@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>CNC Cloud | {% block title %}Dashboard{% endblock %}</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        /* ╔══════════════════════════════════════╗
+   ║  CSS 设计令牌                        ║
+   ╚══════════════════════════════════════╝ */
+        :root {
+            --sidebar-w: 240px;
+            --navbar-h: 56px;
+            --bg: #f4f7fa;
+            --card-bg: #ffffff;
+            --card-shadow: 0 2px 12px 0 rgba(0, 0, 0, .05);
+            --radius: 8px;
+            --primary: #409EFF;
+            --primary-bg: #ecf5ff;
+            --danger: #f56c6c;
+            --success: #67c23a;
+            --warning: #E6A23C;
+            --text: #303133;
+            --text-sec: #606266;
+            --text-hint: #909399;
+            --border: #e4e7ed;
+            --font: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            font-family: var(--font);
+            font-size: 14px;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  侧边栏                              ║
+   ╚══════════════════════════════════════╝ */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: var(--sidebar-w);
+            z-index: 200;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 20px;
+            height: var(--navbar-h);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .logo-box {
+            width: 32px;
+            height: 32px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .logo-box svg {
+            width: 18px;
+            height: 18px;
+            fill: #fff;
+        }
+
+        .sidebar-nav {
+            padding: 12px 0;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: var(--text-sec);
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            transition: all .15s;
+            font-size: 14px;
+        }
+
+        .nav-link svg {
+            width: 17px;
+            height: 17px;
+            flex-shrink: 0;
+            fill: currentColor;
+        }
+
+        .nav-link:hover {
+            background: #f5f7fa;
+            color: var(--text);
+        }
+
+        .nav-link.active {
+            background: var(--primary-bg);
+            color: var(--primary);
+            border-left-color: var(--primary);
+            font-weight: 500;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-hint);
+            flex-shrink: 0;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  顶部导航栏                          ║
+   ╚══════════════════════════════════════╝ */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-w);
+            right: 0;
+            height: var(--navbar-h);
+            z-index: 100;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+        }
+
+        .navbar-brand {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .badge-pill {
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid;
+            transition: all .15s;
+        }
+
+        .badge-pill.running {
+            color: var(--success);
+            border-color: #b3e19d;
+            background: #f0f9eb;
+        }
+
+        .badge-pill.stopped {
+            color: var(--danger);
+            border-color: #fab6b6;
+            background: #fef0f0;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .icon-btn {
+            color: var(--text-hint);
+            cursor: pointer;
+            transition: color .15s;
+            display: flex;
+            align-items: center;
+        }
+
+        .icon-btn:hover {
+            color: var(--primary);
+        }
+
+        .icon-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  主内容区                            ║
+   ╚══════════════════════════════════════╝ */
+        .main {
+            margin-left: var(--sidebar-w);
+            padding-top: var(--navbar-h);
+            min-height: 100vh;
+        }
+
+        .content {
+            padding: 24px;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  卡片通用                            ║
+   ╚══════════════════════════════════════╝ */
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--card-shadow);
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+        }
+
+        .card-title-bar {
+            display: inline-block;
+            width: 3px;
+            height: 14px;
+            background: var(--primary);
+            border-radius: 2px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .section-label {
+            font-size: 12px;
+            color: var(--text-hint);
+            margin-bottom: 4px;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  网格工具类（12 列）                 ║
+   ╚══════════════════════════════════════╝ */
+        .row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .col-3 {
+            flex: 0 0 calc(25% - 12px);
+        }
+
+        .col-4 {
+            flex: 0 0 calc(33.333% - 11px);
+        }
+
+        .col-5 {
+            flex: 0 0 calc(41.667% - 10px);
+        }
+
+        .col-6 {
+            flex: 0 0 calc(50% - 8px);
+        }
+
+        .col-7 {
+            flex: 0 0 calc(58.333% - 9px);
+        }
+
+        .col-8 {
+            flex: 0 0 calc(66.667% - 11px);
+        }
+
+        .col-9 {
+            flex: 0 0 calc(75% - 12px);
+        }
+
+        .col-12 {
+            flex: 0 0 100%;
+        }
+
+        .mb-4 {
+            margin-bottom: 16px;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  通用表格                            ║
+   ╚══════════════════════════════════════╝ */
+        .tbl {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .tbl th {
+            background: #fafafa;
+            color: var(--text-hint);
+            font-weight: 500;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tbl td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f5f7fa;
+            color: var(--text);
+        }
+
+        .tbl tbody tr:hover {
+            background: #f5f7ff;
+        }
+
+        .tbl tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  Modal                               ║
+   ╚══════════════════════════════════════╝ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 80px;
+            background: rgba(0, 0, 0, .35);
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-box {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, .12);
+            width: 860px;
+            max-width: 95vw;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .modal-close-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-hint);
+            transition: all .15s;
+            font-size: 15px;
+        }
+
+        .modal-close-btn:hover {
+            background: var(--bg);
+            color: var(--danger);
+        }
+
+        .modal-body {
+            padding: 20px;
+            display: flex;
+            gap: 16px;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  按钮                                ║
+   ╚══════════════════════════════════════╝ */
+        .btn {
+            padding: 5px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid;
+            transition: all .15s;
+            font-family: var(--font);
+        }
+
+        .btn-primary {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            opacity: .85;
+        }
+
+        .btn-default {
+            border-color: var(--border);
+            background: #fff;
+            color: var(--text-sec);
+        }
+
+        .btn-default:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-sm {
+            padding: 3px 10px;
+            font-size: 12px;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  风险色                              ║
+   ╚══════════════════════════════════════╝ */
+        .risk-high {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .risk-med {
+            color: var(--warning);
+            font-weight: 600;
+        }
+
+        .risk-low {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  进度条                              ║
+   ╚══════════════════════════════════════╝ */
+        .progress-bar-wrap {
+            height: 8px;
+            background: #f0f2f5;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: var(--primary);
+            transition: width .5s;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  Stat 数字行                         ║
+   ╚══════════════════════════════════════╝ */
+        .stat-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 11px 0;
+            border-bottom: 1px solid #f5f7fa;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 7px;
+        }
+
+        .stat-val {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  快照小方块                          ║
+   ╚══════════════════════════════════════╝ */
+        .snapshot-card {
+            background: #f4f7fa;
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+        }
+
+        .snapshot-card .sk-label {
+            font-size: 12px;
+            color: var(--text-hint);
+            margin-bottom: 6px;
+        }
+
+        .snapshot-card .sk-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+            font-family: monospace;
+        }
+
+        .snapshot-card .sk-unit {
+            font-size: 12px;
+            color: var(--text-hint);
+            margin-left: 4px;
+        }
+
+        /* ╔══════════════════════════════════════╗
+   ║  分页                                ║
+   ╚══════════════════════════════════════╝ */
+        .pagination {
+            display: flex;
+            gap: 4px;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+
+        .page-btn {
+            min-width: 32px;
+            height: 32px;
+            border: 1px solid var(--border);
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-sec);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 6px;
+            transition: all .15s;
+        }
+
+        .page-btn:hover,
+        .page-btn.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #fff;
+        }
+
+        /* 过滤统计卡 */
+        .filter-card {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 18px;
+            background: #fff;
+            cursor: pointer;
+            transition: all .15s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .filter-card:hover {
+            border-color: var(--primary);
+        }
+
+        .filter-card .fc-label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .filter-card .fc-num {
+            font-size: 22px;
+            font-weight: 700;
+            font-family: monospace;
+        }
+
+        .filter-card.all {
+            border-color: #c0c4cc;
+        }
+
+        .filter-card.high {
+            border-color: #f56c6c;
+        }
+
+        .filter-card.high .fc-label,
+        .filter-card.high .fc-num {
+            color: #f56c6c;
+        }
+
+        .filter-card.med {
+            border-color: #E6A23C;
+        }
+
+        .filter-card.med .fc-label,
+        .filter-card.med .fc-num {
+            color: #E6A23C;
+        }
+
+        .filter-card.low {
+            border-color: #67c23a;
+        }
+
+        .filter-card.low .fc-label,
+        .filter-card.low .fc-num {
+            color: #67c23a;
+        }
+
+        .filter-cards-row {
+            display: flex;
+            gap: 14px;
+        }
+    </style>
+    {% block extra_style %}{% endblock %}
+</head>
+
+<body>
+
+    <!-- ══════ 侧边栏 ══════ -->
+    <aside class="sidebar">
+        <a href="/dashboard/" class="sidebar-logo">
+            <div class="logo-box">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+            </div>
+            CNC Cloud
+        </a>
+        <nav class="sidebar-nav">
+            <a href="/dashboard/" class="nav-link {% block nav_dashboard %}{% endblock %}">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                </svg>
+                Dashboard
+            </a>
+            <a href="/devices/" class="nav-link {% block nav_device %}{% endblock %}">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z" />
+                </svg>
+                Device
+            </a>
+            <a href="/events/" class="nav-link {% block nav_event %}{% endblock %}">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                </svg>
+                Event
+            </a>
+            <a href="/setting/" class="nav-link {% block nav_setting %}{% endblock %}">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                </svg>
+                Setting
+            </a>
+        </nav>
+        <div class="sidebar-footer">v1.0.0 · CNC 预测性维护系统</div>
+    </aside>
+
+    <!-- ══════ Navbar ══════ -->
+    <header class="navbar">
+        <div></div><!-- 顶栏左侧预留 -->
+        <div class="navbar-right">
+            <div class="avatar" title="管理员">管</div>
+            <span class="icon-btn" title="退出登录">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+                </svg>
+            </span>
+        </div>
+    </header>
+
+    <!-- ══════ 主内容 ══════ -->
+    <main class="main">
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <script>
+        /* 数据流控制入口已移至 Setting 页面 */
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

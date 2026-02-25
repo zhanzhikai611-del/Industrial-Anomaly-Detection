@@ -1,0 +1,5 @@
+venv/
+CNCData/
+**/__pycache__/
+.DS_Store
+*.sqlite3
