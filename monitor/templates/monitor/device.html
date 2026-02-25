@@ -61,6 +61,22 @@
         flex-direction: column;
         justify-content: flex-start;
     }
+
+    /* 状态下拉框 */
+    .status-select {
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid #dcdfe6;
+        font-size: 12px;
+        font-weight: 500;
+        outline: none;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .status-select.running { color: #67c23a; background-color: #f0f9eb; border-color: #c2e7b0; }
+    .status-select.idle { color: #E6A23C; background-color: #fdf6ec; border-color: #f5dab1; }
+    .status-select.down { color: #f56c6c; background-color: #fef0f0; border-color: #fbc4c4; }
+
 </style>
 {% endblock %}
 
@@ -154,12 +170,21 @@
     let modalChart = null;
 
     /* ── 风险分类 ── */
-    function riskClass(s) { return s > .75 ? 'risk-high' : s > .45 ? 'risk-med' : 'risk-low'; }
-    function statusBadge(st) {
-        const map = { Running: '运行', Idle: '待机', Down: '停机' };
-        const cls = { Running: 'status-run', Idle: 'status-idle', Down: 'status-down' };
-        return `<span class="status-badge ${cls[st] || ''}">${map[st] || st}</span>`;
+    function riskClass(s) { return s > .75 ? 'risk-high' : s > .40 ? 'risk-med' : 'risk-low'; }
+    
+    function statusDropdown(deviceId, currentStatus) {
+        // UI 显示的文案与后端值的对应
+        const options = [
+            {val: 'Running', label: 'Running'},
+            {val: 'Idle', label: 'Standby'},
+            {val: 'Down', label: 'Stopped'}
+        ];
+        const optsHtml = options.map(o => `<option value="${o.val}" ${o.val === currentStatus ? 'selected' : ''}>${o.label}</option>`).join('');
+        return `<select class="status-select ${currentStatus.toLowerCase()}" onchange="changeDeviceStatus(${deviceId}, this.value, event)" onclick="event.stopPropagation()">
+            ${optsHtml}
+        </select>`;
     }
+
     function scoreLabel(s) {
         if (s == null) return '<span style="color:#c0c4cc;">--</span>';
         const v = (s * 100).toFixed(0) + '%';
@@ -174,8 +199,8 @@
     }
     function filterRows(rows) {
         if (currentFilter === 'high') return rows.filter(d => d.current_status === 'Running' && (d.anomaly_score || 0) > .75);
-        if (currentFilter === 'med') return rows.filter(d => d.current_status === 'Running' && (d.anomaly_score || 0) > 0.45 && (d.anomaly_score || 0) <= 0.75);
-        if (currentFilter === 'low') return rows.filter(d => d.current_status === 'Running' && (d.anomaly_score || 0) <= .45);
+        if (currentFilter === 'med') return rows.filter(d => d.current_status === 'Running' && (d.anomaly_score || 0) > 0.40 && (d.anomaly_score || 0) <= 0.75);
+        if (currentFilter === 'low') return rows.filter(d => d.current_status === 'Running' && (d.anomaly_score || 0) <= .40);
         return rows;  // 'all' 显示全部（含 Idle/Down）
     }
 
@@ -193,7 +218,7 @@
       <td style="color:#909399;">${dev.device_type || '--'}</td>
       <td style="color:#606266;">${dev.machining_process || '--'}</td>
       <td>${scoreLabel(dev.anomaly_score)}</td>
-      <td>${statusBadge(dev.current_status)}</td>
+      <td>${statusDropdown(dev.device_id, dev.current_status)}</td>
       <td>
         <button class="op-btn ${dev.unhandled_alert_id ? 'has-alert' : ''}"
           onclick="event.stopPropagation(); handleAlert(${dev.unhandled_alert_id},this)"
@@ -231,7 +256,7 @@
             running.forEach(dev => {
                 const s = dev.anomaly_score || 0;
                 if (s > .75) high++;
-                else if (s > .45) med++;
+                else if (s > .40) med++;
                 else low++;
             });
             document.getElementById('fc-all').textContent = all;
@@ -242,6 +267,29 @@
             renderTable();
         } catch (e) {
             console.warn('[devices]', e);
+        }
+    }
+
+    /* ── 状态反向控制 ── */
+    async function changeDeviceStatus(deviceId, newStatus, event) {
+        event.stopPropagation();
+        try {
+            const res = await fetch(`/api/device/${deviceId}/status/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            }).then(r => r.json());
+            
+            if (res.status === 'ok') {
+                event.target.className = `status-select ${newStatus.toLowerCase()}`;
+                setTimeout(loadDevices, 100); 
+            } else {
+                alert('状态更新失败: ' + res.message);
+                loadDevices(); // fallback
+            }
+        } catch(e) {
+            console.error(e);
+            loadDevices();
         }
     }
 

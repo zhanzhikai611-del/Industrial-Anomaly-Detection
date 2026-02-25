@@ -32,23 +32,17 @@ logger = logging.getLogger(__name__)
 #  从 simulate_real_cnc_data.py 提取的 CNC 统计参数（保持一致）
 # ═══════════════════════════════════════════════════════════════════
 
-REAL_STATS = {
-    'S1_CurrentFeedback': {
-        'unworn': {'mean': 15.93, 'std': 10.03},
-        'worn':   {'mean': 15.95, 'std':  9.93},
-        'worn_bias': 8.0,          # 磨损时电流均值上移 +8A
-    },
-    'S1_OutputPower': {
-        'unworn': {'mean': 0.1337, 'std': 0.0783},
-        'worn':   {'mean': 0.1332, 'std': 0.0780},
-        'worn_bias': 0.07,         # 磨损时功率损耗 +0.07W（提升～50%）
-    },
-    'X1_ActualVelocity': {
-        'unworn': {'mean': -0.19, 'std': 4.82},
-        'worn':   {'mean': -0.37, 'std': 8.5},  # 震动严重，std 4.82→8.5
-        'worn_bias': 0.0,
-    },
-}
+# ═══════════════════════════════════════════════════════════════════
+#  分组参数（与 simulate_real_cnc_data.py 一致）
+# ═══════════════════════════════════════════════════════════════════
+
+GROUP_PARAMS = [
+    (15.0, 0.13), # Group 1: 1-5 (New) -> ~0-40% Probability
+    (24.0, 0.18), # Group 2: 6-10 (Semi-new) -> ~30-50%
+    (27.0, 0.25), # Group 3: 11-15 (Normal) -> ~41-75%
+    (31.0, 0.32), # Group 4: 16-20 (Old) -> ~60-85%
+    (40.0, 0.40), # Group 5: 21-25 (Faulty) -> ~76-100%
+]
 
 # 报警阈值（与 simulate_real_cnc_data.py 保持一致）
 ALERT_THRESHOLDS = {
@@ -76,53 +70,92 @@ STREAM_INTERVAL = 3     # 守护进程轮询间隔（秒）
 #  核心生成函数（复用 simulate_real_cnc_data.py 同款逻辑）
 # ═══════════════════════════════════════════════════════════════════
 
-def _gen_single_record(device, ts, is_worn: bool) -> ProductionSensorData:
-    """
-    为单台设备、单个时刻生成一条传感流水记录（不保存）。
-    正态分布参数来自真实 CNC 数据集统计（切削阶段 17,520 条有效样本）。
-    worn(磨损)：电流均值 +2A、功率均值 +0.02W、进给速度 std 更大。
-    """
-    rng = REAL_STATS
-    if is_worn:
-        sc_mean = rng['S1_CurrentFeedback']['worn']['mean'] + rng['S1_CurrentFeedback']['worn_bias']
-        sc_std  = rng['S1_CurrentFeedback']['worn']['std']
-        sp_mean = rng['S1_OutputPower']['worn']['mean'] + rng['S1_OutputPower']['worn_bias']
-        sp_std  = rng['S1_OutputPower']['worn']['std']
-        fv_mean = rng['X1_ActualVelocity']['worn']['mean']
-        fv_std  = rng['X1_ActualVelocity']['worn']['std']
+def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
+    sc_mean, sp_mean = GROUP_PARAMS[group_idx]
+    
+    sc = float(np.random.normal(sc_mean, 1.5))
+    sp = float(max(0.0, np.random.normal(sp_mean, 0.015)))
+    fv = float(np.random.normal(-0.19, 2.0))
+    machining_proc = np.random.choice(STAGE_LABELS, p=STAGE_PROBS)
+
+    is_worn = (group_idx >= 3)
+    cap = device.standard_capacity
+
+    # ── 可用性 A：分组停机时间 ──────────────────────────────────────
+    if group_idx == 0:
+        downtime = 0.0
+    elif group_idx == 1:
+        downtime = round(random.uniform(0, 2), 1)
+    elif group_idx == 2:
+        downtime = round(random.uniform(1, 5), 1)
+    elif group_idx == 3:
+        downtime = round(random.uniform(3, 12), 1)
     else:
-        sc_mean = rng['S1_CurrentFeedback']['unworn']['mean']
-        sc_std  = rng['S1_CurrentFeedback']['unworn']['std']
-        sp_mean = rng['S1_OutputPower']['unworn']['mean']
-        sp_std  = rng['S1_OutputPower']['unworn']['std']
-        fv_mean = rng['X1_ActualVelocity']['unworn']['mean']
-        fv_std  = rng['X1_ActualVelocity']['unworn']['std']
+        downtime = round(random.uniform(8, 20), 1)
 
-    spindle_current = float(np.random.normal(sc_mean, sc_std))
-    spindle_power   = float(max(0.0, np.random.normal(sp_mean, sp_std)))
-    feed_velocity   = float(np.random.normal(fv_mean, fv_std))
-    machining_proc  = np.random.choice(STAGE_LABELS, p=STAGE_PROBS)
+    # ── 性能 P：主轴倍率下降 → 实际产出 < 理论产出 ─────────────────
+    if group_idx == 0:
+        perf_ratio = random.uniform(0.96, 1.00)
+    elif group_idx == 1:
+        perf_ratio = random.uniform(0.93, 0.98)
+    elif group_idx == 2:
+        perf_ratio = random.uniform(0.88, 0.95)
+    elif group_idx == 3:
+        perf_ratio = random.uniform(0.78, 0.90)
+    else:
+        perf_ratio = random.uniform(0.65, 0.82)
 
-    # OEE 管理字段
-    input_qty     = device.standard_capacity
-    downtime      = round(random.uniform(5, 20), 1) if is_worn else 0.0
-    actual_output = (
-        max(0, input_qty - int(downtime * device.standard_capacity / 60))
-        if is_worn else input_qty
-    )
+    actual_run = max(0.0, LOADING_TIME - downtime)
+    theoretical_output = (actual_run / 60.0) * cap
+    out = max(0, int(theoretical_output * perf_ratio))
+
+    # ── 良率 Q：高风险设备产出次品 ─────────────────────────────────
+    input_qty_val = max(1, int(theoretical_output))
+    if group_idx <= 1:
+        defect_rate = random.uniform(0.0, 0.01)
+    elif group_idx == 2:
+        defect_rate = random.uniform(0.01, 0.04)
+    elif group_idx == 3:
+        defect_rate = random.uniform(0.03, 0.08)
+    else:
+        defect_rate = random.uniform(0.06, 0.15)
+
+    defects = int(out * defect_rate)
+    good_output = max(0, out - defects)
 
     return ProductionSensorData(
         device            = device,
         timestamp         = ts,
-        spindle_current   = round(spindle_current, 4),
-        spindle_power     = round(spindle_power,   4),
-        feed_velocity     = round(feed_velocity,   4),
+        spindle_current   = round(sc, 4),
+        spindle_power     = round(sp,   4),
+        feed_velocity     = round(fv,   4),
         machining_process = machining_proc,
         tool_condition    = is_worn,
         loading_time      = LOADING_TIME,
         downtime          = downtime,
-        input_qty         = input_qty,
-        actual_output     = actual_output,
+        input_qty         = input_qty_val,
+        actual_output     = good_output,
+    )
+
+def _gen_idle_record(device, ts) -> ProductionSensorData:
+    sc = float(max(0, np.random.normal(0.3, 0.05)))
+    sp = float(max(0, np.random.normal(0.002, 0.001)))
+    fv = float(np.random.normal(0.0, 0.02))
+    return ProductionSensorData(
+        device=device, timestamp=ts,
+        spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
+        machining_process='Idle', tool_condition=False,
+        loading_time=0.0, downtime=0.0,
+        input_qty=device.standard_capacity, actual_output=0,
+    )
+
+def _gen_down_record(device, ts) -> ProductionSensorData:
+    return ProductionSensorData(
+        device=device, timestamp=ts,
+        spindle_current=0.0, spindle_power=0.0, feed_velocity=0.0,
+        machining_process='Down', tool_condition=False,
+        loading_time=0.0, downtime=float(STREAM_INTERVAL),
+        input_qty=device.standard_capacity, actual_output=0,
     )
 
 
@@ -195,18 +228,36 @@ class Command(BaseCommand):
                 records_created = 0
                 alerts_created  = 0
 
-                for dev in devices:
-                    is_worn = random.random() < ANOMALY_PROB
-                    rec_obj = _gen_single_record(dev, now, is_worn)
-                    rec_obj.save()          # 逐条 save 获取 pk，便于立即关联 Alert
-                    records_created += 1
+                for idx, dev in enumerate(devices):
+                    status = dev.current_status
+                    if idx < 5:
+                        group_idx = 0
+                    elif idx < 12:
+                        group_idx = 1
+                    elif idx < 19:
+                        group_idx = 2
+                    elif idx < 23:
+                        group_idx = 3
+                    else:
+                        group_idx = 4
 
-                    if _check_and_create_alert(rec_obj):
-                        alerts_created += 1
+                    if status == 'Running':
+                        rec_obj = _gen_running_record(dev, now, group_idx)
+                        rec_obj.save()          # 逐条 save 获取 pk，便于立即关联 Alert
+                        records_created += 1
 
-                worn_flag = '⚠' if any(
-                    random.random() < ANOMALY_PROB for _ in devices
-                ) else '✓'
+                        if _check_and_create_alert(rec_obj):
+                            alerts_created += 1
+                    elif status == 'Idle':
+                        rec_obj = _gen_idle_record(dev, now)
+                        rec_obj.save()
+                        records_created += 1
+                    else: # Down
+                        rec_obj = _gen_down_record(dev, now)
+                        rec_obj.save()
+                        records_created += 1
+
+                worn_flag = '⚠' if alerts_created > 0 else '✓'
                 self.stdout.write(
                     f'[{tick:>6}] ▶  {now:%H:%M:%S}  '
                     f'写入 {records_created} 条  报警 {alerts_created} 条'

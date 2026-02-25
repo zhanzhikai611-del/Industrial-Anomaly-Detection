@@ -148,9 +148,22 @@ def api_dashboard_stats(request):
       - 当日总产出 / 总投入
       - 设备状态分布（Running / Idle / Down）
       - 今日报警分类频次
+
+    V1.1 重构：废除 per-record 平均逻辑，改用设备级联计算模型。
+      A = (Running设备数 / 总设备数) × 排班修正系数
+      P = Σ(actual_output) / Σ(theoretical_output)   全厂级
+      Q = 1 - (高风险设备数 × 次品系数) / 总设备数
+      OEE = A × P × Q
     """
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # ── 设备状态分布 ──────────────────────────────────────────────
+    running_count = DeviceInfo.objects.filter(current_status='Running').count()
+    idle_count    = DeviceInfo.objects.filter(current_status='Idle').count()
+    down_count    = DeviceInfo.objects.filter(current_status='Down').count()
+    total_devices = DeviceInfo.objects.count() or 25
+
+    # ── 拉取今日最近流水用于聚合 ──────────────────────────────────
     today_qs = list(
         ProductionSensorData.objects
         .filter(timestamp__gte=today_start)
@@ -158,34 +171,63 @@ def api_dashboard_stats(request):
         .order_by('-timestamp')[:500]
     )
 
-    # ── OEE 各分项均值 ────────────────────────────────────────────
-    a_vals, p_vals, q_vals, oee_vals = [], [], [], []
     total_output, total_input = 0, 0
+    sum_actual_output = 0
+    sum_theoretical_output = 0
 
     for rec in today_qs:
-        if rec.availability is not None:
-            a_vals.append(rec.availability)
-        if rec.performance is not None:
-            p_vals.append(rec.performance)
-        if rec.quality is not None:
-            q_vals.append(rec.quality)
-        if rec.oee is not None:
-            oee_vals.append(rec.oee)
         total_output += rec.actual_output or 0
         total_input  += rec.input_qty or 0
+        sum_actual_output += rec.actual_output or 0
+        # 理论产出 = (loading_time - downtime) / 60 × standard_capacity
+        if rec.loading_time and rec.loading_time > 0:
+            try:
+                cap = rec.device.standard_capacity
+                actual_run = max(0, rec.loading_time - rec.downtime)
+                theo = (actual_run / 60.0) * cap
+                sum_theoretical_output += theo
+            except Exception:
+                pass
 
-    def avg(lst): return round(sum(lst) / len(lst), 4) if lst else None
+    # ═══════════════════════════════════════════════════════════════
+    #  OEE 级联计算模型
+    # ═══════════════════════════════════════════════════════════════
 
-    avg_a   = avg(a_vals)
-    avg_p   = avg(p_vals)
-    avg_q   = avg(q_vals)
-    avg_oee = avg(oee_vals)
+    # ── A（可用性）= Running设备比率 × 排班修正系数 ────────────────
+    #    排班修正：假设标准班为 25 台全部在线，实际可能有排班空置
+    SHIFT_FACTOR = 0.998  # 日班排班修正系数（约 0.2% 换班损耗）
+    avg_a = round((running_count / total_devices) * SHIFT_FACTOR, 4)
 
-    # ── 设备状态分布 ──────────────────────────────────────────────
-    running_count = DeviceInfo.objects.filter(current_status='Running').count()
-    idle_count    = DeviceInfo.objects.filter(current_status='Idle').count()
-    down_count    = DeviceInfo.objects.filter(current_status='Down').count()
-    total_devices = DeviceInfo.objects.count()
+    # ── P（性能）= Σ实际产出 / Σ理论最大产出 ──────────────────────
+    #    理论最大产出 = 该设备实际运转时间下的标准满载产量
+    if sum_theoretical_output > 0:
+        avg_p = round(sum_actual_output / sum_theoretical_output, 4)
+    else:
+        avg_p = None
+
+    # ── Q（良率）= 1 - (高风险设备数 × 次品系数) / 总设备数 ───────
+    #    高风险设备 = anomaly_score > 0.75 的设备（来自 AI 推断）
+    #    次品系数 = 0.08（工业经验值：高风险设备平均产出 8% 次品）
+    DEFECT_COEFF = 0.08
+    # 统计高风险设备数：取每台设备最新一条记录推断
+    high_risk_count = 0
+    if _LR_MODEL is not None:
+        seen_devices = set()
+        for rec in today_qs:
+            dev_id = rec.device_id
+            if dev_id in seen_devices:
+                continue
+            seen_devices.add(dev_id)
+            prob = _predict_proba(rec)
+            if prob is not None and prob > 0.75:
+                high_risk_count += 1
+    avg_q = round(1.0 - (high_risk_count * DEFECT_COEFF) / total_devices, 4)
+
+    # ── OEE = A × P × Q（严格连乘）────────────────────────────────
+    if avg_a is not None and avg_p is not None and avg_q is not None:
+        avg_oee = round(avg_a * avg_p * avg_q, 4)
+    else:
+        avg_oee = None
 
     # ── 今日报警分类频次 ──────────────────────────────────────────
     from django.db.models import Count
@@ -263,7 +305,7 @@ def api_realtime_stream(request):
         'tool_condition':      int(rec.tool_condition),
         'oee':                 rec.oee,
         'anomaly_probability': prob,
-        'ai_alert':            (prob is not None and prob > 0.7),
+        'ai_alert':            (prob is not None and prob > 0.75),
     }]
     return JsonResponse({'status': 'ok', 'count': 1, 'data': data, 'ai_ready': _LR_MODEL is not None})
 
@@ -496,3 +538,31 @@ def api_handle_alert(request, alert_id):
         })
     except AnomalyAlertLog.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': '报警记录不存在'}, status=404)
+
+# ═══════════════════════════════════════════════════════════════════
+#  API 8（新增）：更新设备状态 /api/device/<id>/status/
+# ═══════════════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_update_device_status(request, device_id):
+    """
+    POST /api/device/<id>/status/
+    反向控制：接收前端下发的状态变更指令，并更新数据库中 DeviceInfo 的状态字段。
+    """
+    import json
+    try:
+        data = json.loads(request.body)
+        new_status = data.get('status')
+        if new_status not in ['Running', 'Idle', 'Down']:
+            return JsonResponse({'status': 'error', 'message': '无效的状态'}, status=400)
+            
+        device = DeviceInfo.objects.get(pk=device_id)
+        device.current_status = new_status
+        device.save(update_fields=['current_status'])
+        
+        return JsonResponse({'status': 'ok', 'message': f'设备状态已成功更新为 {new_status}'})
+    except DeviceInfo.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': '设备不存在'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

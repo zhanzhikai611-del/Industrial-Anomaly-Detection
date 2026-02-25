@@ -80,7 +80,8 @@
     <div class="col-6">
         <div class="card" style="height:100%;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-                <span class="card-title" style="margin-bottom:0;">综合效能指标（OEE）</span>
+                <span class="card-title" style="margin-bottom:0; white-space:nowrap;"><span
+                        class="card-title-bar"></span>综合效能指标（OEE）</span>
                 <span class="oee-total-num" id="oee-pct">--</span>
             </div>
             <div class="oee-total-label" style="text-align:right; margin-bottom:8px;">综合 OEE</div>
@@ -111,7 +112,7 @@
     <!-- ② 实时生产快报（col-3） -->
     <div class="col-3">
         <div class="card" style="height:100%;">
-            <div class="card-title">实时生产快报</div>
+            <div class="card-title" style="white-space:nowrap;"><span class="card-title-bar"></span>实时生产快报</div>
             <div class="section-label">当日总产出</div>
             <div class="kpi-row">
                 <span class="kpi-big" id="s-output" style="color:#409EFF;">--</span>
@@ -136,7 +137,8 @@
     <div class="col-3">
         <div class="card" style="height:100%;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                <span class="card-title" style="margin-bottom:0;">设备</span>
+                <span class="card-title" style="margin-bottom:0; white-space:nowrap;"><span
+                        class="card-title-bar"></span>设备</span>
                 <span style="font-size:22px; font-weight:700; font-family:monospace; color:#303133;"
                     id="d-total">--</span>
             </div>
@@ -165,7 +167,7 @@
             <div class="card-title"><span class="card-title-bar"></span>系统异常报警</div>
 
             <!-- 4a: 双轴折线图 -->
-            <div class="chart-section-title">质量预测预警（基于 AI 模型）</div>
+            <div class="chart-section-title">设备故障预警多维关联可视化</div>
             <div id="chart-line" style="height:210px; margin-bottom:20px;"></div>
 
             <!-- 4b: 物理指标异常分布饼图 -->
@@ -235,7 +237,7 @@
             backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { color: '#303133' }
         },
         legend: { top: 8, right: 0, icon: 'roundRect', textStyle: { color: '#606266', fontSize: 11 }, itemWidth: 12, itemHeight: 4 },
-        grid: { left: 0, right: 0, top: 52, bottom: 0, containLabel: true },
+        grid: { left: 0, right: 10, top: 52, bottom: 8, containLabel: true },
         xAxis: {
             type: 'category', boundaryGap: false, data: [],
             axisLine: { show: false }, axisTick: { show: false },
@@ -250,7 +252,7 @@
                 axisLabel: { color: '#409EFF', fontSize: 10 }, nameTextStyle: { color: '#409EFF', fontSize: 10 }
             },
             {
-                type: 'value', name: 'A-预测(%)', position: 'right', min: 0, max: 100,
+                type: 'value', name: 'AI故障预警(%)', position: 'right', min: 0, max: 100, interval: 20,
                 axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
                 axisLabel: { color: '#f56c6c', fontSize: 10 }, nameTextStyle: { color: '#f56c6c', fontSize: 10 }
             }
@@ -266,16 +268,22 @@
                 data: []
             },
             {
-                name: 'AI预测', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1,
+                name: 'AI故障预警', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1,
                 color: '#f56c6c',
                 lineStyle: { color: '#f56c6c', width: 2 },
                 itemStyle: { color: '#f56c6c' },
                 markLine: {
                     symbol: ['none', 'none'], data: [{
-                        yAxis: 70, name: '预警阈值',
-                        lineStyle: { color: '#f56c6c', type: 'dashed', width: 1 },
-                        label: { color: '#f56c6c', fontSize: 10, formatter: '70%' }
+                        yAxis: 75, name: '预警阈值',
+                        lineStyle: { color: '#f56c6c', type: 'dashed', width: 1, opacity: 0.3 },
+                        label: { show: false }
                     }]
+                },
+                markArea: {
+                    itemStyle: { color: 'rgba(255, 77, 79, 0.1)' },
+                    data: [
+                        [{ yAxis: 75 }, { yAxis: 100 }]
+                    ]
                 },
                 areaStyle: {
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -379,14 +387,14 @@
         } catch (e) { console.warn('[stream]', e); }
     }
 
-    /* ── 风险排名（仅 Running 设备 Top 5） ── */
+    /* ── 风险排名（仅 Running 设备 Top 10） ── */
     async function fetchRisk() {
         try {
             const d = await fetch('/api/device-matrix/').then(r => r.json());
             if (d.status !== 'ok') return;
             // 只统计运行中设备，避免待机/停机的零分拉低排名
             const running = d.data.filter(dev => dev.current_status === 'Running');
-            const top = running.slice(0, 5);
+            const top = running.slice(0, 10);
             el('risk-tbody').innerHTML = top.map((dev, i) => {
                 const s = dev.anomaly_score != null ? (dev.anomaly_score * 100).toFixed(0) + '%' : '--';
                 const cls = dev.anomaly_score > 0.75 ? 'risk-high' : dev.anomaly_score > 0.45 ? 'risk-med' : 'risk-low';

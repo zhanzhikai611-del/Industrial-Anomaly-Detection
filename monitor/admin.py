@@ -153,7 +153,7 @@ class AnomalyAlertLogAdmin(admin.ModelAdmin):
     def score_display(self, obj):
         if obj.anomaly_score is None:
             return '—'
-        color = '#dc3545' if obj.anomaly_score >= 0.7 else '#ffc107'
+        color = '#dc3545' if obj.anomaly_score >= 0.75 else '#ffc107'
         pct = f'{obj.anomaly_score:.1%}'
         return format_html('<b style="color:{}">{}</b>', color, pct)
 

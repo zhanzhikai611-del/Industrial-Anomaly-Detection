@@ -276,7 +276,7 @@ class AnomalyAlertLog(models.Model):
         null=True,
         blank=True,
         verbose_name='异常置信度',
-        help_text='LR 模型输出的"刀具磨损概率"（0~1），超过 0.7 触发预警',
+        help_text='LR 模型输出的"刀具磨损概率"（0~1），超过 0.75 触发预警',
     )
     is_handled = models.BooleanField(
         default=False,

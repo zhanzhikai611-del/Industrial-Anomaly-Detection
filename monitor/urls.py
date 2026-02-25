@@ -21,4 +21,5 @@ urlpatterns = [
     path('api/sensor-logs/',               views.api_sensor_logs,    name='api_sensor_logs'),
     path('api/stream/<int:device_id>/',    views.api_device_stream,  name='api_device_stream'),
     path('api/alerts/<int:alert_id>/handle/', views.api_handle_alert, name='api_handle_alert'),
+    path('api/device/<int:device_id>/status/', views.api_update_device_status, name='api_update_device_status'),
 ]

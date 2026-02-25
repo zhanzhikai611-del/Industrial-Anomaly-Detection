@@ -60,9 +60,9 @@ DEVICE_CONFIGS = [
     ('Punch-冲压-{:02d}',  5, '冲压机组', 2000),  # 01-05
 ]
 
-RUNNING_COUNT = 22   # 序号 1-22 → Running
-IDLE_COUNT    =  2   # 序号 23-24 → Idle
-DOWN_COUNT    =  1   # 序号 25 → Down
+RUNNING_COUNT = 25   # V1.1 默认全天运行
+IDLE_COUNT    =  0
+DOWN_COUNT    =  0
 TOTAL_DEVICES = RUNNING_COUNT + IDLE_COUNT + DOWN_COUNT  # 25
 
 DAYS          = 7
@@ -83,13 +83,15 @@ def clear_data():
 
 # ── Step 2：创建 25 台设备 ──────────────────────────────────────────
 def _resolve_status(seq):
-    if seq <= RUNNING_COUNT:
-        return 'Running'
-    elif seq <= RUNNING_COUNT + IDLE_COUNT:
-        return 'Idle'
-    return 'Down'
+    return 'Running'
 
-
+GROUP_PARAMS = [
+    (15.0, 0.13), # Group 1: 1-5 (New) -> ~0-40% Probability
+    (24.0, 0.18), # Group 2: 6-10 (Semi-new) -> ~30-50%
+    (27.0, 0.25), # Group 3: 11-15 (Normal) -> ~41-75%
+    (31.0, 0.32), # Group 4: 16-20 (Old) -> ~60-85%
+    (40.0, 0.40), # Group 5: 21-25 (Faulty) -> ~76-100%
+]
 def create_devices():
     print(f'🏭  初始化 {TOTAL_DEVICES} 台设备 '
           f'(Running={RUNNING_COUNT} / Idle={IDLE_COUNT} / Down={DOWN_COUNT})…',
@@ -111,33 +113,72 @@ def create_devices():
 
 
 # ── 记录生成函数 ────────────────────────────────────────────────────
-def _gen_running_record(device, ts, is_worn):
-    r = REAL_STATS
-    if is_worn:
-        sc = float(np.random.normal(r['S1_CurrentFeedback']['worn']['mean'] + r['S1_CurrentFeedback']['worn_bias'],
-                                    r['S1_CurrentFeedback']['worn']['std']))
-        sp = float(max(0, np.random.normal(r['S1_OutputPower']['worn']['mean'] + r['S1_OutputPower']['worn_bias'],
-                                           r['S1_OutputPower']['worn']['std'])))
-        fv = float(np.random.normal(r['X1_ActualVelocity']['worn']['mean'],
-                                    r['X1_ActualVelocity']['worn']['std']))
-    else:
-        sc = float(np.random.normal(r['S1_CurrentFeedback']['unworn']['mean'],
-                                    r['S1_CurrentFeedback']['unworn']['std']))
-        sp = float(max(0, np.random.normal(r['S1_OutputPower']['unworn']['mean'],
-                                           r['S1_OutputPower']['unworn']['std'])))
-        fv = float(np.random.normal(r['X1_ActualVelocity']['unworn']['mean'],
-                                    r['X1_ActualVelocity']['unworn']['std']))
+def _gen_running_record(device, ts, group_idx):
+    sc_mean, sp_mean = GROUP_PARAMS[group_idx]
+    
+    # 按照设定的分组生成正态分布的特征，使由于特征基准的偏移，
+    # 逻辑回归推断出的概率准确落在各自区间。
+    sc = float(np.random.normal(sc_mean, 1.5))
+    sp = float(max(0, np.random.normal(sp_mean, 0.015)))
+    fv = float(np.random.normal(-0.19, 2.0))
 
+    is_worn = (group_idx >= 3)
     cap = device.standard_capacity
-    dt  = round(random.uniform(5, 20), 1) if is_worn else 0.0
-    out = max(0, cap - int(dt * cap / 60)) if is_worn else cap
+
+    # ── 可用性 A：停机时间（仅高危设备产生计划外停机）──────────────
+    if group_idx == 0:
+        dt = 0.0                                          # 新设备，无停机
+    elif group_idx == 1:
+        dt = round(random.uniform(0, 2), 1)               # 准新，偶发微停
+    elif group_idx == 2:
+        dt = round(random.uniform(1, 5), 1)               # 正常磨损
+    elif group_idx == 3:
+        dt = round(random.uniform(3, 12), 1)              # 老旧，频繁微停
+    else:
+        dt = round(random.uniform(8, 20), 1)              # 故障边缘
+
+    # ── 性能 P：主轴倍率下降导致实际产出低于标准 ─────────────────
+    #    Standard_Cycle_Time 隐含在 cap 中：cap = 理论 1h 最大产出
+    #    actual_run_hours = (loading_time - dt) / 60
+    #    理论产出 = actual_run_hours * cap
+    #    performance_ratio: 高风险设备因倍率下降而低于 100%
+    if group_idx == 0:
+        perf_ratio = random.uniform(0.96, 1.00)           # 新设备接近满载
+    elif group_idx == 1:
+        perf_ratio = random.uniform(0.93, 0.98)           # 准新，轻微下降
+    elif group_idx == 2:
+        perf_ratio = random.uniform(0.88, 0.95)           # 正常磨损期
+    elif group_idx == 3:
+        perf_ratio = random.uniform(0.78, 0.90)           # 老旧，主轴倍率明显降低
+    else:
+        perf_ratio = random.uniform(0.65, 0.82)           # 故障边缘，严重降速
+
+    actual_run = max(0.0, LOADING_TIME - dt)               # 实际运行分钟
+    theoretical_output = (actual_run / 60.0) * cap         # 理论满载产出
+    out = max(0, int(theoretical_output * perf_ratio))     # 实际产出
+
+    # ── 良率 Q：高风险设备产出中包含次品 ──────────────────────────
+    #    input_qty = 投入数 = 理论满载产出（扣除停机时间的标准值）
+    #    actual_output = 良品数 = out - defects
+    input_qty_val = max(1, int(theoretical_output))        # 投入数 = 理论产出
+    if group_idx <= 1:
+        defect_rate = random.uniform(0.0, 0.01)            # 1% 以内
+    elif group_idx == 2:
+        defect_rate = random.uniform(0.01, 0.04)           # 1-4%
+    elif group_idx == 3:
+        defect_rate = random.uniform(0.03, 0.08)           # 3-8%
+    else:
+        defect_rate = random.uniform(0.06, 0.15)           # 6-15% 次品
+
+    defects = int(out * defect_rate)
+    good_output = max(0, out - defects)
 
     return ProductionSensorData(
         device=device, timestamp=ts,
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process=np.random.choice(STAGE_LABELS, p=STAGE_PROBS),
         tool_condition=is_worn, loading_time=LOADING_TIME,
-        downtime=dt, input_qty=cap, actual_output=out,
+        downtime=dt, input_qty=input_qty_val, actual_output=good_output,
     )
 
 
@@ -174,15 +215,25 @@ def simulate_sensor_data(devices):
 
     all_records, alert_infos = [], []
 
-    for dev in devices:
+    for idx, dev in enumerate(devices):
         status = dev.current_status
+        # IDX is 0-indexed (0 to 24 corresponding to devices 1 to 25)
+        if idx < 5:      # 1-5 (idx 0-4)
+            group_idx = 0
+        elif idx < 12:   # 6-12 (idx 5-11)
+            group_idx = 1
+        elif idx < 19:   # 13-19 (idx 12-18)
+            group_idx = 2
+        elif idx < 23:   # 20-23 (idx 19-22)
+            group_idx = 3
+        else:            # 24-25 (idx 23-24)
+            group_idx = 4
 
         for m in range(total_mins):
             ts = start_time + timedelta(minutes=m * INTERVAL_MINS)
 
             if status == 'Running':
-                is_worn = random.random() < ANOMALY_PROB
-                rec = _gen_running_record(dev, ts, is_worn)
+                rec = _gen_running_record(dev, ts, group_idx)
                 all_records.append(rec)
 
                 # 物理阈值报警
@@ -290,12 +341,11 @@ import time
 import threading
 from django.db import connection
 
-def _generate_single_device_realtime(dev, ts):
+def _generate_single_device_realtime(dev, ts, group_idx):
     status = dev.current_status
     alert_info = None
     if status == 'Running':
-        is_worn = random.random() < ANOMALY_PROB
-        rec = _gen_running_record(dev, ts, is_worn)
+        rec = _gen_running_record(dev, ts, group_idx)
         if (abs(rec.spindle_current) > ALERT_THRESHOLDS['spindle_current'] or
                 rec.spindle_power    > ALERT_THRESHOLDS['spindle_power']      or
                 abs(rec.feed_velocity) > ALERT_THRESHOLDS['feed_velocity']):
@@ -341,7 +391,22 @@ def run_realtime_simulation():
                     continue
 
                 ts = timezone.now()
-                futures = [executor.submit(_generate_single_device_realtime, dev, ts) for dev in devices]
+                # 根据 device index 生成组别
+                futures = []
+                for idx, dev in enumerate(devices):
+                    # 重新从 DB 读取最新状态，支持前台动态更改
+                    dev.refresh_from_db(fields=['current_status'])
+                    if idx < 5:
+                        group_idx = 0
+                    elif idx < 12:
+                        group_idx = 1
+                    elif idx < 19:
+                        group_idx = 2
+                    elif idx < 23:
+                        group_idx = 3
+                    else:
+                        group_idx = 4
+                    futures.append(executor.submit(_generate_single_device_realtime, dev, ts, group_idx))
                 
                 records = []
                 alert_infos = []
