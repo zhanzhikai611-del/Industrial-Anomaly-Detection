@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 monitor/views.py
 ECharts 大屏 RESTful API + 逻辑回归实时在线推理
@@ -21,13 +22,17 @@ from pathlib import Path
 import numpy as np
 import joblib
 
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
+from django.shortcuts import render, get_object_or_404
 
 from .models import (
-    SystemConfig, DeviceInfo,
+    SystemConfig, DeviceInfo, UserProfile,
     ProductionSensorData, AnomalyAlertLog,
 )
 
@@ -40,6 +45,11 @@ logger = logging.getLogger(__name__)
 def dashboard_view(request):
     """首页 Dashboard"""
     from django.shortcuts import render
+    if request.user.is_authenticated:
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        if profile.role != 'Admin':
+            profile.role = 'Admin'
+            profile.save(update_fields=['role'])
     return render(request, 'monitor/dashboard.html')
 
 def device_view(request):
@@ -49,13 +59,104 @@ def device_view(request):
 
 def event_view(request):
     """Event 报警事件页"""
-    from django.shortcuts import render
-    return render(request, 'monitor/event.html')
+    from django.core.paginator import Paginator
+    from django.db.models import Count
+    from django.utils import timezone
+    from datetime import timedelta
+    import json
+    
+    events_list = AnomalyAlertLog.objects.select_related('record', 'record__device').order_by('-alert_time')
+    paginator = Paginator(events_list, 10)
+    page_number = request.GET.get('page')
+    events = paginator.get_page(page_number)
+    
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # 按照类型统计
+    type_counts = AnomalyAlertLog.objects.filter(alert_time__gte=today_start).values('alert_type').annotate(count=Count('id'))
+    stats_data = {'HIGH_CURRENT': 0, 'HIGH_POWER': 0, 'LOW_VELOCITY': 0}
+    for tc in type_counts:
+        stats_data[tc['alert_type']] = tc['count']
+        
+    trend_labels = []
+    trend_values = []
+    for i in range(5, -1, -1):
+        dt = now - timedelta(hours=i*4)
+        trend_labels.append(dt.strftime('%H:00'))
+        cnt = AnomalyAlertLog.objects.filter(alert_time__date=dt.date(), alert_time__hour=dt.hour).count()
+        trend_values.append(cnt)
+
+    return render(request, 'monitor/event.html', {
+        'events': events,
+        'stats_data_json': json.dumps([stats_data.get('LOW_VELOCITY', 0), stats_data.get('HIGH_POWER', 0), stats_data.get('HIGH_CURRENT', 0)]),
+        'trend_labels_json': json.dumps(trend_labels),
+        'trend_values_json': json.dumps(trend_values),
+    })
 
 def setting_view(request):
     """Setting 系统设置页"""
     from django.shortcuts import render
     return render(request, 'monitor/setting.html')
+
+def role_required(allowed_roles):
+    from functools import wraps
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            user_profile = getattr(request.user, 'profile', None)
+            role_name = user_profile.role if user_profile else 'Operator'
+            if role_name not in allowed_roles:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.path.startswith('/api/'):
+                    return JsonResponse({'status': 'error', 'message': 'Permission Denied'}, status=403)
+                return HttpResponseForbidden("您没有权限访问此页面。")
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
+
+def account_view(request):
+    """Account 账号管理页"""
+    user_profile = getattr(request.user, 'profile', None)
+    role_name = user_profile.role if user_profile else 'Operator'
+    has_permission = (role_name == 'Admin')
+    
+    if has_permission:
+        users = User.objects.select_related('profile').all().order_by('-date_joined')
+    else:
+        users = []
+        
+    return render(request, 'monitor/account.html', {'users': users, 'has_permission': has_permission})
+
+@csrf_exempt
+@require_http_methods(['POST'])
+@role_required(['Admin'])
+def api_create_account(request):
+    import json
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        password = data.get('password')
+        real_name = data.get('real_name')
+        job_number = data.get('job_number')
+        role = data.get('role', 'Operator')
+        
+        if User.objects.filter(username=username).exists():
+            return JsonResponse({'status': 'error', 'message': 'Username already exists'}, status=400)
+            
+        with transaction.atomic():
+            user = User.objects.create(
+                username=username,
+                password=make_password(password)
+            )
+            UserProfile.objects.create(
+                user=user,
+                real_name=real_name,
+                job_number=job_number,
+                role=role
+            )
+        return JsonResponse({'status': 'ok', 'message': '账号创建成功'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -116,6 +217,22 @@ def start_stream(request):
     return JsonResponse({'status': 'ok', 'message': '实时数据流已启动', 'is_realtime_active': True})
 
 
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_toggle_stream(request):
+    import json
+    data = json.loads(request.body)
+    action = data.get('action')
+    cfg = SystemConfig.get()
+    
+    if action == 'start':
+        cfg.is_realtime_active = True
+    elif action == 'stop':
+        cfg.is_realtime_active = False
+        
+    cfg.save()
+    return JsonResponse({'status': 'ok', 'is_running': cfg.is_realtime_active})
+    
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
 def stop_stream(request):
@@ -396,7 +513,8 @@ def api_device_matrix(request):
             'spindle_current':  sc,
             'spindle_power':    sp,
             'feed_velocity':    fv,
-            'anomaly_score':    prob,          # AI 输出置信度
+            'anomaly_score':    prob,
+            'oee':              latest.oee if latest else None,   # OEE 字段
             'ai_alert':         prob is not None and prob > 0.8,
             'unhandled_alert_id': latest_alert.id if latest_alert else None,
             'standard_capacity': dev.standard_capacity,
@@ -564,5 +682,25 @@ def api_update_device_status(request, device_id):
         return JsonResponse({'status': 'ok', 'message': f'设备状态已成功更新为 {new_status}'})
     except DeviceInfo.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': '设备不存在'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(['POST'])
+@role_required(['Admin', 'Engineer'])
+def api_device_reset(request, device_id):
+    try:
+        device = get_object_or_404(DeviceInfo, pk=device_id)
+        with transaction.atomic():
+            AnomalyAlertLog.objects.filter(
+                record__device=device, 
+                is_handled=False
+            ).update(is_handled=True)
+            
+            device.current_group_id = 2
+            device.current_status = 'Running'
+            device.save(update_fields=['current_group_id', 'current_status'])
+            
+        return JsonResponse({'status': 'ok', 'message': f'设备 {device.device_name} 已处理完毕并恢复运行性能'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

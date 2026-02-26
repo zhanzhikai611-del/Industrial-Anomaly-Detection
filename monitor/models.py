@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 monitor/models.py
 工业异常预警系统 —— 核心数据模型（v3，基于 CNC 铣床数据集重构）
@@ -15,6 +16,7 @@ monitor/models.py
 from django.db import models
 from django.utils import timezone
 from django.utils.safestring import mark_safe
+from django.contrib.auth.models import User
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -56,6 +58,11 @@ class DeviceInfo(models.Model):
         verbose_name='运行状态',
         help_text='Running=运行 | Idle=待机 | Down=停机，用于大屏状态指示灯',
     )
+    current_group_id = models.IntegerField(
+        default=1, 
+        verbose_name='当前特征组 ID', 
+        help_text='取值 1~5，由重置逻辑变更为 2(准新) 实现回春'
+    )
 
     class Meta:
         db_table = 'device_info'
@@ -65,6 +72,21 @@ class DeviceInfo(models.Model):
 
     def __str__(self):
         return f'[{self.id}] {self.device_name} ({self.get_current_status_display()})'
+
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ('Admin', 'Admin'),
+        ('Engineer', 'Engineer'),
+        ('Operator', 'Operator'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='关联系统用户')
+    real_name = models.CharField(max_length=50, verbose_name='真实姓名')
+    job_number = models.CharField(max_length=50, unique=True, verbose_name='工号')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='Operator', verbose_name='系统角色')
+
+    class Meta:
+        db_table = 'user_profile'
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -321,6 +343,10 @@ class SystemConfig(models.Model):
         auto_now=True,
         verbose_name='最近更新时间',
     )
+    ai_alert_threshold = models.FloatField(default=0.75, verbose_name='AI 置信度高报阈值')
+    spindle_current_high = models.FloatField(default=50.0, verbose_name='主轴电流高报阈值(A)')
+    spindle_power_high = models.FloatField(default=120.0, verbose_name='主轴功率高报阈值(W)')
+    feed_velocity_low = models.FloatField(default=0.5, verbose_name='进给速度低报阈值(mm/min)')
 
     class Meta:
         db_table  = 'system_config'

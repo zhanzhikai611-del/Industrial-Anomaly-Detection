@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 monitor/management/commands/run_realtime_stream.py
 实时数据流守护进程 —— Django Management Command
@@ -164,15 +165,16 @@ def _check_and_create_alert(record: ProductionSensorData) -> bool:
     检查刚保存的 record 是否触发物理报警阈值。
     若触发则写入 AnomalyAlertLog，返回 True。
     """
+    cfg = SystemConfig.get()
     sc  = abs(record.spindle_current)
     sp  = record.spindle_power
     fv  = abs(record.feed_velocity)
 
-    if sc > ALERT_THRESHOLDS['spindle_current']:
+    if sc > cfg.spindle_current_high:
         atype = 'HIGH_CURRENT'
-    elif sp > ALERT_THRESHOLDS['spindle_power']:
+    elif sp > cfg.spindle_power_high:
         atype = 'HIGH_POWER'
-    elif fv > ALERT_THRESHOLDS['feed_velocity']:
+    elif fv < cfg.feed_velocity_low:
         atype = 'LOW_VELOCITY'
     else:
         return False
@@ -229,17 +231,9 @@ class Command(BaseCommand):
                 alerts_created  = 0
 
                 for idx, dev in enumerate(devices):
+                    dev.refresh_from_db(fields=['current_status', 'current_group_id'])
                     status = dev.current_status
-                    if idx < 5:
-                        group_idx = 0
-                    elif idx < 12:
-                        group_idx = 1
-                    elif idx < 19:
-                        group_idx = 2
-                    elif idx < 23:
-                        group_idx = 3
-                    else:
-                        group_idx = 4
+                    group_idx = min(max(dev.current_group_id - 1, 0), 4)
 
                     if status == 'Running':
                         rec_obj = _gen_running_record(dev, now, group_idx)

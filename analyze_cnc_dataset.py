@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 analyze_cnc_dataset.py
 CNC 铣床刀具磨损数据集统计分析脚本

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 monitor/admin.py
 Django Admin 后台注册（v3，对应 CNC 版三张模型）

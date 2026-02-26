@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 IndustrialWarningSystem/__init__.py
 在项目启动时用 pymysql 替换 MySQLdb，使 Django 能够连接 MySQL 数据库

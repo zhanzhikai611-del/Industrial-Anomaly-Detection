@@ -7,9 +7,9 @@
     <title>CNC Cloud | {% block title %}Dashboard{% endblock %}</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
-        /* ╔══════════════════════════════════════╗
-   ║  CSS 设计令牌                        ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           Design Tokens  —  Figma V1.0.2
+        ══════════════════════════════════════ */
         :root {
             --sidebar-w: 240px;
             --navbar-h: 56px;
@@ -19,14 +19,19 @@
             --radius: 8px;
             --primary: #409EFF;
             --primary-bg: #ecf5ff;
+            --ai-red: #ff6467;
             --danger: #f56c6c;
+            --danger-deep: #f67575;
             --success: #67c23a;
             --warning: #E6A23C;
             --text: #303133;
             --text-sec: #606266;
             --text-hint: #909399;
+            --text-weak: #C0C4CC;
             --border: #e4e7ed;
-            --font: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+            --row-div: #f5f7fa;
+            --font: -apple-system, 'Helvetica Neue', Arial, 'PingFang SC', 'Noto Sans SC', sans-serif;
+            --font-mono: 'Menlo', 'Courier New', monospace;
         }
 
         *,
@@ -47,9 +52,9 @@
             background: var(--bg);
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  侧边栏                              ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           侧边栏  (Figma: w=240px, border-right #e4e7ed)
+        ══════════════════════════════════════ */
         .sidebar {
             position: fixed;
             top: 0;
@@ -63,18 +68,19 @@
             flex-direction: column;
         }
 
-        .sidebar-logo {
+        /* Logo 区域与顶部 header 等高，在 header 内部的左侧品牌块 */
+        .sidebar-brand {
+            height: var(--navbar-h);
             display: flex;
             align-items: center;
             gap: 10px;
             padding: 0 20px;
-            height: var(--navbar-h);
             border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
+            text-decoration: none;
             font-size: 15px;
             font-weight: 700;
             color: var(--text);
-            text-decoration: none;
+            flex-shrink: 0;
         }
 
         .logo-box {
@@ -91,9 +97,14 @@
         .logo-box svg {
             width: 18px;
             height: 18px;
-            fill: #fff;
+            fill: none;
+            stroke: #fff;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
+        /* 导航列表 */
         .sidebar-nav {
             padding: 12px 0;
             flex: 1;
@@ -105,6 +116,7 @@
             align-items: center;
             gap: 10px;
             padding: 10px 20px;
+            height: 37px;
             color: var(--text-sec);
             text-decoration: none;
             border-left: 3px solid transparent;
@@ -116,7 +128,11 @@
             width: 17px;
             height: 17px;
             flex-shrink: 0;
-            fill: currentColor;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         .nav-link:hover {
@@ -131,6 +147,7 @@
             font-weight: 500;
         }
 
+        /* 底部版本号 */
         .sidebar-footer {
             padding: 16px 20px;
             border-top: 1px solid var(--border);
@@ -139,10 +156,10 @@
             flex-shrink: 0;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  顶部导航栏                          ║
-   ╚══════════════════════════════════════╝ */
-        .navbar {
+        /* ══════════════════════════════════════
+           顶部 Header  (固定, left=240px)
+        ══════════════════════════════════════ */
+        .header {
             position: fixed;
             top: 0;
             left: var(--sidebar-w);
@@ -153,42 +170,9 @@
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-end;
             padding: 0 24px;
-        }
-
-        .navbar-brand {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text);
-        }
-
-        .navbar-right {
-            display: flex;
-            align-items: center;
             gap: 14px;
-        }
-
-        .badge-pill {
-            padding: 3px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            border: 1px solid;
-            transition: all .15s;
-        }
-
-        .badge-pill.running {
-            color: var(--success);
-            border-color: #b3e19d;
-            background: #f0f9eb;
-        }
-
-        .badge-pill.stopped {
-            color: var(--danger);
-            border-color: #fab6b6;
-            background: #fef0f0;
         }
 
         .avatar {
@@ -220,12 +204,16 @@
         .icon-btn svg {
             width: 20px;
             height: 20px;
-            fill: currentColor;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  主内容区                            ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           主内容区
+        ══════════════════════════════════════ */
         .main {
             margin-left: var(--sidebar-w);
             padding-top: var(--navbar-h);
@@ -236,9 +224,9 @@
             padding: 24px;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  卡片通用                            ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           卡片
+        ══════════════════════════════════════ */
         .card {
             background: var(--card-bg);
             border-radius: var(--radius);
@@ -256,6 +244,7 @@
             gap: 0;
         }
 
+        /* Figma：3×14px 圆角蓝色色块 */
         .card-title-bar {
             display: inline-block;
             width: 3px;
@@ -272,9 +261,9 @@
             margin-bottom: 4px;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  网格工具类（12 列）                 ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           Grid
+        ══════════════════════════════════════ */
         .row {
             display: flex;
             gap: 16px;
@@ -317,9 +306,9 @@
             margin-bottom: 16px;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  通用表格                            ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           通用表格
+        ══════════════════════════════════════ */
         .tbl {
             width: 100%;
             border-collapse: collapse;
@@ -337,7 +326,7 @@
 
         .tbl td {
             padding: 10px 12px;
-            border-bottom: 1px solid #f5f7fa;
+            border-bottom: 1px solid var(--row-div);
             color: var(--text);
         }
 
@@ -349,9 +338,9 @@
             border-bottom: none;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  Modal                               ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           Modal
+        ══════════════════════════════════════ */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -416,9 +405,9 @@
             gap: 16px;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  按钮                                ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           按钮
+        ══════════════════════════════════════ */
         .btn {
             padding: 5px 14px;
             border-radius: 4px;
@@ -455,9 +444,9 @@
             font-size: 12px;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  风险色                              ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           风险色
+        ══════════════════════════════════════ */
         .risk-high {
             color: var(--danger);
             font-weight: 600;
@@ -473,9 +462,9 @@
             font-weight: 600;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  进度条                              ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           进度条
+        ══════════════════════════════════════ */
         .progress-bar-wrap {
             height: 8px;
             background: #f0f2f5;
@@ -491,15 +480,15 @@
             transition: width .5s;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  Stat 数字行                         ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           设备状态行
+        ══════════════════════════════════════ */
         .stat-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 11px 0;
-            border-bottom: 1px solid #f5f7fa;
+            border-bottom: 1px solid var(--row-div);
         }
 
         .stat-row:last-child {
@@ -510,19 +499,20 @@
             display: inline-block;
             width: 8px;
             height: 8px;
-            border-radius: 50%;
+            border-radius: 4px;
             margin-right: 7px;
         }
 
         .stat-val {
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--text);
+            font-family: var(--font-mono);
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  快照小方块                          ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           AI 诊断弹窗 特征快照卡
+        ══════════════════════════════════════ */
         .snapshot-card {
             background: #f4f7fa;
             border-radius: 6px;
@@ -540,7 +530,7 @@
             font-size: 20px;
             font-weight: 700;
             color: var(--text);
-            font-family: monospace;
+            font-family: var(--font-mono);
         }
 
         .snapshot-card .sk-unit {
@@ -549,9 +539,76 @@
             margin-left: 4px;
         }
 
-        /* ╔══════════════════════════════════════╗
-   ║  分页                                ║
-   ╚══════════════════════════════════════╝ */
+        /* ══════════════════════════════════════
+           设备筛选卡 (Device 页)
+        ══════════════════════════════════════ */
+        .filter-cards-row {
+            display: flex;
+            gap: 14px;
+        }
+
+        .filter-card {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 18px;
+            background: #fff;
+            cursor: pointer;
+            transition: all .15s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .filter-card:hover {
+            border-color: var(--primary);
+        }
+
+        .filter-card .fc-label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .filter-card .fc-num {
+            font-size: 22px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        .filter-card.all {
+            border-color: #c0c4cc;
+        }
+
+        .filter-card.high {
+            border-color: var(--danger);
+        }
+
+        .filter-card.high .fc-label,
+        .filter-card.high .fc-num {
+            color: var(--danger);
+        }
+
+        .filter-card.med {
+            border-color: var(--warning);
+        }
+
+        .filter-card.med .fc-label,
+        .filter-card.med .fc-num {
+            color: var(--warning);
+        }
+
+        .filter-card.low {
+            border-color: var(--success);
+        }
+
+        .filter-card.low .fc-label,
+        .filter-card.low .fc-num {
+            color: var(--success);
+        }
+
+        /* ══════════════════════════════════════
+           分页
+        ══════════════════════════════════════ */
         .pagination {
             display: flex;
             gap: 4px;
@@ -582,69 +639,26 @@
             color: #fff;
         }
 
-        /* 过滤统计卡 */
-        .filter-card {
-            flex: 1;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 14px 18px;
-            background: #fff;
-            cursor: pointer;
-            transition: all .15s;
+        /* ══════════════════════════════════════
+           图表区段标题
+        ══════════════════════════════════════ */
+        .chart-section-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-sec);
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 4px;
+            margin: 0 0 8px;
         }
 
-        .filter-card:hover {
-            border-color: var(--primary);
-        }
-
-        .filter-card .fc-label {
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .filter-card .fc-num {
-            font-size: 22px;
-            font-weight: 700;
-            font-family: monospace;
-        }
-
-        .filter-card.all {
-            border-color: #c0c4cc;
-        }
-
-        .filter-card.high {
-            border-color: #f56c6c;
-        }
-
-        .filter-card.high .fc-label,
-        .filter-card.high .fc-num {
-            color: #f56c6c;
-        }
-
-        .filter-card.med {
-            border-color: #E6A23C;
-        }
-
-        .filter-card.med .fc-label,
-        .filter-card.med .fc-num {
-            color: #E6A23C;
-        }
-
-        .filter-card.low {
-            border-color: #67c23a;
-        }
-
-        .filter-card.low .fc-label,
-        .filter-card.low .fc-num {
-            color: #67c23a;
-        }
-
-        .filter-cards-row {
-            display: flex;
-            gap: 14px;
+        .chart-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 12px;
+            background: var(--primary);
+            border-radius: 2px;
         }
     </style>
     {% block extra_style %}{% endblock %}
@@ -654,58 +668,91 @@
 
     <!-- ══════ 侧边栏 ══════ -->
     <aside class="sidebar">
-        <a href="/dashboard/" class="sidebar-logo">
+        <a href="/dashboard/" class="sidebar-brand">
             <div class="logo-box">
+                <!-- Codesandbox icon (Figma node 4:421) -->
                 <svg viewBox="0 0 24 24">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    <path
+                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
                 </svg>
             </div>
             CNC Cloud
         </a>
+
         <nav class="sidebar-nav">
+            <!-- 仪表盘 — grid icon -->
             <a href="/dashboard/" class="nav-link {% block nav_dashboard %}{% endblock %}">
                 <svg viewBox="0 0 24 24">
-                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
-                Dashboard
+                仪表盘
             </a>
+
+            <!-- 设备监控 — cpu icon -->
             <a href="/devices/" class="nav-link {% block nav_device %}{% endblock %}">
                 <svg viewBox="0 0 24 24">
-                    <path
-                        d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z" />
+                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                    <rect x="9" y="9" width="6" height="6" />
+                    <line x1="9" y1="1" x2="9" y2="4" />
+                    <line x1="15" y1="1" x2="15" y2="4" />
+                    <line x1="9" y1="20" x2="9" y2="23" />
+                    <line x1="15" y1="20" x2="15" y2="23" />
+                    <line x1="20" y1="9" x2="23" y2="9" />
+                    <line x1="20" y1="14" x2="23" y2="14" />
+                    <line x1="1" y1="9" x2="4" y2="9" />
+                    <line x1="1" y1="14" x2="4" y2="14" />
                 </svg>
-                Device
+                设备监控
             </a>
+
+            <!-- 事件中心 — file-minus icon -->
             <a href="/events/" class="nav-link {% block nav_event %}{% endblock %}">
                 <svg viewBox="0 0 24 24">
-                    <path
-                        d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="9" y1="15" x2="15" y2="15" />
                 </svg>
-                Event
+                事件中心
             </a>
+
+            <!-- 账号管理 — user icon -->
+            <a href="/accounts/" class="nav-link {% block nav_account %}{% endblock %}">
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                </svg>
+                账号管理
+            </a>
+
+            <!-- 系统设置 — settings icon -->
             <a href="/setting/" class="nav-link {% block nav_setting %}{% endblock %}">
                 <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3" />
                     <path
-                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
-                Setting
+                系统设置
             </a>
         </nav>
-        <div class="sidebar-footer">V1.0.1 · CNC 预测性维护系统</div>
+
+        <div class="sidebar-footer">V1.0.2 · CNC预警系统</div>
     </aside>
 
-    <!-- ══════ Navbar ══════ -->
-    <header class="navbar">
-        <div></div><!-- 顶栏左侧预留 -->
-        <div class="navbar-right">
-            <div class="avatar" title="管理员">管</div>
-            <span class="icon-btn" title="退出登录">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
-                </svg>
-            </span>
-        </div>
+    <!-- ══════ Header ══════ -->
+    <header class="header">
+        <div class="avatar" title="管理员">管</div>
+        <span class="icon-btn" title="退出登录">
+            <svg viewBox="0 0 24 24">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+        </span>
     </header>
 
     <!-- ══════ 主内容 ══════ -->
@@ -715,9 +762,6 @@
         </div>
     </main>
 
-    <script>
-        /* 数据流控制入口已移至 Setting 页面 */
-    </script>
     {% block extra_js %}{% endblock %}
 </body>
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 train_model.py
 基于 CNC 铣床传感数据的逻辑回归刀具磨损预测模型训练脚本

@@ -1,400 +1,433 @@
 {% extends 'monitor/base.html' %}
-{% block title %}Event{% endblock %}
-{% block page_title %}Event · 报警事件审计{% endblock %}
+{% block title %}事件中心{% endblock %}
 {% block nav_event %}active{% endblock %}
 
 {% block extra_style %}
 <style>
-    /* 顶栏筛选 */
-    .event-toolbar {
+    /* ── 布局设定 ── */
+    .ev-container {
+        display: flex;
+        gap: 20px;
+        min-height: calc(100vh - 56px);
+        padding: 20px;
+    }
+
+    /* 左侧两张图表卡片 */
+    .ev-left-col {
+        width: 421px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    /* 右侧一张大表格卡片 */
+    .ev-right-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .ev-card {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
+        padding: 20px;
+        flex: 1;
+    }
+
+    /* ── 标题与工具栏 ── */
+    .ev-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #e4e7ed;
     }
 
-    .event-toolbar .tb-left {
+    .ev-title-wrap {
         display: flex;
-        gap: 8px;
         align-items: center;
+        gap: 8px;
     }
 
-    .event-toolbar .tb-right {
+    .ev-title-bar {
+        width: 3px;
+        height: 14px;
+        background: #409EFF;
+        border-radius: 2px;
+    }
+
+    .ev-title-text {
+        font-size: 14px;
+        color: #303133;
+        font-family: 'PingFang SC', sans-serif;
+        font-weight: 600;
+    }
+
+    .ev-tools {
         display: flex;
-        gap: 8px;
-        align-items: center;
+        gap: 10px;
+    }
+
+    .ev-search {
+        width: 180px;
+        height: 28px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+        padding: 0 10px;
         font-size: 12px;
-        color: #909399;
+        color: #303133;
+        outline: none;
     }
 
-    /* 报警类型标签 */
-    .alert-tag {
-        display: inline-block;
+    .ev-search::placeholder {
+        color: #c0c4cc;
+    }
+
+    .ev-search:focus {
+        border-color: #409eff;
+    }
+
+    .ev-select {
+        width: 110px;
+        height: 28px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+        padding: 0 10px;
+        font-size: 12px;
+        color: #606266;
+        outline: none;
+        cursor: pointer;
+        background: #fff;
+    }
+
+    .ev-select:focus {
+        border-color: #409eff;
+    }
+
+    /* ── 表格区域 ── */
+    .ev-table-wrap {
+        flex: 1;
+        overflow: auto;
+    }
+
+    .ev-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .ev-table th {
+        background: #fafafa;
+        border-bottom: 1px solid #e4e7ed;
+        color: #909399;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 12px 20px;
+        text-align: left;
+    }
+
+    .ev-table td {
+        padding: 15px 20px;
+        border-bottom: 1px solid #f5f7fa;
+        color: #303133;
+        font-size: 13px;
+        vertical-align: top;
+    }
+
+    .time-cell {
+        font-family: 'Menlo', monospace;
+    }
+
+    .time-time {
+        color: #909399;
+        font-size: 11px;
+        margin-top: 4px;
+    }
+
+    .device-cell {
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 500;
+    }
+
+    .tag-vhigh {
+        display: inline-flex;
+        background: #fef0f0;
+        color: #f56c6c;
         padding: 2px 10px;
         border-radius: 20px;
         font-size: 11px;
         font-weight: 500;
-        letter-spacing: .3px;
-    }
-
-    .tag-vhigh {
-        background: #fef0f0;
-        color: #f56c6c;
+        letter-spacing: 0.3px;
     }
 
     .tag-high {
+        display: inline-flex;
         background: #fdf6ec;
-        color: #E6A23C;
+        color: #e6a23c;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.3px;
     }
 
-    .tag-med {
-        background: #f0f9eb;
-        color: #67c23a;
-    }
-
-    .tag-info {
-        background: #ecf5ff;
-        color: #409EFF;
-    }
-
-    /* 状态圆点 */
-    .handled-dot {
-        color: #67c23a;
-    }
-
-    .unhandled-dot {
-        color: #f56c6c;
-    }
-
-    /* 操作按钮列 */
-    .ev-close-btn {
-        padding: 3px 12px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        background: #fff;
-        color: #606266;
+    .val-cell {
+        font-family: 'Menlo', monospace;
         font-size: 12px;
-        cursor: pointer;
-        transition: all .15s;
     }
 
-    .ev-close-btn.done {
-        color: #c0c4cc;
-        border-color: #e4e7ed;
-        pointer-events: none;
-    }
-
-    .ev-close-btn:not(.done):hover {
-        border-color: #409EFF;
-        color: #409EFF;
-    }
-
-    /* 分页区 */
-    .table-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 16px;
-        font-size: 12px;
+    .val-unit {
         color: #909399;
-    }
-
-    /* select 选择器 */
-    .filter-select {
-        padding: 5px 10px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        background: #fff;
-        font-size: 12px;
-        color: #606266;
-        cursor: pointer;
-        outline: none;
-    }
-
-    .filter-select:focus {
-        border-color: #409EFF;
-    }
-
-    /* 搜索输入框 */
-    .search-input {
-        padding: 5px 12px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        font-size: 12px;
-        color: #303133;
-        outline: none;
-        width: 180px;
-    }
-
-    .search-input:focus {
-        border-color: #409EFF;
-    }
-
-    .search-input::placeholder {
-        color: #c0c4cc;
-    }
-
-    /* 空状态 */
-    .empty-state {
-        text-align: center;
-        padding: 48px 0;
-        color: #c0c4cc;
-        font-size: 13px;
+        font-size: 10px;
+        margin-left: 2px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- 顶部工具栏 -->
-<div class="event-toolbar">
-    <div class="tb-left">
-        <input class="search-input" id="search-input" type="text" placeholder="搜索设备名…" oninput="applyFilter()">
-        <select class="filter-select" id="type-filter" onchange="applyFilter()">
-            <option value="">全部类型</option>
-            <option value="HIGH_CURRENT">主轴过电流</option>
-            <option value="HIGH_POWER">主轴过载</option>
-            <option value="LR_TOOL_WEAR">LR 刀具磨损</option>
-            <option value="LOW_VELOCITY">进给骤降</option>
-            <option value="DOWNTIME">停机超时</option>
-        </select>
-        <select class="filter-select" id="status-filter" onchange="applyFilter()">
-            <option value="">全部状态</option>
-            <option value="false">未处理</option>
-            <option value="true">已处理</option>
-        </select>
+<div class="ev-container">
+    <!-- 左侧两图表 -->
+    <div class="ev-left-col">
+        <!-- 统计条形图 -->
+        <div class="ev-card" style="height: 310px; display: flex; flex-direction: column;">
+            <div class="ev-title-wrap" style="margin-bottom: 20px;">
+                <div class="ev-title-bar"></div>
+                <div class="ev-title-text">系统异常事件统计</div>
+            </div>
+            <div id="chart-bar" style="height: 350px; width: 100%;"></div>
+        </div>
+        <!-- 趋势面积图 -->
+        <div class="ev-card" style="flex: 1; display: flex; flex-direction: column;">
+            <div class="ev-title-wrap" style="margin-bottom: 20px;">
+                <div class="ev-title-bar"></div>
+                <div class="ev-title-text">报警频率趋势图</div>
+            </div>
+            <div id="chart-trend" style="height: 350px; width: 100%;"></div>
+        </div>
     </div>
-    <div class="tb-right">
-        共 <span id="ev-total" style="color:#303133; font-weight:600; margin:0 4px;">--</span> 条记录
-        &nbsp;|&nbsp; 每页
-        <select class="filter-select" id="page-size" onchange="changePageSize()" style="width:60px;">
-            <option value="10">10</option>
-            <option value="20">20</option>
-            <option value="50">50</option>
-        </select>
-    </div>
-</div>
 
-<!-- 主表格卡片 -->
-<div class="card">
-    <table class="tbl" id="ev-table">
-        <thead>
-            <tr>
-                <th style="width:150px;">触发时间</th>
-                <th>设备</th>
-                <th>报警类型</th>
-                <th style="width:90px;">AI 置信度</th>
-                <th style="width:80px;">主轴电流</th>
-                <th style="width:80px;">主轴功率</th>
-                <th style="width:90px;">处理状态</th>
-                <th style="width:80px;">操作</th>
-            </tr>
-        </thead>
-        <tbody id="ev-tbody">
-            <tr>
-                <td colspan="8" class="empty-state">加载中…</td>
-            </tr>
-        </tbody>
-    </table>
+    <!-- 右侧完整表格 -->
+    <div class="ev-right-col">
+        <div class="ev-header">
+            <div class="ev-title-wrap">
+                <div class="ev-title-bar"></div>
+                <div class="ev-title-text">系统异常事件上报</div>
+            </div>
+            <div class="ev-tools">
+                <input class="ev-search" id="ev-search" placeholder="搜索设备名…" oninput="applyFilter()">
+                <select class="ev-select" id="type-filter" onchange="applyFilter()">
+                    <option value="">全部类型</option>
+                    <option value="HIGH_CURRENT">主轴过电流</option>
+                    <option value="HIGH_POWER">主轴过载</option>
+                    <option value="LOW_VELOCITY">进给速度异常</option>
+                </select>
+            </div>
+        </div>
 
-    <!-- 分页 -->
-    <div class="table-footer">
-        <span id="page-info" style="color:#909399;"></span>
-        <div class="pagination" id="pagination"></div>
+        <div class="ev-table-wrap">
+            <table class="ev-table" id="ev-table">
+                <thead>
+                    <tr>
+                        <th style="width: 150px;">触发时间</th>
+                        <th style="width: 160px;">设备</th>
+                        <th style="width: 200px;">报警类型</th>
+                        <th style="width: 100px;" class="text-nowrap">主轴电流</th>
+                        <th class="text-nowrap">主轴功率</th>
+                    </tr>
+                </thead>
+                <tbody id="ev-tbody">
+                    {% for event in events %}
+                    <tr>
+                        <td>
+                            <div class="time-cell">{{ event.alert_time|date:"Y-m-d" }}</div>
+                            <div class="time-time">{{ event.alert_time|date:"H:i:s" }}</div>
+                        </td>
+                        <td class="device-cell">{{ event.record.device.device_name }}</td>
+                        <td>
+                            {% if event.alert_type == 'LR_TOOL_WEAR' %}
+                            <span class="tag-vhigh">{{ event.get_alert_type_display }}</span>
+                            {% elif event.alert_type == 'DOWNTIME' %}
+                            <span class="tag-vhigh">{{ event.get_alert_type_display }}</span>
+                            {% else %}
+                            <span class="tag-high">{{ event.get_alert_type_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap"><span class="val-cell">{{ event.record.spindle_current|floatformat:2
+                                }}</span><span class="val-unit">A</span></td>
+                        <td class="text-nowrap"><span class="val-cell">{{ event.record.spindle_power|floatformat:1
+                                }}</span><span class="val-unit">W</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" style="text-align:center;padding:40px;color:#909399;">暂无数据</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <!-- Pagination -->
+            <div class="mt-3 d-flex justify-content-center">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination pagination-sm">
+                        {% if events.has_previous %}
+                        <li class="page-item"><a class="page-link"
+                                href="?page={{ events.previous_page_number }}">上一页</a></li>
+                        {% endif %}
+                        <li class="page-item active"><a class="page-link" href="#">第 {{ events.number }} 页</a></li>
+                        {% if events.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ events.next_page_number }}">下一页</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block extra_script %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script>
-    /* ── 常量与状态 ── */
-    const ALERT_NAMES = {
-        HIGH_CURRENT: '主轴过电流物理报警',
-        HIGH_POWER: '主轴过载物理报警',
-        LR_TOOL_WEAR: 'LR 刀具磨损预警',
-        LOW_VELOCITY: '进给速度骤降',
-        DOWNTIME: '停机超时报警',
-    };
+    let barChart = null;
+    let trendChart = null;
+    let allAlerts = [];
 
-    let allEvents = [];   // 原始数据（最多 100 条）
-    let filteredRows = [];   // 筛选后
-    let currentPage = 1;
-    let pageSize = 10;
-
-    /* ── 时间格式化 ── */
-    function fmtDt(iso) {
-        const d = new Date(iso);
-        const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const hms = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-        return `${ymd}<br><span style="color:#909399;font-size:11px;">${hms}</span>`;
-    }
-
-    /* ── 风险标签 ── */
-    function riskTag(score) {
-        if (score == null) return '<span style="color:#c0c4cc;">--</span>';
-        const s = score * 100;
-        const v = s.toFixed(1) + '%';
-        if (s >= 80) return `<span class="alert-tag tag-vhigh">${v}</span>`;
-        if (s >= 50) return `<span class="alert-tag tag-high">${v}</span>`;
-        if (s >= 20) return `<span class="alert-tag tag-med">${v}</span>`;
-        return `<span class="alert-tag tag-info">${v}</span>`;
-    }
-
-    /* ── 报警类型标签 ── */
-    function typeTag(alertType, score) {
-        const name = ALERT_NAMES[alertType] || alertType;
-        let cls = 'tag-info';
-        if (score != null) {
-            if (score >= .8) cls = 'tag-vhigh';
-            else if (score >= .5) cls = 'tag-high';
-            else if (score >= .2) cls = 'tag-med';
-        }
-        return `<span class="alert-tag ${cls}">${name}</span>`;
-    }
-
-    /* ── 渲染一页 ── */
-    function renderPage() {
-        const start = (currentPage - 1) * pageSize;
-        const pageRows = filteredRows.slice(start, start + pageSize);
-        const total = filteredRows.length;
-
-        // 空状态
-        if (!pageRows.length) {
-            document.getElementById('ev-tbody').innerHTML =
-                `<tr><td colspan="8" class="empty-state">暂无符合条件的事件记录</td></tr>`;
-            document.getElementById('page-info').textContent = '';
-            document.getElementById('pagination').innerHTML = '';
-            return;
-        }
-
-        // 表格行
-        document.getElementById('ev-tbody').innerHTML = pageRows.map(a => `
-    <tr>
-      <td style="font-family:monospace;">${fmtDt(a.alert_time)}</td>
-      <td style="font-weight:500;">${a.device_name}</td>
-      <td>${typeTag(a.alert_type, a.anomaly_score)}</td>
-      <td>${riskTag(a.anomaly_score)}</td>
-      <td style="font-family:monospace; font-size:12px;">${a.spindle_current?.toFixed(2) ?? '--'} <small style="color:#909399;">A</small></td>
-      <td style="font-family:monospace; font-size:12px;">${a.spindle_power?.toFixed(0) ?? '--'} <small style="color:#909399;">W</small></td>
-      <td>
-        ${a.is_handled
-                ? '<span class="handled-dot">✓</span> <span style="color:#909399;font-size:12px;">已处理</span>'
-                : '<span class="unhandled-dot">●</span> <span style="color:#f56c6c;font-size:12px;">待处理</span>'}
-      </td>
-      <td>
-        <button class="ev-close-btn ${a.is_handled ? 'done' : ''}"
-          data-id="${a.id}" onclick="handleAlert(${a.id}, this)"
-          ${a.is_handled ? 'disabled' : ''}>
-          ${a.is_handled ? '已闭环' : '闭环'}
-        </button>
-      </td>
-    </tr>`).join('');
-
-        // 状态信息
-        document.getElementById('page-info').textContent =
-            `第 ${start + 1} – ${Math.min(start + pageSize, total)} 条，共 ${total} 条`;
-
-        // 分页按钮
-        const totalPages = Math.ceil(total / pageSize);
-        let pages = '';
-        // 上一页
-        pages += `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹</button>`;
-        // 页码（最多显示 7 个，带省略号）
-        const range = buildPageRange(currentPage, totalPages);
-        range.forEach(p => {
-            if (p === '…') {
-                pages += `<button class="page-btn" disabled>…</button>`;
-            } else {
-                pages += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
-            }
-        });
-        // 下一页
-        pages += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>›</button>`;
-        document.getElementById('pagination').innerHTML = pages;
-    }
-
-    function buildPageRange(cur, total) {
-        if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-        const r = [];
-        if (cur <= 4) {
-            for (let i = 1; i <= 5; i++) r.push(i);
-            r.push('…'); r.push(total);
-        } else if (cur >= total - 3) {
-            r.push(1); r.push('…');
-            for (let i = total - 4; i <= total; i++) r.push(i);
-        } else {
-            r.push(1); r.push('…');
-            for (let i = cur - 1; i <= cur + 1; i++) r.push(i);
-            r.push('…'); r.push(total);
-        }
-        return r;
-    }
-
-    function goPage(p) {
-        const totalPages = Math.ceil(filteredRows.length / pageSize);
-        if (p < 1 || p > totalPages) return;
-        currentPage = p; renderPage();
-    }
-
-    function changePageSize() {
-        pageSize = +document.getElementById('page-size').value;
-        currentPage = 1; renderPage();
-    }
-
-    /* ── 筛选 ── */
-    function applyFilter() {
-        const q = document.getElementById('search-input').value.trim().toLowerCase();
-        const type = document.getElementById('type-filter').value;
-        const stat = document.getElementById('status-filter').value;
-
-        filteredRows = allEvents.filter(a => {
-            if (q && !a.device_name.toLowerCase().includes(q)) return false;
-            if (type && a.alert_type !== type) return false;
-            if (stat === 'true' && !a.is_handled) return false;
-            if (stat === 'false' && a.is_handled) return false;
-            return true;
-        });
-        document.getElementById('ev-total').textContent = filteredRows.length;
-        currentPage = 1;
-        renderPage();
-    }
-
-    /* ── 加载数据 ── */
-    async function loadEvents() {
-        try {
-            // 实时启停检查
-            const st = await fetch('/api/stream-status/').then(r => r.json());
-            if (!st.is_realtime_active) {
-                console.log('监控已暂停');
-                return;
-            }
-
-            const d = await fetch('/api/alerts/?limit=100').then(r => r.json());
-            if (d.status !== 'ok') return;
-            allEvents = d.data;
-            applyFilter();
-        } catch (e) { console.warn('[events]', e); }
-    }
-
-    /* ── 闭环处理 ── */
-    async function handleAlert(id, btn) {
-        btn.textContent = '处理中…'; btn.disabled = true;
-        try {
-            const r = await fetch(`/api/alerts/${id}/handle/`).then(r => r.json());
-            if (r.status === 'ok') {
-                // 更新本地缓存
-                const ev = allEvents.find(a => a.id === id);
-                if (ev) ev.is_handled = true;
-                applyFilter();    // 重新渲染（可能影响过滤状态）
-            } else {
-                btn.textContent = '失败'; btn.disabled = false;
-            }
-        } catch (e) { btn.textContent = '失败'; btn.disabled = false; }
-    }
-
-    /* ── 启动 ── */
     document.addEventListener('DOMContentLoaded', () => {
-        loadEvents();
-        setInterval(loadEvents, 3000);
+        barChart = echarts.init(document.getElementById('chart-bar'));
+        trendChart = echarts.init(document.getElementById('chart-trend'));
+
+        fetchData();
+        // 自动刷新
+        setInterval(fetchData, 10000);
+
+        window.addEventListener('resize', () => {
+            barChart.resize();
+            trendChart.resize();
+        });
     });
+
+    async function fetchData() {
+        try {
+            const res = await fetch('/api/alerts/');
+            const data = await res.json();
+            if (data.status === 'ok') {
+                allAlerts = data.alerts;
+                renderCharts(data.alerts);
+            }
+        } catch (e) { console.error('Error fetching alerts', e); }
+    }
+
+    function renderCharts(alerts) {
+        // 1. 统计数量（基于 Figma 假数据对齐设计UI）
+        const barOption = {
+            grid: { left: '0%', right: '15%', top: '0%', bottom: '5%', containLabel: true },
+            xAxis: { type: 'value', show: false },
+            yAxis: {
+                type: 'category',
+                data: ['进给速度异常报警', '主轴过载物理报警', '主轴过电流物理报警'],
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: '#6b7280', fontSize: 12, margin: 16 }
+            },
+            series: [{
+                type: 'bar',
+                data: JSON.parse('{{ stats_data_json|safe }}'),
+                barWidth: 12,
+                showBackground: true,
+                backgroundStyle: { color: '#f3f6fa', borderRadius: 6 },
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#3b82f6' },
+                        { offset: 0.6, color: '#60a5fa' },
+                        { offset: 1, color: '#93c5fd' }
+                    ]),
+                    borderRadius: 6
+                },
+                label: {
+                    show: true,
+                    position: 'right',
+                    color: '#374151',
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    formatter: '{c}',
+                    distance: 10
+                }
+            }]
+        };
+        barChart.setOption(barOption);
+
+        // 2. 趋势图（模拟红色峰值的 Figma 样式）
+        const trendOption = {
+            grid: { left: '3%', right: '8%', top: '5%', bottom: '10%', containLabel: true },
+            tooltip: {
+                trigger: 'axis',
+                formatter: '峰值 {c} @ {b}',
+                backgroundColor: '#fef2f2',
+                borderColor: '#fecaca',
+                textStyle: { color: '#ef4444', fontSize: 11, fontFamily: 'monospace' }
+            },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: JSON.parse('{{ trend_labels_json|safe }}'),
+                axisLine: { show: false },
+                axisTick: { show: false },
+                axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' }
+            },
+            yAxis: {
+                type: 'value',
+                min: 0, max: 50, interval: 10,
+                splitLine: { show: false },
+                axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' }
+            },
+            series: [{
+                type: 'line',
+                smooth: 0.3,
+                showSymbol: false,
+                lineStyle: { width: 2, color: '#ef4444' },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(239,68,68,0.3)' },
+                        { offset: 1, color: 'rgba(239,68,68,0)' }
+                    ])
+                },
+                markPoint: {
+                    data: [
+                        { type: 'max', name: 'Max', symbol: 'circle', symbolSize: 8, itemStyle: { color: '#ef4444', borderColor: '#fff', borderWidth: 1 }, label: { show: false } }
+                    ]
+                },
+                data: JSON.parse('{{ trend_values_json|safe }}')
+            }]
+        };
+        trendChart.setOption(trendOption);
+    }
+
+    // Table strictly rendered from Django backend.
+    function applyFilter() {
+        const typeQ = document.getElementById('type-filter').value;
+        const searchQ = document.getElementById('ev-search').value.toLowerCase().trim();
+        const trs = document.querySelectorAll('#ev-tbody tr');
+
+        trs.forEach(tr => {
+            if (tr.children.length === 1) return; // 'No data' row
+            const deviceName = tr.querySelector('.device-cell')?.textContent.toLowerCase() || '';
+            let rawTypeStr = tr.children[2]?.textContent || '';
+            rawTypeStr = rawTypeStr.trim();
+
+            // simple front-end filter for rendered table
+            let isEvMatch = true;
+            if (typeQ === 'HIGH_CURRENT' && !rawTypeStr.includes('过电流')) isEvMatch = false;
+            if (typeQ === 'HIGH_POWER' && !rawTypeStr.includes('过载')) isEvMatch = false;
+            if (typeQ === 'LOW_VELOCITY' && !rawTypeStr.includes('速度')) isEvMatch = false;
+
+            if (searchQ && !deviceName.includes(searchQ)) isEvMatch = false;
+            tr.style.display = isEvMatch ? '' : 'none';
+        });
+    }
 </script>
 {% endblock %}

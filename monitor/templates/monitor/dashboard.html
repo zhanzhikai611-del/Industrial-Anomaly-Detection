@@ -1,40 +1,34 @@
 {% extends 'monitor/base.html' %}
 {% block title %}Dashboard{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
 {% block nav_dashboard %}active{% endblock %}
 
 {% block extra_style %}
 <style>
-    /* OEE 三分项百分比 */
+    /* ── OEE 数值区 ── */
+    .oee-total-num {
+        font-size: 26px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        color: var(--primary);
+    }
+
     .oee-val {
         font-size: 17px;
         font-weight: 700;
-        color: #303133;
+        color: var(--text);
     }
 
     .oee-sub {
         font-size: 11px;
-        color: #909399;
+        color: var(--text-hint);
         margin-top: 2px;
     }
 
-    .oee-total-num {
-        font-size: 26px;
-        font-weight: 700;
-        font-family: monospace;
-        color: #409EFF;
-    }
-
-    .oee-total-label {
-        font-size: 12px;
-        color: #909399;
-    }
-
-    /* 快报数字 */
+    /* ── 实时快报大数字 ── */
     .kpi-big {
         font-size: 28px;
         font-weight: 700;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .kpi-row {
@@ -46,61 +40,43 @@
 
     .kpi-unit {
         font-size: 12px;
-        color: #909399;
-    }
-
-    /* 系统报警卡内布局 */
-    .chart-section-title {
-        font-size: 12px;
-        font-weight: 500;
-        color: #606266;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        margin: 0 0 8px;
-    }
-
-    .chart-section-title::before {
-        content: '';
-        display: inline-block;
-        width: 3px;
-        height: 12px;
-        background: #409EFF;
-        border-radius: 2px;
+        color: var(--text-hint);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- ════════════════════════ ROW 1 ════════════════════════ -->
+<!-- ════ ROW 1 ════ -->
 <div class="row mb-4">
 
-    <!-- ① OEE 综合效能卡（col-6） -->
+    <!-- ① OEE 综合效能卡 (col-6 ≈ 568px) -->
     <div class="col-6">
         <div class="card" style="height:100%;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-                <span class="card-title" style="margin-bottom:0; white-space:nowrap;"><span
-                        class="card-title-bar"></span>综合效能指标（OEE）</span>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+                <span class="card-title" style="margin-bottom:0;white-space:nowrap;">
+                    <span class="card-title-bar"></span>综合效能指标（OEE）
+                </span>
                 <span class="oee-total-num" id="oee-pct">--</span>
             </div>
-            <div class="oee-total-label" style="text-align:right; margin-bottom:8px;">综合 OEE</div>
+            <div style="font-size:12px;color:var(--text-hint);text-align:right;margin-bottom:8px;">综合 OEE</div>
+            <!-- 主进度条 (Figma: bg=#f0f2f5, fill=#409eff, h=8px) -->
             <div class="progress-bar-wrap">
                 <div class="progress-bar-fill" id="oee-bar" style="width:0%"></div>
             </div>
-            <!-- 三个半圆弧 EChart -->
-            <div style="display:flex; gap:0; margin-top:8px;">
-                <div style="flex:1; text-align:center;">
+            <!-- 三个半圆弧 -->
+            <div style="display:flex;gap:0;margin-top:8px;">
+                <div style="flex:1;text-align:center;">
                     <div id="g-q" style="height:88px;"></div>
                     <div class="oee-val" id="v-q">--</div>
                     <div class="oee-sub">良率(Q)</div>
                 </div>
-                <div style="flex:1; text-align:center;">
+                <div style="flex:1;text-align:center;">
                     <div id="g-p" style="height:88px;"></div>
                     <div class="oee-val" id="v-p">--</div>
                     <div class="oee-sub">性能(P)</div>
                 </div>
-                <div style="flex:1; text-align:center;">
+                <div style="flex:1;text-align:center;">
                     <div id="g-a" style="height:88px;"></div>
                     <div class="oee-val" id="v-a">--</div>
                     <div class="oee-sub">可用性(A)</div>
@@ -109,37 +85,42 @@
         </div>
     </div>
 
-    <!-- ② 实时生产快报（col-3） -->
+    <!-- ② 实时生产快报 (col-3) -->
     <div class="col-3">
         <div class="card" style="height:100%;">
-            <div class="card-title" style="white-space:nowrap;"><span class="card-title-bar"></span>实时生产快报</div>
+            <div class="card-title"><span class="card-title-bar"></span>实时生产快报</div>
+
             <div class="section-label">当日总产出</div>
             <div class="kpi-row">
-                <span class="kpi-big" id="s-output" style="color:#409EFF;">--</span>
+                <span class="kpi-big" id="s-output" style="color:var(--primary);">--</span>
                 <span class="kpi-unit">件</span>
             </div>
-            <div style="height:1px; background:#f5f7fa; margin:8px 0;"></div>
-            <div class="section-label">未处理报警</div>
+
+            <div style="height:1px;background:var(--row-div);margin:8px 0;"></div>
+
+            <div class="section-label">事件上报数</div>
             <div class="kpi-row">
-                <span class="kpi-big" id="s-alerts" style="color:#f56c6c;">--</span>
+                <span class="kpi-big" id="s-alerts" style="color:var(--danger);">--</span>
                 <span class="kpi-unit">条</span>
             </div>
-            <div style="height:1px; background:#f5f7fa; margin:8px 0 12px;"></div>
-            <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#909399;">
+
+            <div style="height:1px;background:var(--row-div);margin:8px 0 12px;"></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-hint);">
                 <span>AI 模型</span>
                 <span id="s-ai-badge"
-                    style="padding:2px 8px; border-radius:20px; font-size:11px; font-weight:500;">检测中</span>
+                    style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;">检测中</span>
             </div>
         </div>
     </div>
 
-    <!-- ③ 设备状态总览（col-3） -->
+    <!-- ③ 设备状态总览 (col-3) -->
     <div class="col-3">
         <div class="card" style="height:100%;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                <span class="card-title" style="margin-bottom:0; white-space:nowrap;"><span
-                        class="card-title-bar"></span>设备</span>
-                <span style="font-size:22px; font-weight:700; font-family:monospace; color:#303133;"
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span class="card-title" style="margin-bottom:0;white-space:nowrap;">
+                    <span class="card-title-bar"></span>设备
+                </span>
+                <span style="font-size:22px;font-weight:700;font-family:var(--font-mono);color:var(--text);"
                     id="d-total">--</span>
             </div>
             <div class="stat-row">
@@ -158,32 +139,25 @@
     </div>
 </div>
 
-<!-- ════════════════════════ ROW 2 ════════════════════════ -->
-<div class="row">
+<!-- ════ ROW 2 ════ -->
+<div class="row d-flex align-items-stretch mb-4">
 
-    <!-- ④ 系统异常报警图表区（col-8） -->
-    <div class="col-8">
-        <div class="card">
-            <div class="card-title"><span class="card-title-bar"></span>系统异常报警</div>
-
-            <!-- 4a: 双轴折线图 -->
-            <div class="chart-section-title">设备故障预警多维关联可视化</div>
-            <div id="chart-line" style="height:210px; margin-bottom:20px;"></div>
-
-            <!-- 4b: 物理指标异常分布饼图 -->
-            <div class="chart-section-title">物理指标异常分布</div>
-            <div id="chart-pie" style="height:220px;"></div>
+    <!-- ④ 设备故障预警多维关联可视化 (col-8) -->
+    <div class="col-8 h-100">
+        <div class="card h-100 d-flex flex-column">
+            <div class="card-title"><span class="card-title-bar"></span>设备故障预警多维关联可视化</div>
+            <div id="chart-line" style="flex:1; min-height:240px;"></div>
         </div>
     </div>
 
-    <!-- ⑤ 设备风险排名 Top N（col-4） -->
-    <div class="col-4">
-        <div class="card" style="height:100%;">
+    <!-- ⑤ 设备风险排名 Top 5 (col-4) -->
+    <div class="col-4 h-100">
+        <div class="card h-100 d-flex flex-column">
             <div class="card-title"><span class="card-title-bar"></span>设备风险排名</div>
             <table class="tbl">
                 <thead>
                     <tr>
-                        <th style="width:32px;">序号</th>
+                        <th style="width:36px;">排名</th>
                         <th>设备名称</th>
                         <th>设备型号</th>
                         <th>实时风险</th>
@@ -191,7 +165,7 @@
                 </thead>
                 <tbody id="risk-tbody">
                     <tr>
-                        <td colspan="4" style="text-align:center;color:#c0c4cc;padding:24px 0;">加载中…</td>
+                        <td colspan="4" style="text-align:center;color:var(--text-weak);padding:24px 0;">加载中…</td>
                     </tr>
                 </tbody>
             </table>
@@ -203,12 +177,13 @@
 
 {% block extra_js %}
 <script>
-    /* ── 工具 ── */
     const el = id => document.getElementById(id);
-    const pct = v => (v == null ? '--' : (v * 100).toFixed(1) + '%');
-    const num = v => (v == null ? '--' : Number(v).toLocaleString());
+    const pct = v => v == null ? '--' : (v * 100).toFixed(1) + '%';
+    const num = v => v == null ? '--' : Number(v).toLocaleString();
 
-    /* ── 半圆弧 Gauge 工厂（纯浅色，无 dark/shadow） ── */
+    /* ── 半圆弧 Gauge 工厂
+       Figma 颜色：Q=#a78bfa(紫)  P=#409EFF(蓝)  A=#67c23a(绿)
+    ── */
     function makeGauge(domId, color) {
         const c = echarts.init(el(domId));
         c.setOption({
@@ -229,19 +204,31 @@
     const GP = makeGauge('g-p', '#409EFF');
     const GA = makeGauge('g-a', '#67c23a');
 
-    /* ── 双轴折线图 ── */
+    /* ── 双轴折线图
+       Figma：电流线 #2b7fff / AI 预警线 #ff6467
+       细实线 width:1.5，无 areaStyle 发光
+    ── */
     const cLine = echarts.init(el('chart-line'));
     cLine.setOption({
         tooltip: {
             trigger: 'axis', axisPointer: { type: 'cross' },
-            backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { color: '#303133' }
+            backgroundColor: '#fff', borderColor: '#e4e7ed',
+            textStyle: { color: '#303133', fontSize: 12 }
         },
-        legend: { top: 8, right: 0, icon: 'roundRect', textStyle: { color: '#606266', fontSize: 11 }, itemWidth: 12, itemHeight: 4 },
-        grid: { left: 0, right: 10, top: 52, bottom: 8, containLabel: true },
+        legend: {
+            top: '5%', right: 0, icon: 'roundRect',
+            textStyle: { color: '#4a5565', fontSize: 12 },
+            itemWidth: 24, itemHeight: 2,
+            data: [
+                { name: '电流', itemStyle: { color: '#2b7fff' } },
+                { name: 'AI预警', itemStyle: { color: '#ff6467' } }
+            ]
+        },
+        grid: { left: 0, right: 50, top: '20%', bottom: 8, containLabel: true },
         xAxis: {
             type: 'category', boundaryGap: false, data: [],
             axisLine: { show: false }, axisTick: { show: false },
-            axisLabel: { color: '#909399', fontSize: 10, fontFamily: 'monospace' },
+            axisLabel: { color: '#6b7280', fontSize: 11, fontFamily: 'monospace' },
             splitLine: { show: false }
         },
         yAxis: [
@@ -249,75 +236,40 @@
                 type: 'value', name: '电流(A)', position: 'left',
                 axisLine: { show: false }, axisTick: { show: false },
                 splitLine: { lineStyle: { color: '#f0f2f5' } },
-                axisLabel: { color: '#409EFF', fontSize: 10 }, nameTextStyle: { color: '#409EFF', fontSize: 10 }
+                axisLabel: { color: '#4a5565', fontSize: 11 },
+                nameTextStyle: { color: '#4a5565', fontSize: 11 }
             },
             {
-                type: 'value', name: 'AI故障预警(%)', position: 'right', min: 0, max: 100, interval: 20,
-                axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
-                axisLabel: { color: '#f56c6c', fontSize: 10 }, nameTextStyle: { color: '#f56c6c', fontSize: 10 }
+                type: 'value', name: 'AI预警(%)', position: 'right', nameGap: 30, offset: 10,
+                min: 0, max: 100, interval: 20,
+                axisLine: { show: false }, axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { color: '#ff6467', fontSize: 11 },
+                nameTextStyle: { color: '#ff6467', fontSize: 11 }
             }
         ],
         series: [
             {
-                name: '电流', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0,
-                lineStyle: { color: '#409EFF', width: 2 },
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(64,158,255,.15)' }, { offset: 1, color: 'rgba(64,158,255,0)' }])
-                },
+                name: '电流', type: 'line', smooth: true, symbol: 'none',
+                yAxisIndex: 0,
+                lineStyle: { color: '#2b7fff', width: 1.5 },
                 data: []
             },
             {
-                name: 'AI故障预警', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1,
-                color: '#f56c6c',
-                lineStyle: { color: '#f56c6c', width: 2 },
-                itemStyle: { color: '#f56c6c' },
+                name: 'AI预警', type: 'line', smooth: true, symbol: 'none',
+                yAxisIndex: 1,
+                lineStyle: { color: '#ff6467', width: 1.5 },
+                itemStyle: { color: '#ff6467' },
                 markLine: {
-                    symbol: ['none', 'none'], data: [{
-                        yAxis: 75, name: '预警阈值',
-                        lineStyle: { color: '#f56c6c', type: 'dashed', width: 1, opacity: 0.3 },
-                        label: { show: false }
-                    }]
-                },
-                markArea: {
-                    itemStyle: { color: 'rgba(255, 77, 79, 0.1)' },
-                    data: [
-                        [{ yAxis: 75 }, { yAxis: 100 }]
-                    ]
-                },
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(245,108,108,.12)' }, { offset: 1, color: 'rgba(245,108,108,0)' }])
+                    symbol: ['none', 'none'],
+                    data: [{ yAxis: 75, lineStyle: { color: '#ff6467', type: 'dashed', width: 1, opacity: 0.35 }, label: { show: false } }]
                 },
                 data: []
             }
         ]
     });
 
-    /* ── 饼图（扁平浅色调） ── */
-    const cPie = echarts.init(el('chart-pie'));
-    const PIE_COLORS = ['#818cf8', '#f87171', '#34d399', '#fbbf24', '#60a5fa'];
-    const ALERT_NAMES = {
-        HIGH_CURRENT: '主轴过电流物理报警', HIGH_POWER: '主轴过载物理报警',
-        LR_TOOL_WEAR: 'LR刀具磨损预警', LOW_VELOCITY: '震动激增', DOWNTIME: '停机超时', OTHER: '其他'
-    };
-    cPie.setOption({
-        color: PIE_COLORS,
-        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        legend: {
-            orient: 'vertical', right: '5%', top: 'center', icon: 'roundRect',
-            textStyle: { fontSize: 13, color: '#303133' }
-        },
-        series: [{
-            name: '异常类型', type: 'pie',
-            radius: ['0%', '55%'], center: ['28%', '50%'],
-            label: { show: false },
-            itemStyle: { borderColor: '#fff', borderWidth: 2 },
-            data: []
-        }]
-    });
-
-    /* ── 数据区间缓冲（平滑滚动） ── */
+    /* ── 数据缓冲 ── */
     const MAX = 50;
     let tsArr = [], curArr = [], probArr = [];
 
@@ -334,7 +286,9 @@
             const q = d.quality != null ? +(d.quality * 100).toFixed(1) : 0;
             const p = d.performance != null ? +(d.performance * 100).toFixed(1) : 0;
             const a = d.availability != null ? +(d.availability * 100).toFixed(1) : 0;
-            el('v-q').textContent = q + '%'; el('v-p').textContent = p + '%'; el('v-a').textContent = a + '%';
+            el('v-q').textContent = q + '%';
+            el('v-p').textContent = p + '%';
+            el('v-a').textContent = a + '%';
             GQ.setOption({ series: [{ data: [{ value: q }] }] });
             GP.setOption({ series: [{ data: [{ value: p }] }] });
             GA.setOption({ series: [{ data: [{ value: a }] }] });
@@ -342,36 +296,24 @@
             /* 快报 */
             el('s-output').textContent = num(d.total_output);
             el('s-alerts').textContent = d.unhandled_alerts ?? '--';
-            const aiBadge = el('s-ai-badge');
+            const badge = el('s-ai-badge');
             if (d.ai_model_loaded) {
-                aiBadge.textContent = '● 已就绪';
-                aiBadge.style.cssText = 'background:#f0f9eb;color:#67c23a;border:1px solid #b3e19d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;';
+                badge.textContent = '● 已就绪';
+                badge.style.cssText = 'background:#f0f9eb;color:#67c23a;border:1px solid #b3e19d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;';
             } else {
-                aiBadge.textContent = '× 未加载';
-                aiBadge.style.cssText = 'background:#fef0f0;color:#f56c6c;border:1px solid #fab6b6;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;';
+                badge.textContent = '× 未加载';
+                badge.style.cssText = 'background:#fef0f0;color:#f56c6c;border:1px solid #fab6b6;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;';
             }
 
-            /* 设备状态 */
+            /* 设备 */
             el('d-total').textContent = d.total_devices ?? '--';
             el('d-run').textContent = d.running_devices ?? '--';
             el('d-idle').textContent = d.idle_devices ?? '--';
             el('d-down').textContent = d.down_devices ?? '--';
-
-            /* 饼图数据更新 */
-            if (d.alert_distribution?.length) {
-                cPie.setOption({
-                    series: [{
-                        data: d.alert_distribution.map((item, i) => ({
-                            name: ALERT_NAMES[item.alert_type] || item.alert_type,
-                            value: item.cnt
-                        }))
-                    }]
-                });
-            }
         } catch (e) { console.warn('[stats]', e); }
     }
 
-    /* ── 流水接口 → 折线图增量 ── */
+    /* ── 流水接口 → 折线图 ── */
     async function fetchStream() {
         try {
             const d = await fetch('/api/stream/').then(r => r.json());
@@ -380,48 +322,47 @@
             const t = new Date(latest.timestamp);
             const label = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
             if (tsArr.length && tsArr[tsArr.length - 1] === label) return;
-            tsArr.push(label); curArr.push(latest.spindle_current);
+            tsArr.push(label);
+            curArr.push(latest.spindle_current);
             probArr.push(latest.anomaly_probability != null ? +(latest.anomaly_probability * 100).toFixed(1) : 0);
             if (tsArr.length > MAX) { tsArr.shift(); curArr.shift(); probArr.shift(); }
             cLine.setOption({ xAxis: { data: tsArr }, series: [{ data: curArr }, { data: probArr }] });
         } catch (e) { console.warn('[stream]', e); }
     }
 
-    /* ── 风险排名（仅 Running 设备 Top 10） ── */
+    /* ── 风险排名 Top 5 ── */
     async function fetchRisk() {
         try {
             const d = await fetch('/api/device-matrix/').then(r => r.json());
             if (d.status !== 'ok') return;
-            // 只统计运行中设备，避免待机/停机的零分拉低排名
             const running = d.data.filter(dev => dev.current_status === 'Running');
-            const top = running.slice(0, 10);
+            running.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
+            const top = running.slice(0, 5);
             el('risk-tbody').innerHTML = top.map((dev, i) => {
                 const s = dev.anomaly_score != null ? (dev.anomaly_score * 100).toFixed(0) + '%' : '--';
-                const cls = dev.anomaly_score > 0.75 ? 'risk-high' : dev.anomaly_score > 0.45 ? 'risk-med' : 'risk-low';
+                const cls = dev.anomaly_score > 0.75 ? 'text-danger fw-bold' : dev.anomaly_score > 0.45 ? 'text-warning fw-bold' : 'text-success fw-bold';
                 return `<tr>
-        <td style="color:#c0c4cc;">${i + 1}</td>
-        <td style="font-weight:500;">${dev.device_name}</td>
-        <td style="color:#909399;">${dev.device_type || '--'}</td>
-        <td class="${cls}">${s}</td>
-      </tr>`;
+                    <td style="color:var(--text-weak);">${i + 1}</td>
+                    <td style="font-weight:500;">${dev.device_name}</td>
+                    <td style="color:var(--text-hint);">${dev.device_type || '--'}</td>
+                    <td class="${cls}">${s}</td>
+                </tr>`;
             }).join('');
         } catch (e) { console.warn('[risk]', e); }
     }
 
-    /* ── 轮询 ── */
+    /* ── 轮询总入口 ── */
     async function pollAll() {
         try {
             const st = await fetch('/api/stream-status/').then(r => r.json());
-            if (!st.is_realtime_active) {
-                console.log('监控已暂停');
-                return;
-            }
+            if (!st.is_realtime_active) return;
             fetchStats();
             fetchStream();
             fetchRisk();
         } catch (e) { console.warn('[pollAll]', e); }
     }
+
     document.addEventListener('DOMContentLoaded', () => { pollAll(); setInterval(pollAll, 3000); });
-    window.addEventListener('resize', () => [GQ, GP, GA, cLine, cPie].forEach(c => c.resize()));
+    window.addEventListener('resize', () => [GQ, GP, GA, cLine].forEach(c => c.resize()));
 </script>
 {% endblock %}

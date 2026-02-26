@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 simulate_real_cnc_data.py  v4 — 精益车间版
 ————————————————————————————————————
@@ -218,16 +219,7 @@ def simulate_sensor_data(devices):
     for idx, dev in enumerate(devices):
         status = dev.current_status
         # IDX is 0-indexed (0 to 24 corresponding to devices 1 to 25)
-        if idx < 5:      # 1-5 (idx 0-4)
-            group_idx = 0
-        elif idx < 12:   # 6-12 (idx 5-11)
-            group_idx = 1
-        elif idx < 19:   # 13-19 (idx 12-18)
-            group_idx = 2
-        elif idx < 23:   # 20-23 (idx 19-22)
-            group_idx = 3
-        else:            # 24-25 (idx 23-24)
-            group_idx = 4
+        group_idx = min(max(dev.current_group_id - 1, 0), 4)
 
         for m in range(total_mins):
             ts = start_time + timedelta(minutes=m * INTERVAL_MINS)
@@ -236,12 +228,17 @@ def simulate_sensor_data(devices):
                 rec = _gen_running_record(dev, ts, group_idx)
                 all_records.append(rec)
 
-                # 物理阈值报警
-                if (abs(rec.spindle_current) > ALERT_THRESHOLDS['spindle_current'] or
-                        rec.spindle_power    > ALERT_THRESHOLDS['spindle_power']      or
-                        abs(rec.feed_velocity) > ALERT_THRESHOLDS['feed_velocity']):
-                    atype = ('HIGH_CURRENT' if abs(rec.spindle_current) > ALERT_THRESHOLDS['spindle_current']
-                             else 'HIGH_POWER' if rec.spindle_power > ALERT_THRESHOLDS['spindle_power']
+                from monitor.models import SystemConfig
+                cfg = SystemConfig.objects.first()
+                sc_thresh = cfg.spindle_current_high if cfg else ALERT_THRESHOLDS['spindle_current']
+                sp_thresh = cfg.spindle_power_high if cfg else ALERT_THRESHOLDS['spindle_power']
+                fv_thresh = cfg.feed_velocity_low if cfg else 0.5
+
+                if (abs(rec.spindle_current) > sc_thresh or
+                        rec.spindle_power    > sp_thresh or
+                        abs(rec.feed_velocity) < fv_thresh):
+                    atype = ('HIGH_CURRENT' if abs(rec.spindle_current) > sc_thresh
+                             else 'HIGH_POWER' if rec.spindle_power > sp_thresh
                              else 'LOW_VELOCITY')
                     alert_infos.append({
                         'list_idx':    len(all_records) - 1,
@@ -346,11 +343,17 @@ def _generate_single_device_realtime(dev, ts, group_idx):
     alert_info = None
     if status == 'Running':
         rec = _gen_running_record(dev, ts, group_idx)
-        if (abs(rec.spindle_current) > ALERT_THRESHOLDS['spindle_current'] or
-                rec.spindle_power    > ALERT_THRESHOLDS['spindle_power']      or
-                abs(rec.feed_velocity) > ALERT_THRESHOLDS['feed_velocity']):
-            atype = ('HIGH_CURRENT' if abs(rec.spindle_current) > ALERT_THRESHOLDS['spindle_current']
-                     else 'HIGH_POWER' if rec.spindle_power > ALERT_THRESHOLDS['spindle_power']
+        from monitor.models import SystemConfig
+        cfg = SystemConfig.objects.first()
+        sc_thresh = cfg.spindle_current_high if cfg else ALERT_THRESHOLDS['spindle_current']
+        sp_thresh = cfg.spindle_power_high if cfg else ALERT_THRESHOLDS['spindle_power']
+        fv_thresh = cfg.feed_velocity_low if cfg else 0.5
+
+        if (abs(rec.spindle_current) > sc_thresh or
+                rec.spindle_power    > sp_thresh or
+                abs(rec.feed_velocity) < fv_thresh):
+            atype = ('HIGH_CURRENT' if abs(rec.spindle_current) > sc_thresh
+                     else 'HIGH_POWER' if rec.spindle_power > sp_thresh
                      else 'LOW_VELOCITY')
             alert_info = {
                 'alert_time':  ts,
@@ -396,16 +399,7 @@ def run_realtime_simulation():
                 for idx, dev in enumerate(devices):
                     # 重新从 DB 读取最新状态，支持前台动态更改
                     dev.refresh_from_db(fields=['current_status'])
-                    if idx < 5:
-                        group_idx = 0
-                    elif idx < 12:
-                        group_idx = 1
-                    elif idx < 19:
-                        group_idx = 2
-                    elif idx < 23:
-                        group_idx = 3
-                    else:
-                        group_idx = 4
+                    group_idx = min(max(dev.current_group_id - 1, 0), 4)
                     futures.append(executor.submit(_generate_single_device_realtime, dev, ts, group_idx))
                 
                 records = []
