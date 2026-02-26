@@ -230,11 +230,11 @@
             </div>
         </div>
 
-        <div class="ev-table-wrap">
+        <div class="ev-table-wrap" style="margin-top: 10px;">
             <table class="ev-table" id="ev-table">
                 <thead>
                     <tr>
-                        <th style="width: 150px;">触发时间</th>
+                        <th style="width: 150px; text-align: center;">触发时间</th>
                         <th style="width: 160px;">设备</th>
                         <th style="width: 200px;">报警类型</th>
                         <th style="width: 100px;" class="text-nowrap">主轴电流</th>
@@ -244,11 +244,12 @@
                 <tbody id="ev-tbody">
                     {% for event in events %}
                     <tr>
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             <div class="time-cell">{{ event.alert_time|date:"Y-m-d" }}</div>
                             <div class="time-time">{{ event.alert_time|date:"H:i:s" }}</div>
                         </td>
-                        <td class="device-cell">{{ event.record.device.device_name }}</td>
+                        <td class="device-cell" style="vertical-align: middle;">{{ event.record.device.device_name }}
+                        </td>
                         <td>
                             {% if event.alert_type == 'LR_TOOL_WEAR' %}
                             <span class="tag-vhigh">{{ event.get_alert_type_display }}</span>
@@ -326,7 +327,7 @@
     function renderCharts(alerts) {
         // 1. 统计数量（基于 Figma 假数据对齐设计UI）
         const barOption = {
-            grid: { left: '0%', right: '15%', top: '0%', bottom: '5%', containLabel: true },
+            grid: { left: '0%', right: '15%', top: '15%', bottom: '5%', containLabel: true },
             xAxis: { type: 'value', show: false },
             yAxis: {
                 type: 'category',
@@ -363,7 +364,7 @@
 
         // 2. 趋势图（模拟红色峰值的 Figma 样式）
         const trendOption = {
-            grid: { left: '3%', right: '8%', top: '5%', bottom: '10%', containLabel: true },
+            grid: { left: '3%', right: '8%', top: '15%', bottom: '10%', containLabel: true },
             tooltip: {
                 trigger: 'axis',
                 formatter: '峰值 {c} @ {b}',

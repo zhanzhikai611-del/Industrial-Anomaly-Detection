@@ -1,0 +1,443 @@
+{% extends 'monitor/base.html' %}
+{% block title %}账号管理{% endblock %}
+{% block nav_account %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+    .acc-container {
+        padding: 20px 24px;
+        min-height: calc(100vh - 56px);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* ── 顶部工具栏 ── */
+    .acc-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .acc-tools-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .acc-search {
+        width: 180px;
+        height: 28px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+        padding: 0 10px 0 30px;
+        font-size: 12px;
+        color: rgba(48, 49, 51, 0.5);
+        outline: none;
+        background: #fff url('data:image/svg+xml;utf8,<svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.8333 12.8333L9.33333 9.33333M10.5 5.83333C10.5 8.41066 8.41066 10.5 5.83333 10.5C3.256 10.5 1.16667 8.41066 1.16667 5.83333C1.16667 3.256 3.256 1.16667 5.83333 1.16667C8.41066 1.16667 10.5 3.256 10.5 5.83333Z" stroke="%23C0C4CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat 10px center;
+        background-size: 14px 14px;
+    }
+
+    .acc-search:focus {
+        border-color: #409eff;
+        color: #303133;
+    }
+
+    .acc-select {
+        height: 28px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+        padding: 0 24px 0 10px;
+        font-size: 12px;
+        color: #606266;
+        outline: none;
+        cursor: pointer;
+        background: #fff;
+        appearance: auto;
+    }
+
+    .acc-select:focus {
+        border-color: #409eff;
+    }
+
+    /* ── 表格卡片 ── */
+    .acc-card {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .acc-table-wrap {
+        flex: 1;
+        overflow: auto;
+        padding: 20px 20px 0 20px;
+    }
+
+    .acc-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .acc-table th {
+        background: #fafafa;
+        border-bottom: 1px solid #e4e7ed;
+        color: #909399;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 12px;
+        text-align: left;
+    }
+
+    .acc-table td {
+        padding: 20px 12px;
+        border-bottom: 1px solid #f5f7fa;
+        color: #303133;
+        font-size: 13px;
+        vertical-align: middle;
+    }
+
+    /* ── 角色标签 ── */
+    .role-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 9px;
+        border-radius: 4px;
+        font-size: 12px;
+        border: 1px solid transparent;
+        line-height: 18px;
+    }
+
+    .role-admin {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+
+    .role-operator {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+        color: #15803d;
+    }
+
+    .role-engineer {
+        background: #f9fafb;
+        border-color: #d1d5db;
+        color: #374151;
+    }
+
+    /* ── 状态标签 ── */
+    .status-tag {
+        display: inline-flex;
+        align-items: center;
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        gap: 6px;
+    }
+
+    .status-active {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+    }
+
+    .status-active::before {
+        content: '';
+        display: block;
+        width: 6px;
+        height: 6px;
+        border-radius: 3px;
+        background: #22c55e;
+    }
+
+    .status-inactive {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #b91c1c;
+    }
+
+    .status-inactive::before {
+        content: '';
+        display: block;
+        width: 6px;
+        height: 6px;
+        border-radius: 3px;
+        background: #ef4444;
+    }
+
+    /* ── 操作按钮 ── */
+    .acc-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+    }
+
+    .acc-btn-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 4px;
+        border: 1px solid #dcdfe6;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #606266;
+    }
+
+    .acc-btn-icon:hover {
+        border-color: #409eff;
+        color: #409eff;
+    }
+
+    /* 新增账号弹窗 */
+    .fm-label {
+        font-size: 12px;
+        color: var(--text-sec);
+        margin-bottom: 5px;
+        display: block;
+    }
+
+    .fm-input,
+    .fm-select-modal {
+        width: 100%;
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 12px;
+        font-size: 13px;
+        color: var(--text);
+        outline: none;
+        background: #fff;
+    }
+
+    .fm-input:focus,
+    .fm-select-modal:focus {
+        border-color: var(--primary);
+    }
+
+    .fm-group {
+        margin-bottom: 14px;
+    }
+
+    .fm-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="acc-container">
+
+    <!-- 顶部工具栏 -->
+    <div class="acc-toolbar">
+        <div class="acc-tools-left">
+            <input class="acc-search" id="search-input" placeholder="搜索用户名/姓名…" oninput="applyFilter()">
+            <select class="acc-select" style="width:102px;" id="type-filter" onchange="applyFilter()">
+                <option value="">全部类型</option>
+                <option value="internal">内部员工</option>
+                <option value="external">外部访客</option>
+            </select>
+            <select class="acc-select" style="width:90px;" id="role-filter" onchange="applyFilter()">
+                <option value="">全部角色</option>
+                <option value="admin">系统管理员</option>
+                <option value="operator">操作员</option>
+                <option value="engineer">工程师</option>
+            </select>
+        </div>
+        <button class="btn btn-primary btn-sm" style="height:28px; padding:0 14px; font-size:13px;"
+            onclick="openAddModal()">
+            <i data-feather="user-plus" style="width:14px;height:14px;margin-right:4px;"></i>新增账号
+        </button>
+    </div>
+
+    <!-- 用户列表卡片 -->
+    <div class="acc-card">
+        {% if has_permission %}
+        <div class="acc-table-wrap">
+            <table class="acc-table" id="user-table">
+                <thead>
+                    <tr>
+                        <th style="width:15%;">用户名</th>
+                        <th style="width:15%;">真实姓名</th>
+                        <th style="width:10%;">工号</th>
+                        <th style="width:15%;">所属角色</th>
+                        <th style="width:20%;">创建时间</th>
+                        <th style="width:10%;">账号状态</th>
+                        <th style="width:15%; text-align:center;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="user-tbody">
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            <div style="display:flex;align-items:center;">
+                                <div
+                                    style="width:32px;height:32px;border-radius:50%;background:#e4e7ed;margin-right:12px;line-height:32px;text-align:center;">
+                                    👤
+                                </div>
+                                <span>{{ user.username }}</span>
+                            </div>
+                        </td>
+                        <td>{{ user.profile.real_name|default:'-' }}</td>
+                        <td style="font-family:'JetBrains Mono',monospace;">{{ user.profile.job_number|default:'-' }}
+                        </td>
+                        <td>
+                            {% if user.profile.role == 'Admin' %}
+                            <span class="role-tag role-admin">Admin</span>
+                            {% elif user.profile.role == 'Engineer' %}
+                            <span class="role-tag role-engineer">Engineer</span>
+                            {% else %}
+                            <span class="role-tag role-operator">Operator</span>
+                            {% endif %}
+                        </td>
+                        <td style="color:var(--text-sec);font-family:'JetBrains Mono',monospace;">{{
+                            user.date_joined|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {% if user.is_active %}
+                            <span class="status-tag status-active">启用</span>
+                            {% else %}
+                            <span class="status-tag status-inactive">禁用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="acc-actions">
+                                <button class="acc-btn-icon" title="编辑">
+                                    <i data-feather="edit-2" style="width:14px;height:14px;"></i>
+                                </button>
+                                <button class="acc-btn-icon" title="删除" style="color:#f56c6c;border-color:#f56c6c15;">
+                                    <i data-feather="trash-2" style="width:14px;height:14px;"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align:center;padding:40px;color:#909399;">暂无账号数据</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div
+            style="flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; padding: 60px;">
+            <div style="font-size: 48px; margin-bottom: 20px;">🔒</div>
+            <h4 style="color: #303133; font-weight: 500;">权限受限</h4>
+            <p style="color: #909399; font-size: 14px; margin-top: 8px;">您当前的角色无权限访问此页面的数据。</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- 新增账号弹窗 -->
+<div class="modal-overlay" id="add-modal">
+    <div
+        style="background:#fff; border-radius:8px; box-shadow:0 8px 32px rgba(0,0,0,.12); width:480px; max-width:96vw;">
+        <div
+            style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
+            <span style="font-size:15px;font-weight:600;color:var(--text);">新增账号</span>
+            <button class="modal-close" onclick="closeAddModal()">×</button>
+        </div>
+        <div style="padding:20px;">
+            <div class="fm-row">
+                <div class="fm-group">
+                    <label class="fm-label">用户名 <span style="color:var(--danger);">*</span></label>
+                    <input class="fm-input" id="fm-username" placeholder="请输入用户名">
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">真实姓名</label>
+                    <input class="fm-input" id="fm-realname" placeholder="请输入中文姓名">
+                </div>
+            </div>
+            <div class="fm-row">
+                <div class="fm-group">
+                    <label class="fm-label">工号 <span style="color:var(--danger);">*</span></label>
+                    <input class="fm-input" id="fm-jobnum" placeholder="如 001234">
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">所属角色 <span style="color:var(--danger);">*</span></label>
+                    <select class="fm-select-modal" id="fm-role">
+                        <option value="admin">系统管理员</option>
+                        <option value="operator" selected>操作员</option>
+                        <option value="engineer">工程师</option>
+                    </select>
+                </div>
+            </div>
+            <div class="fm-group">
+                <label class="fm-label">初始密码 <span style="color:var(--danger);">*</span></label>
+                <input class="fm-input" type="password" id="fm-pwd" placeholder="请输入初始密码">
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;">
+                <button class="btn btn-default btn-sm" onclick="closeAddModal()">取消</button>
+                <button class="btn btn-primary btn-sm" onclick="submitAdd()">确认新增</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    function openAddModal() { document.getElementById('add-modal').classList.add('show'); }
+    function closeAddModal() { document.getElementById('add-modal').classList.remove('show'); }
+
+    async function submitAdd() {
+        const username = document.getElementById('fm-username').value.trim();
+        const realname = document.getElementById('fm-realname').value.trim();
+        const jobnum = document.getElementById('fm-jobnum').value.trim();
+        const role = document.getElementById('fm-role').value;
+        const pwd = document.getElementById('fm-pwd').value;
+        if (!username || !pwd || !jobnum) { alert('用户名、工号和密码为必填项'); return; }
+
+        try {
+            const csrfToken = getCookie('csrftoken');
+            const response = await fetch('/api/accounts/create/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password: pwd, real_name: realname, job_number: jobnum, role: role })
+            });
+            const data = await response.json();
+            if (response.ok && data.status === 'ok') {
+                alert('账号新增成功');
+                location.reload();
+            } else {
+                alert('新增失败: ' + (data.message || '未知错误'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('网络请求出错');
+        }
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    document.getElementById('add-modal').addEventListener('click', e => { if (e.target.id === 'add-modal') closeAddModal(); });
+    document.addEventListener('DOMContentLoaded', () => { if (window.feather) feather.replace(); });
+</script>
+{% endblock %}

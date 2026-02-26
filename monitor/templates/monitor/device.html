@@ -302,7 +302,7 @@
 
     <!-- 筛选标签卡 -->
     <div class="filter-pill" id="fp-all" onclick="setFilter('all')">
-        <span class="fp-label">所有运行设备</span>
+        <span class="fp-label">所有设备</span>
         <span class="fp-num" id="fc-all">--</span>
     </div>
     <div class="filter-pill high" id="fp-high" onclick="setFilter('high')">
@@ -436,7 +436,7 @@
         const high = running.filter(x => (x.anomaly_score ?? 0) > 0.75);
         const med = running.filter(x => (x.anomaly_score ?? 0) > 0.45 && (x.anomaly_score ?? 0) <= 0.75);
         const low = running.filter(x => (x.anomaly_score ?? 0) <= 0.45);
-        document.getElementById('fc-all').textContent = running.length;
+        document.getElementById('fc-all').textContent = allDevices.length;
         document.getElementById('fc-high').textContent = high.length;
         document.getElementById('fc-med').textContent = med.length;
         document.getElementById('fc-low').textContent = low.length;
@@ -458,9 +458,9 @@
 
         let list = allDevices;
         if (keyword) list = list.filter(d => d.device_name.toLowerCase().includes(keyword));
-        if (activeFilter === 'high') list = list.filter(d => (d.anomaly_score ?? 0) > 0.75);
-        else if (activeFilter === 'med') list = list.filter(d => (d.anomaly_score ?? 0) > 0.45 && (d.anomaly_score ?? 0) <= 0.75);
-        else if (activeFilter === 'low') list = list.filter(d => (d.anomaly_score ?? 0) <= 0.45);
+        if (activeFilter === 'high') list = list.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) > 0.75);
+        else if (activeFilter === 'med') list = list.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) > 0.45 && (d.anomaly_score ?? 0) <= 0.75);
+        else if (activeFilter === 'low') list = list.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) <= 0.45);
 
         if (sort === 'risk_desc') list.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
         else if (sort === 'risk_asc') list.sort((a, b) => (a.anomaly_score ?? 0) - (b.anomaly_score ?? 0));
@@ -495,7 +495,7 @@
             return `<tr style="cursor:pointer;" onclick="openAIModal(${dev.device_id})">
             <td style="font-weight:500;color:var(--text);">${dev.device_name}</td>
             <td style="color:var(--text-hint);">${dev.device_type || '--'}</td>
-            <td style="color:var(--text-sec);font-size:12px;">${process}</td>
+            <td style="color:var(--text-sec);font-size:12px;">${dev.machining_process || '--'}</td>
             <td class="${cls}" style="font-weight:700;">${pct}</td>
             <td class="${oeeC}" style="font-weight:700;">${oee}</td>
             <td>
@@ -536,17 +536,17 @@
         modalChartInst.setOption({
             tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { fontSize: 12 } },
             legend: {
-                top: '5%', right: 0, icon: 'roundRect', itemWidth: 24, itemHeight: 2,
+                top: 0, right: 0, icon: 'roundRect', itemWidth: 24, itemHeight: 2,
                 textStyle: { fontSize: 12 }, data: [
                     { name: '电流', itemStyle: { color: '#2b7fff' } },
                     { name: 'AI预测', itemStyle: { color: '#ff6467' } }
                 ]
             },
-            grid: { left: 10, right: 50, top: '20%', bottom: 8, containLabel: true },
+            grid: { left: 10, right: 40, top: 40, bottom: 8, containLabel: true },
             xAxis: { type: 'category', boundaryGap: false, data: [], axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#6b7280', fontSize: 10, fontFamily: 'monospace' } },
             yAxis: [
-                { type: 'value', name: '电流(A)', position: 'left', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#f0f2f5' } }, axisLabel: { color: '#4a5565', fontSize: 10 }, nameTextStyle: { color: '#4a5565', fontSize: 10 } },
-                { type: 'value', name: 'AI预测(%)', position: 'right', nameGap: 30, offset: 10, min: 0, max: 100, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#ff6467', fontSize: 10 }, nameTextStyle: { color: '#ff6467', fontSize: 10 } }
+                { type: 'value', name: '电流(A)', position: 'left', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#f0f2f5' } }, axisLabel: { color: '#4a5565', fontSize: 10 }, nameTextStyle: { color: '#4a5565', fontSize: 10, padding: [0, 0, 0, 0] } },
+                { type: 'value', name: 'AI预测(%)', position: 'right', nameGap: 30, offset: 10, min: 0, max: 100, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#ff6467', fontSize: 10 }, nameTextStyle: { color: '#ff6467', fontSize: 10, padding: [20, 0, 0, 0] } }
             ],
             series: [
                 { name: '电流', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, lineStyle: { color: '#2b7fff', width: 1.5 }, data: [] },

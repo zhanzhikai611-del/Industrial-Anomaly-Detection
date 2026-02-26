@@ -107,6 +107,33 @@
         line-height: 1.7;
     }
 
+    /* ── 胶囊开关组 ── */
+    .capsule-group {
+        display: inline-flex;
+        background: #e4e7ed;
+        border-radius: 20px;
+        padding: 3px;
+    }
+
+    .capsule-btn {
+        width: 60px;
+        height: 28px;
+        border-radius: 15px;
+        border: none;
+        background: transparent;
+        color: #909399;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .capsule-btn.active {
+        background: #fff;
+        color: #409eff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+
     /* ── 报警配置卡 ── */
     .fm-group {
         margin-bottom: 20px;
@@ -193,10 +220,9 @@
                     <div class="stream-status-val">
                         <span class="status-text" id="stream-text"
                             style="min-width: 48px; display: inline-block;">暂停</span>
-                        <div class="form-check form-switch" style="margin: 0; padding-left: 2.5em; height: 24px;">
-                            <input class="form-check-input" type="checkbox" id="stream-switch"
-                                style="cursor: pointer; width: 40px; height: 20px; margin-top: 2px;"
-                                onchange="toggleStream(this.checked)">
+                        <div class="capsule-group" id="stream-toggle-group">
+                            <button class="capsule-btn active" id="btn-stop" onclick="toggleStream(false)">暂停</button>
+                            <button class="capsule-btn" id="btn-start" onclick="toggleStream(true)">运行</button>
                         </div>
                     </div>
                 </div>
@@ -291,7 +317,7 @@
 
     async function checkStatus() {
         try {
-            const res = await fetch('/api/stream/status/');
+            const res = await fetch('/api/stream-status/');
             const data = await res.json();
             updateUI(data.is_running);
             refreshStats();
@@ -302,21 +328,26 @@
 
     function updateUI(running) {
         const txt = document.getElementById('stream-text');
-        const sw = document.getElementById('stream-switch');
+        const btnStart = document.getElementById('btn-start');
+        const btnStop = document.getElementById('btn-stop');
 
         if (running) {
-            txt.innerText = '已开启';
-            txt.style.color = '#67c23a';
-            sw.checked = true;
+            txt.innerText = '运行中';
+            txt.style.color = '#409eff';
+            btnStart.classList.add('active');
+            btnStop.classList.remove('active');
         } else {
             txt.innerText = '已暂停';
             txt.style.color = 'rgba(0,0,0,0.35)';
-            sw.checked = false;
+            btnStart.classList.remove('active');
+            btnStop.classList.add('active');
         }
     }
 
     async function toggleStream(newState) {
-        document.getElementById('stream-switch').disabled = true;
+        // Prevent double click
+        document.getElementById('btn-start').disabled = true;
+        document.getElementById('btn-stop').disabled = true;
         const action = newState ? 'start' : 'stop';
         try {
             const res = await fetch(`/api/system/toggle_stream/`, {
@@ -337,7 +368,8 @@
             // revert
             updateUI(!newState);
         } finally {
-            document.getElementById('stream-switch').disabled = false;
+            document.getElementById('btn-start').disabled = false;
+            document.getElementById('btn-stop').disabled = false;
         }
     }
 

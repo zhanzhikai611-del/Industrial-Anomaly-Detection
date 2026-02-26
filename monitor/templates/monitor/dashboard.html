@@ -216,7 +216,7 @@
             textStyle: { color: '#303133', fontSize: 12 }
         },
         legend: {
-            top: '5%', right: 0, icon: 'roundRect',
+            top: 0, right: 0, icon: 'roundRect',
             textStyle: { color: '#4a5565', fontSize: 12 },
             itemWidth: 24, itemHeight: 2,
             data: [
@@ -224,7 +224,7 @@
                 { name: 'AI预警', itemStyle: { color: '#ff6467' } }
             ]
         },
-        grid: { left: 0, right: 50, top: '20%', bottom: 8, containLabel: true },
+        grid: { left: 10, right: 40, top: 40, bottom: 8, containLabel: true },
         xAxis: {
             type: 'category', boundaryGap: false, data: [],
             axisLine: { show: false }, axisTick: { show: false },
@@ -237,7 +237,7 @@
                 axisLine: { show: false }, axisTick: { show: false },
                 splitLine: { lineStyle: { color: '#f0f2f5' } },
                 axisLabel: { color: '#4a5565', fontSize: 11 },
-                nameTextStyle: { color: '#4a5565', fontSize: 11 }
+                nameTextStyle: { color: '#4a5565', fontSize: 11, padding: [0, 0, 0, 0] }
             },
             {
                 type: 'value', name: 'AI预警(%)', position: 'right', nameGap: 30, offset: 10,
@@ -245,7 +245,7 @@
                 axisLine: { show: false }, axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { color: '#ff6467', fontSize: 11 },
-                nameTextStyle: { color: '#ff6467', fontSize: 11 }
+                nameTextStyle: { color: '#ff6467', fontSize: 11, padding: [20, 0, 0, 0] }
             }
         ],
         series: [
