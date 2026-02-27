@@ -140,35 +140,43 @@
 </div>
 
 <!-- ════ ROW 2 ════ -->
-<div class="row d-flex align-items-stretch mb-4">
+<!-- min-height 预分配空间，消除数据加载前的布局跳动 -->
+<div class="row mb-4" style="align-items: stretch; min-height: 400px;">
 
     <!-- ④ 设备故障预警多维关联可视化 (col-8) -->
-    <div class="col-8 h-100">
-        <div class="card h-100 d-flex flex-column">
+    <div class="col-8">
+        <div class="card" style="height: 100%; display: flex; flex-direction: column;">
             <div class="card-title"><span class="card-title-bar"></span>设备故障预警多维关联可视化</div>
-            <div id="chart-line" style="flex:1; min-height:240px;"></div>
+            <!-- 固定高度：ECharts 初始化即可获得正确容器尺寸，无需等数据后 resize -->
+            <div id="chart-line" style="height: 340px;"></div>
         </div>
     </div>
 
     <!-- ⑤ 设备风险排名 Top 5 (col-4) -->
-    <div class="col-4 h-100">
-        <div class="card h-100 d-flex flex-column">
+    <div class="col-4">
+        <div class="card" style="height: 100%; display: flex; flex-direction: column;">
             <div class="card-title"><span class="card-title-bar"></span>设备风险排名</div>
-            <table class="tbl">
-                <thead>
-                    <tr>
-                        <th style="width:36px;">排名</th>
-                        <th>设备名称</th>
-                        <th>设备型号</th>
-                        <th>实时风险</th>
-                    </tr>
-                </thead>
-                <tbody id="risk-tbody">
-                    <tr>
-                        <td colspan="4" style="text-align:center;color:var(--text-weak);padding:24px 0;">加载中…</td>
-                    </tr>
-                </tbody>
-            </table>
+            <!-- 固定高度容器：加载前后均保持一致，消除行高跳动 -->
+            <div style="height: 340px; overflow: auto; padding: 0;">
+                <table class="tbl" style="margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;">排名</th>
+                            <th>设备名称</th>
+                            <th>设备型号</th>
+                            <th>实时风险</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risk-tbody">
+                        <tr>
+                            <td colspan="4"
+                                style="height: 300px; text-align: center; vertical-align: middle;">
+                                <div style="color:var(--text-weak);">加载中…</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -216,15 +224,15 @@
             textStyle: { color: '#303133', fontSize: 12 }
         },
         legend: {
-            top: 0, right: 0, icon: 'roundRect',
+            bottom: '0%', left: '0%', icon: 'roundRect',
             textStyle: { color: '#4a5565', fontSize: 12 },
             itemWidth: 24, itemHeight: 2,
             data: [
-                { name: '电流', itemStyle: { color: '#2b7fff' } },
-                { name: 'AI预警', itemStyle: { color: '#ff6467' } }
+                { name: '电流', itemStyle: { color: '#409EFF' } },
+                { name: 'AI预警', itemStyle: { color: '#f56c6c' } }
             ]
         },
-        grid: { left: 10, right: 40, top: 40, bottom: 8, containLabel: true },
+        grid: { left: '5%', right: '12%', bottom: '15%', containLabel: true },
         xAxis: {
             type: 'category', boundaryGap: false, data: [],
             axisLine: { show: false }, axisTick: { show: false },
@@ -240,29 +248,29 @@
                 nameTextStyle: { color: '#4a5565', fontSize: 11, padding: [0, 0, 0, 0] }
             },
             {
-                type: 'value', name: 'AI预警(%)', position: 'right', nameGap: 30, offset: 10,
+                type: 'value', name: 'AI预警(%)', position: 'right', nameGap: 15, offset: 10,
                 min: 0, max: 100, interval: 20,
                 axisLine: { show: false }, axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { color: '#ff6467', fontSize: 11 },
-                nameTextStyle: { color: '#ff6467', fontSize: 11, padding: [20, 0, 0, 0] }
+                nameTextStyle: { color: '#ff6467', fontSize: 11, padding: [0, 0, 0, 0] }
             }
         ],
         series: [
             {
                 name: '电流', type: 'line', smooth: true, symbol: 'none',
                 yAxisIndex: 0,
-                lineStyle: { color: '#2b7fff', width: 1.5 },
+                lineStyle: { color: '#409EFF', width: 1.5 },
                 data: []
             },
             {
                 name: 'AI预警', type: 'line', smooth: true, symbol: 'none',
                 yAxisIndex: 1,
-                lineStyle: { color: '#ff6467', width: 1.5 },
-                itemStyle: { color: '#ff6467' },
+                lineStyle: { color: '#f56c6c', width: 1.5 },
+                itemStyle: { color: '#f56c6c' },
                 markLine: {
                     symbol: ['none', 'none'],
-                    data: [{ yAxis: 75, lineStyle: { color: '#ff6467', type: 'dashed', width: 1, opacity: 0.35 }, label: { show: false } }]
+                    data: [{ yAxis: 75, lineStyle: { color: '#f56c6c', type: 'dashed', width: 1, opacity: 0.35 }, label: { show: false } }]
                 },
                 data: []
             }
@@ -337,17 +345,21 @@
             if (d.status !== 'ok') return;
             const running = d.data.filter(dev => dev.current_status === 'Running');
             running.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
-            const top = running.slice(0, 5);
-            el('risk-tbody').innerHTML = top.map((dev, i) => {
-                const s = dev.anomaly_score != null ? (dev.anomaly_score * 100).toFixed(0) + '%' : '--';
-                const cls = dev.anomaly_score > 0.75 ? 'text-danger fw-bold' : dev.anomaly_score > 0.45 ? 'text-warning fw-bold' : 'text-success fw-bold';
-                return `<tr>
-                    <td style="color:var(--text-weak);">${i + 1}</td>
-                    <td style="font-weight:500;">${dev.device_name}</td>
-                    <td style="color:var(--text-hint);">${dev.device_type || '--'}</td>
-                    <td class="${cls}">${s}</td>
-                </tr>`;
-            }).join('');
+            const top = running.slice(0, 8);
+            if (top.length === 0) {
+                el('risk-tbody').innerHTML = `<tr><td colspan="4" style="padding: 0; height: 320px; text-align: center; vertical-align: middle;"><div style="color:var(--text-weak);">暂无风险设备</div></td></tr>`;
+            } else {
+                el('risk-tbody').innerHTML = top.map((dev, i) => {
+                    const s = dev.anomaly_score != null ? (dev.anomaly_score * 100).toFixed(0) + '%' : '--';
+                    const styleStr = dev.anomaly_score > 0.75 ? 'color: var(--danger); font-weight: bold;' : dev.anomaly_score > 0.45 ? 'color: var(--warning); font-weight: bold;' : 'color: var(--success); font-weight: bold;';
+                    return `<tr>
+                        <td style="color:var(--text-weak);">${i + 1}</td>
+                        <td style="font-weight:500;">${dev.device_name}</td>
+                        <td style="color:var(--text-hint);">${dev.device_type || '--'}</td>
+                        <td style="${styleStr}">${s}</td>
+                    </tr>`;
+                }).join('');
+            }
         } catch (e) { console.warn('[risk]', e); }
     }
 
@@ -363,6 +375,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => { pollAll(); setInterval(pollAll, 3000); });
-    window.addEventListener('resize', () => [GQ, GP, GA, cLine].forEach(c => c.resize()));
+    window.addEventListener('resize', () => {
+        if (typeof cLine !== 'undefined') cLine.resize();
+        if (typeof GQ !== 'undefined') GQ.resize();
+        if (typeof GP !== 'undefined') GP.resize();
+        if (typeof GA !== 'undefined') GA.resize();
+    });
 </script>
 {% endblock %}

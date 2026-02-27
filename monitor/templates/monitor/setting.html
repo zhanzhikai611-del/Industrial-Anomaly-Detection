@@ -5,7 +5,7 @@
 {% block extra_style %}
 <style>
     .set-container {
-        padding: 5px 24px;
+        padding: 0;
         height: 100%;
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -107,31 +107,42 @@
         line-height: 1.7;
     }
 
-    /* ── 胶囊开关组 ── */
-    .capsule-group {
-        display: inline-flex;
+    /* ── Segmented Control ── */
+    .segment-control {
+        display: flex;
         background: #e4e7ed;
-        border-radius: 20px;
+        border-radius: 6px;
         padding: 3px;
+        width: 120px;
     }
 
-    .capsule-btn {
-        width: 60px;
-        height: 28px;
-        border-radius: 15px;
-        border: none;
-        background: transparent;
-        color: #909399;
+    .segment-item {
+        flex: 1;
+        text-align: center;
+        border-radius: 4px;
         font-size: 13px;
         font-weight: 500;
         cursor: pointer;
-        transition: all 0.2s;
+        padding: 4px 6px;
+        color: #909399;
+        transition: all 0.3s;
+        user-select: none;
     }
 
-    .capsule-btn.active {
+    .segment-item.active {
         background: #fff;
         color: #409eff;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #seg-run.active {
+        background: #409eff !important;
+        color: #fff !important;
+    }
+
+    .segment-control.disabled {
+        opacity: 0.6;
+        pointer-events: none;
     }
 
     /* ── 报警配置卡 ── */
@@ -218,11 +229,9 @@
                 <div class="stream-status-box">
                     <span class="stream-status-lbl">当前数据流状态</span>
                     <div class="stream-status-val">
-                        <span class="status-text" id="stream-text"
-                            style="min-width: 48px; display: inline-block;">暂停</span>
-                        <div class="capsule-group" id="stream-toggle-group">
-                            <button class="capsule-btn active" id="btn-stop" onclick="toggleStream(false)">暂停</button>
-                            <button class="capsule-btn" id="btn-start" onclick="toggleStream(true)">运行</button>
+                        <div class="segment-control" id="stream-segment">
+                            <div class="segment-item active" id="seg-pause" onclick="toggleStream(false)">暂停</div>
+                            <div class="segment-item" id="seg-run" onclick="toggleStream(true)">运行</div>
                         </div>
                     </div>
                 </div>
@@ -274,7 +283,7 @@
                 <div class="info-row"><span class="info-label">项目名称</span><span class="info-val">工业生产数据异常预警系统</span>
                 </div>
                 <div class="info-row"><span class="info-label">版本</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">v1.0.2</span></div>
+                        style="font-family:'Helvetica Neue',sans-serif;">V1.3.0</span></div>
                 <div class="info-row"><span class="info-label">后端框架</span><span class="info-val"
                         style="font-family:'Helvetica Neue',sans-serif;">Django 4.x</span></div>
                 <div class="info-row"><span class="info-label">数据库</span><span class="info-val"
@@ -311,7 +320,7 @@
 
 {% endblock %}
 
-{% block extra_script %}
+{% block extra_js %}
 <script>
     let isStreamRunning = false;
 
@@ -319,35 +328,33 @@
         try {
             const res = await fetch('/api/stream-status/');
             const data = await res.json();
-            updateUI(data.is_running);
+            updateUI(data.is_active);
             refreshStats();
         } catch (e) {
             console.error('Failed to get status', e);
         }
     }
 
-    function updateUI(running) {
-        const txt = document.getElementById('stream-text');
-        const btnStart = document.getElementById('btn-start');
-        const btnStop = document.getElementById('btn-stop');
+    function updateUI(isActive) {
+        isStreamRunning = isActive;
+        const segPause = document.getElementById('seg-pause');
+        const segRun = document.getElementById('seg-run');
 
-        if (running) {
-            txt.innerText = '运行中';
-            txt.style.color = '#409eff';
-            btnStart.classList.add('active');
-            btnStop.classList.remove('active');
+        if (isActive) {
+            segRun.classList.add('active');
+            segPause.classList.remove('active');
         } else {
-            txt.innerText = '已暂停';
-            txt.style.color = 'rgba(0,0,0,0.35)';
-            btnStart.classList.remove('active');
-            btnStop.classList.add('active');
+            segPause.classList.add('active');
+            segRun.classList.remove('active');
         }
     }
 
     async function toggleStream(newState) {
-        // Prevent double click
-        document.getElementById('btn-start').disabled = true;
-        document.getElementById('btn-stop').disabled = true;
+        if (isStreamRunning === newState) return;
+
+        const segmentContainer = document.getElementById('stream-segment');
+        segmentContainer.classList.add('disabled'); // prevent duplicate clicks
+
         const action = newState ? 'start' : 'stop';
         try {
             const res = await fetch(`/api/system/toggle_stream/`, {
@@ -360,7 +367,7 @@
             });
             const data = await res.json();
             if (data.status === 'ok') {
-                updateUI(data.is_running);
+                updateUI(data.is_active);
             }
         } catch (e) {
             console.error('Failed to toggle stream', e);
@@ -368,8 +375,7 @@
             // revert
             updateUI(!newState);
         } finally {
-            document.getElementById('btn-start').disabled = false;
-            document.getElementById('btn-stop').disabled = false;
+            segmentContainer.classList.remove('disabled');
         }
     }
 

@@ -7,6 +7,10 @@ urlpatterns = [
     # ── 根路径重定向 → Dashboard ────────────────────────────────
     path('', RedirectView.as_view(url='/dashboard/', permanent=False), name='root'),
 
+    # ── 身份认证 ────────────────────────────────────────────────
+    path('login/',  views.login_view,  name='login'),
+    path('logout/', views.logout_view, name='logout'),
+
     # ── 实时流开关 ──────────────────────────────────────────────
     path('api/start-stream/',  views.start_stream,  name='start_stream'),
     path('api/stop-stream/',   views.stop_stream,   name='stop_stream'),
@@ -30,5 +34,10 @@ urlpatterns = [
     path('api/alerts/<int:alert_id>/handle/', views.api_handle_alert, name='api_handle_alert'),
     path('api/device/<int:device_id>/status/', views.api_update_device_status, name='api_update_device_status'),
     path('api/device/<int:device_id>/reset/', views.api_device_reset, name='api_device_reset'),
-    path('api/accounts/create/', views.api_create_account, name='api_create_account'),
+
+    # ── 账号管理 CRUD API ─────────────────────────────────────────
+    path('api/accounts/create/',                  views.api_create_account,    name='api_create_account'),
+    path('api/accounts/<int:user_id>/toggle/',    views.api_toggle_user_status, name='api_toggle_user_status'),
+    path('api/accounts/<int:user_id>/delete/',    views.api_delete_user,        name='api_delete_user'),
+    path('api/accounts/<int:user_id>/update/',    views.api_update_user,        name='api_update_user'),
 ]

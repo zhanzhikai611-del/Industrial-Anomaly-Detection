@@ -10,15 +10,15 @@ monitor/management/commands/run_realtime_stream.py
   - 每 3 秒轮询 SystemConfig.is_realtime_active
   - True  → 为每台 DeviceInfo 追加一条当前时刻的仿真传感数据
   - False → 打印 "Streaming paused..." 并继续等待
+  - 每 CLEANUP_EVERY 次心跳执行一次滚动清理，删除超过 RETENTION_DAYS 天的旧数据
   - Ctrl+C 安全退出
-
-注意：只追加（Append），不删除任何历史数据。
 """
 
 import time
 import random
 import logging
 import numpy as np
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -65,6 +65,10 @@ STAGE_PROBS  = [s[1] / sum(w for _, w in _STAGES) for s in _STAGES]
 ANOMALY_PROB  = 0.15    # 磨损工况概率（与历史脚本保持一致）
 LOADING_TIME  = 60.0    # 负荷时间（分钟/记录）
 STREAM_INTERVAL = 3     # 守护进程轮询间隔（秒）
+
+# ── 滚动数据保留策略 ──────────────────────────────────────────────────
+RETENTION_DAYS = 1      # 保留最近 N 天的传感与报警数据
+CLEANUP_EVERY  = 300    # 每 N 次心跳执行一次清理（300 × 3s ≈ 15 分钟）
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -212,7 +216,8 @@ class Command(BaseCommand):
                 cfg = SystemConfig.get()
 
                 if not cfg.is_realtime_active:
-                    self.stdout.write(f'[{tick:>6}] ⏸  Streaming paused...')
+                    if tick % 5 == 0:
+                        self.stdout.write(f'[{tick:>6}] ⏸  Streaming paused...')
                     time.sleep(STREAM_INTERVAL)
                     continue
 
@@ -256,6 +261,23 @@ class Command(BaseCommand):
                     f'[{tick:>6}] ▶  {now:%H:%M:%S}  '
                     f'写入 {records_created} 条  报警 {alerts_created} 条'
                 )
+
+                # ── 滚动清理：每 CLEANUP_EVERY 次心跳执行一次 ────────
+                if tick % CLEANUP_EVERY == 0:
+                    cutoff = now - timedelta(days=RETENTION_DAYS)
+                    try:
+                        # 必须先删子表（AnomalyAlertLog），再删父表（ProductionSensorData）
+                        deleted_alerts  = AnomalyAlertLog.objects.filter(alert_time__lt=cutoff).delete()[0]
+                        deleted_records = ProductionSensorData.objects.filter(timestamp__lt=cutoff).delete()[0]
+                        self.stdout.write(self.style.WARNING(
+                            f'[{tick:>6}] 🗑  滚动清理完成：'
+                            f'删除 {deleted_records:,} 条传感记录、{deleted_alerts:,} 条报警'
+                            f'（保留最近 {RETENTION_DAYS} 天）'
+                        ))
+                    except Exception as exc:
+                        self.stdout.write(self.style.ERROR(
+                            f'[{tick:>6}] ❌  滚动清理异常：{exc}'
+                        ))
 
                 time.sleep(STREAM_INTERVAL)
 

@@ -138,31 +138,85 @@
         color: #f56c6c;
     }
 
-    /* 待处理按钮 (Figma: white bg, #f56c6c border, #f56c6c text) */
-    .btn-pending {
+    /* 待处理图标按钮 */
+    .action-icon-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 62px;
-        height: 26px;
-        border-radius: 4px;
-        border: 1px solid var(--danger);
-        background: #fff;
-        color: var(--danger);
-        font-size: 12px;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: var(--text-hint);
         cursor: pointer;
         transition: all .15s;
-        font-family: var(--font);
+        padding: 0;
     }
 
-    .btn-pending:hover {
-        background: var(--danger);
-        color: #fff;
+    .action-icon-btn:hover:not(:disabled) {
+        background: var(--primary-bg, #ecf5ff);
+        color: var(--primary);
     }
 
-    .btn-pending:disabled {
-        opacity: .4;
+    .action-icon-btn:disabled {
+        color: var(--text-weak);
         cursor: not-allowed;
+    }
+
+    /* ── 自定义调色板 ── */
+    .color-high {
+        color: #f56c6c !important;
+    }
+
+    .color-med {
+        color: #e6a23c !important;
+    }
+
+    .color-low {
+        color: #67c23a !important;
+    }
+
+    .color-normal {
+        color: #303133 !important;
+    }
+
+    /* ── 列表行内状态选择器 ── */
+    .status-select {
+        appearance: none;
+        -webkit-appearance: none;
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 4px 12px;
+        font-size: 12px;
+        outline: none;
+        cursor: pointer;
+        text-align: center;
+        font-weight: 500;
+        font-family: inherit;
+    }
+
+    .status-select.running {
+        background-color: #f0f9eb;
+        border-color: #c2e7b0;
+        color: #67c23a;
+    }
+
+    .status-select.idle {
+        background-color: #fdf6ec;
+        border-color: #f5dab1;
+        color: #e6a23c;
+    }
+
+    .status-select.down {
+        background-color: #fef0f0;
+        border-color: #fab6b6;
+        color: #f56c6c;
+    }
+
+    .status-select:hover {
+        filter: brightness(0.96);
     }
 
     /* ── AI 诊断弹窗 ── */
@@ -305,17 +359,17 @@
         <span class="fp-label">所有设备</span>
         <span class="fp-num" id="fc-all">--</span>
     </div>
-    <div class="filter-pill high" id="fp-high" onclick="setFilter('high')">
-        <span class="fp-label">高风险</span>
-        <span class="fp-num" id="fc-high">--</span>
+    <div class="filter-pill" id="fp-high" onclick="setFilter('high')" style="border-color: #fde2e2;">
+        <span class="fp-label color-high">高风险</span>
+        <span class="fp-num color-high" id="fc-high">--</span>
     </div>
-    <div class="filter-pill med" id="fp-med" onclick="setFilter('med')">
-        <span class="fp-label">中风险</span>
-        <span class="fp-num" id="fc-med">--</span>
+    <div class="filter-pill" id="fp-med" onclick="setFilter('med')" style="border-color: #faecd8;">
+        <span class="fp-label color-med">中风险</span>
+        <span class="fp-num color-med" id="fc-med">--</span>
     </div>
-    <div class="filter-pill low" id="fp-low" onclick="setFilter('low')">
-        <span class="fp-label">低风险</span>
-        <span class="fp-num" id="fc-low">--</span>
+    <div class="filter-pill" id="fp-low" onclick="setFilter('low')" style="border-color: #e1f3d8;">
+        <span class="fp-label color-low">低风险</span>
+        <span class="fp-num color-low" id="fc-low">--</span>
     </div>
 </div>
 
@@ -446,8 +500,9 @@
     function setFilter(f) {
         activeFilter = f; currentPage = 1;
         ['all', 'high', 'med', 'low'].forEach(k => {
-            document.getElementById('fp-' + k).style.borderWidth = (k === f) ? '2px' : '1px';
-            document.getElementById('fp-' + k).style.opacity = (k === f) ? '1' : '0.75';
+            const elm = document.getElementById('fp-' + k);
+            elm.style.borderWidth = (k === f) ? '2px' : '1px';
+            elm.style.opacity = (k === f) ? '1' : '0.65';
         });
         sortAndRender();
     }
@@ -485,28 +540,39 @@
 
         tbody.innerHTML = page.map(dev => {
             const score = dev.anomaly_score ?? 0;
-            const pct = (score * 100).toFixed(0) + '%';
-            const cls = score > 0.75 ? 'text-danger' : score > 0.45 ? 'text-warning' : 'text-success';
+            const showRisk = dev.current_status === 'Running';
+            const pct = showRisk ? (score * 100).toFixed(0) + '%' : '--';
+            const cls = showRisk ? (score > 0.75 ? 'color-high' : score > 0.45 ? 'color-med' : 'color-low') : 'color-normal';
+
             const oeeRaw = dev.oee;
             const oee = oeeRaw != null ? (oeeRaw * 100).toFixed(0) + '%' : '--';
-            const oeeC = oeeRaw != null && oeeRaw < 0.4 ? 'text-danger' : oeeRaw != null && oeeRaw < 0.7 ? 'text-warning' : 'text-success';
-            const badgeCls = 'badge-running';
-            const statusOpts = ['Running', 'Idle', 'Down'].map(s => `<option value="${s}" ${s === dev.current_status ? 'selected' : ''}>${s === 'Running' ? 'Running' : (s === 'Idle' ? 'Standby' : 'Stopped')}</option>`).join('');
+            const oeeC = oeeRaw != null && oeeRaw < 0.45 ? 'color-high' : (oeeRaw != null && oeeRaw < 0.75 ? 'color-med' : 'color-low');
+
+            const selCls = dev.current_status === 'Running' ? 'running' : (dev.current_status === 'Idle' ? 'idle' : 'down');
+            const statusOpts = ['Running', 'Idle', 'Down'].map(s => {
+                const label = s === 'Running' ? 'Running' : (s === 'Idle' ? 'Standby' : 'Stopped');
+                return `<option value="${s}" ${s === dev.current_status ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+
             return `<tr style="cursor:pointer;" onclick="openAIModal(${dev.device_id})">
-            <td style="font-weight:500;color:var(--text);">${dev.device_name}</td>
+            <td style="font-weight:600;color:var(--text);">${dev.device_name}</td>
             <td style="color:var(--text-hint);">${dev.device_type || '--'}</td>
             <td style="color:var(--text-sec);font-size:12px;">${dev.machining_process || '--'}</td>
             <td class="${cls}" style="font-weight:700;">${pct}</td>
             <td class="${oeeC}" style="font-weight:700;">${oee}</td>
             <td>
-                <select class="form-select form-select-sm" onclick="event.stopPropagation()" onchange="updateDeviceStatus(${dev.device_id}, this.value)" style="width: 100px; font-size: 12px; padding: 2px 16px 2px 8px; cursor: pointer;">
+                <select class="status-select ${selCls}" onclick="event.stopPropagation()" onchange="updateDeviceStatus(${dev.device_id}, this.value)">
                     ${statusOpts}
                 </select>
             </td>
             <td>
-                <button class="btn-pending"
-                    onclick="event.stopPropagation();openRepairModal(${dev.device_id},'${dev.device_name}')">
-                    待处理
+                <button class="action-icon-btn"
+                    ${dev.current_status !== 'Down' ? 'disabled' : ''}
+                    onclick="event.stopPropagation();openRepairModal(${dev.device_id},'${dev.device_name}')"
+                    title="下发维修工单（仅停机状态可操作）">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
                 </button>
             </td>
         </tr>`;
@@ -536,23 +602,23 @@
         modalChartInst.setOption({
             tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { fontSize: 12 } },
             legend: {
-                top: 0, right: 0, icon: 'roundRect', itemWidth: 24, itemHeight: 2,
+                bottom: '0%', left: '0%', icon: 'roundRect', itemWidth: 24, itemHeight: 2,
                 textStyle: { fontSize: 12 }, data: [
-                    { name: '电流', itemStyle: { color: '#2b7fff' } },
-                    { name: 'AI预测', itemStyle: { color: '#ff6467' } }
+                    { name: '电流', itemStyle: { color: '#409EFF' } },
+                    { name: 'AI预测', itemStyle: { color: '#f56c6c' } }
                 ]
             },
-            grid: { left: 10, right: 40, top: 40, bottom: 8, containLabel: true },
+            grid: { left: '5%', right: '12%', bottom: '15%', containLabel: true },
             xAxis: { type: 'category', boundaryGap: false, data: [], axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#6b7280', fontSize: 10, fontFamily: 'monospace' } },
             yAxis: [
                 { type: 'value', name: '电流(A)', position: 'left', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#f0f2f5' } }, axisLabel: { color: '#4a5565', fontSize: 10 }, nameTextStyle: { color: '#4a5565', fontSize: 10, padding: [0, 0, 0, 0] } },
-                { type: 'value', name: 'AI预测(%)', position: 'right', nameGap: 30, offset: 10, min: 0, max: 100, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#ff6467', fontSize: 10 }, nameTextStyle: { color: '#ff6467', fontSize: 10, padding: [20, 0, 0, 0] } }
+                { type: 'value', name: 'AI预测(%)', position: 'right', nameGap: 15, offset: 10, min: 0, max: 100, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#ff6467', fontSize: 10 }, nameTextStyle: { color: '#ff6467', fontSize: 10, padding: [0, 0, 0, 0] } }
             ],
             series: [
-                { name: '电流', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, lineStyle: { color: '#2b7fff', width: 1.5 }, data: [] },
+                { name: '电流', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, lineStyle: { color: '#409EFF', width: 1.5 }, data: [] },
                 {
-                    name: 'AI预测', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1, lineStyle: { color: '#ff6467', width: 1.5 },
-                    markLine: { symbol: ['none', 'none'], data: [{ yAxis: 75, lineStyle: { color: '#ff6467', type: 'dashed', width: 1, opacity: 0.35 }, label: { show: false } }] },
+                    name: 'AI预测', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1, lineStyle: { color: '#f56c6c', width: 1.5 },
+                    markLine: { symbol: ['none', 'none'], data: [{ yAxis: 75, lineStyle: { color: '#f56c6c', type: 'dashed', width: 1, opacity: 0.35 }, label: { show: false } }] },
                     data: []
                 }
             ]
@@ -610,14 +676,55 @@
         btn.disabled = true; btn.textContent = '处理中…';
         try {
             const csrfToken = getCsrf();
-            await fetch(`/api/device/${repairDevId}/reset/`, {
+            const res  = await fetch(`/api/device/${repairDevId}/reset/`, {
                 method: 'POST', headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ note: document.getElementById('repair-desc').value })
             });
-        } catch (e) { console.warn('[repair]', e); }
+            const data = await res.json();
+            if (res.ok && data.status === 'ok') {
+                closeModal('repair-modal');
+                showRepairToast();
+                // 回春后加速轮询：每 1 秒刷一次，持续 15 秒，让风险曲线明显下降后恢复正常节奏
+                let ticks = 0;
+                const fastPoll = setInterval(() => {
+                    fetchDevices();
+                    if (++ticks >= 15) clearInterval(fastPoll);
+                }, 1000);
+            } else {
+                alert('处理失败：' + (data.message || res.status));
+            }
+        } catch (e) {
+            console.warn('[repair]', e);
+            alert('网络请求失败，请重试');
+        }
         btn.disabled = false; btn.textContent = '确认下发';
-        closeModal('repair-modal');
-        setTimeout(fetchDevices, 500);
+    }
+
+    function showRepairToast() {
+        let toast = document.getElementById('repair-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'repair-toast';
+            toast.style.cssText = `
+                position:fixed; bottom:32px; right:32px; z-index:9999;
+                background:#fff; border-radius:8px; padding:14px 18px;
+                box-shadow:0 4px 20px rgba(0,0,0,.12); border-left:4px solid #67c23a;
+                display:flex; align-items:flex-start; gap:10px;
+                font-size:13px; color:#303133; max-width:280px;
+                opacity:0; transition:opacity .3s;
+            `;
+            toast.innerHTML = `
+                <div style="color:#67c23a;margin-top:1px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div>
+                    <div style="font-weight:600;margin-bottom:3px;">成功下发处理信息</div>
+                    <div style="color:#909399;font-size:12px;">设备已切换至待机，可手动恢复运行</div>
+                </div>`;
+            document.body.appendChild(toast);
+        }
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, 5000);
     }
 
     function getCsrf() {

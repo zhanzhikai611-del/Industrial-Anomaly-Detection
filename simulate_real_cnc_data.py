@@ -93,6 +93,20 @@ GROUP_PARAMS = [
     (31.0, 0.32), # Group 4: 16-20 (Old) -> ~60-85%
     (40.0, 0.40), # Group 5: 21-25 (Faulty) -> ~76-100%
 ]
+
+def _get_group_id(seq: int) -> int:
+    """
+    将设备创建序号 (1-25) 映射到特征组 ID (1-5)。
+    分布：Group1=5台(1-5)、Group2=6台(6-11)、Group3=7台(12-18)、
+          Group4=5台(19-23)、Group5=2台(24-25)
+    """
+    idx = seq - 1  # 转为 0-based
+    if idx < 5:    return 1
+    elif idx < 11: return 2
+    elif idx < 18: return 3
+    elif idx < 23: return 4
+    else:          return 5
+
 def create_devices():
     print(f'🏭  初始化 {TOTAL_DEVICES} 台设备 '
           f'(Running={RUNNING_COUNT} / Idle={IDLE_COUNT} / Down={DOWN_COUNT})…',
@@ -106,6 +120,7 @@ def create_devices():
                 device_type=dtype,
                 standard_capacity=cap,
                 current_status=_resolve_status(seq),
+                current_group_id=_get_group_id(seq),
             ))
     DeviceInfo.objects.bulk_create(objs)
     devices = list(DeviceInfo.objects.order_by('id'))
@@ -397,8 +412,8 @@ def run_realtime_simulation():
                 # 根据 device index 生成组别
                 futures = []
                 for idx, dev in enumerate(devices):
-                    # 重新从 DB 读取最新状态，支持前台动态更改
-                    dev.refresh_from_db(fields=['current_status'])
+                    # 重新从 DB 读取最新状态与分组，支持前台动态更改及回春逻辑
+                    dev.refresh_from_db(fields=['current_status', 'current_group_id'])
                     group_idx = min(max(dev.current_group_id - 1, 0), 4)
                     futures.append(executor.submit(_generate_single_device_realtime, dev, ts, group_idx))
                 

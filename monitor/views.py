@@ -27,9 +27,11 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 
 from .models import (
     SystemConfig, DeviceInfo, UserProfile,
@@ -39,24 +41,50 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════
+#  RBAC 角色装饰器（必须在页面路由之前定义）
+# ═══════════════════════════════════════════════════════════════════
+
+def role_required(allowed_roles):
+    """
+    RBAC 角色装饰器。
+    - 未登录：重定向到 LOGIN_URL（保留 next 参数）
+    - 角色不足：API 请求返回 403 JSON；页面请求重定向到仪表盘
+    """
+    from functools import wraps
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                return redirect(f'/login/?next={request.path}')
+            user_profile = getattr(request.user, 'profile', None)
+            role_name = user_profile.role if user_profile else 'Operator'
+            if role_name not in allowed_roles:
+                is_api = (request.path.startswith('/api/') or
+                          request.headers.get('x-requested-with') == 'XMLHttpRequest')
+                if is_api:
+                    return JsonResponse({'status': 'error', 'message': 'Permission Denied'}, status=403)
+                return redirect('/dashboard/')
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  页面路由
 # ═══════════════════════════════════════════════════════════════════
 
+@login_required
 def dashboard_view(request):
     """首页 Dashboard"""
-    from django.shortcuts import render
-    if request.user.is_authenticated:
-        profile, created = UserProfile.objects.get_or_create(user=request.user)
-        if profile.role != 'Admin':
-            profile.role = 'Admin'
-            profile.save(update_fields=['role'])
     return render(request, 'monitor/dashboard.html')
 
+
+@login_required
 def device_view(request):
     """Device 设备页"""
-    from django.shortcuts import render
     return render(request, 'monitor/device.html')
 
+@login_required
 def event_view(request):
     """Event 报警事件页"""
     from django.core.paginator import Paginator
@@ -68,7 +96,7 @@ def event_view(request):
     events_list = AnomalyAlertLog.objects.select_related('record', 'record__device').order_by('-alert_time')
     paginator = Paginator(events_list, 10)
     page_number = request.GET.get('page')
-    events = paginator.get_page(page_number)
+    page_obj = paginator.get_page(page_number)
     
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -81,51 +109,55 @@ def event_view(request):
         
     trend_labels = []
     trend_values = []
-    for i in range(5, -1, -1):
-        dt = now - timedelta(hours=i*4)
-        trend_labels.append(dt.strftime('%H:00'))
-        cnt = AnomalyAlertLog.objects.filter(alert_time__date=dt.date(), alert_time__hour=dt.hour).count()
+    for i in range(23, -1, -1):
+        start_time = now - timedelta(minutes=(i+1)*10)
+        end_time = now - timedelta(minutes=i*10)
+        trend_labels.append(end_time.strftime('%H:%M'))
+        cnt = AnomalyAlertLog.objects.filter(alert_time__gte=start_time, alert_time__lt=end_time).count()
         trend_values.append(cnt)
 
     return render(request, 'monitor/event.html', {
-        'events': events,
+        'page_obj': page_obj,
         'stats_data_json': json.dumps([stats_data.get('LOW_VELOCITY', 0), stats_data.get('HIGH_POWER', 0), stats_data.get('HIGH_CURRENT', 0)]),
         'trend_labels_json': json.dumps(trend_labels),
         'trend_values_json': json.dumps(trend_values),
     })
 
+@login_required
+@role_required(['Admin'])
 def setting_view(request):
-    """Setting 系统设置页"""
-    from django.shortcuts import render
+    """Setting 系统设置页（仅 Admin 可访问）"""
     return render(request, 'monitor/setting.html')
 
-def role_required(allowed_roles):
-    from functools import wraps
-    def decorator(view_func):
-        @wraps(view_func)
-        def _wrapped_view(request, *args, **kwargs):
-            user_profile = getattr(request.user, 'profile', None)
-            role_name = user_profile.role if user_profile else 'Operator'
-            if role_name not in allowed_roles:
-                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.path.startswith('/api/'):
-                    return JsonResponse({'status': 'error', 'message': 'Permission Denied'}, status=403)
-                return HttpResponseForbidden("您没有权限访问此页面。")
-            return view_func(request, *args, **kwargs)
-        return _wrapped_view
-    return decorator
-
+@login_required
+@role_required(['Admin'])
 def account_view(request):
-    """Account 账号管理页"""
-    user_profile = getattr(request.user, 'profile', None)
-    role_name = user_profile.role if user_profile else 'Operator'
-    has_permission = (role_name == 'Admin')
-    
-    if has_permission:
-        users = User.objects.select_related('profile').all().order_by('-date_joined')
-    else:
-        users = []
-        
-    return render(request, 'monitor/account.html', {'users': users, 'has_permission': has_permission})
+    """Account 账号管理页（仅 Admin 可访问）"""
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+
+    search_q = request.GET.get('q', '').strip()
+    role_q   = request.GET.get('role', '').strip()
+
+    qs = User.objects.select_related('profile').all().order_by('-date_joined')
+    if search_q:
+        qs = qs.filter(
+            Q(username__icontains=search_q) |
+            Q(profile__real_name__icontains=search_q) |
+            Q(profile__job_number__icontains=search_q)
+        )
+    if role_q:
+        qs = qs.filter(profile__role=role_q)
+
+    paginator = Paginator(qs, 10)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'monitor/account.html', {
+        'page_obj': page_obj,
+        'search_q': search_q,
+        'role_q':   role_q,
+        'total':    paginator.count,
+    })
 
 @csrf_exempt
 @require_http_methods(['POST'])
@@ -231,7 +263,7 @@ def api_toggle_stream(request):
         cfg.is_realtime_active = False
         
     cfg.save()
-    return JsonResponse({'status': 'ok', 'is_running': cfg.is_realtime_active})
+    return JsonResponse({'status': 'ok', 'is_active': cfg.is_realtime_active})
     
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
@@ -248,6 +280,7 @@ def stream_status(request):
     return JsonResponse({
         'status': 'ok',
         'is_realtime_active': cfg.is_realtime_active,
+        'is_active': cfg.is_realtime_active,
         'updated_at': cfg.updated_at.isoformat() if cfg.updated_at else None,
     })
 
@@ -389,24 +422,30 @@ def api_dashboard_stats(request):
 @require_http_methods(['GET'])
 def api_realtime_stream(request):
     """
-    GET /api/stream/ — 模拟实时数据流
-    从 Running 设备近期数据中随机采样 1 条，将 timestamp 替换为当前时间，
-    使前端折线图每次轮询都能获得新时间戳，从而持续更新。
+    GET /api/stream/ — 实时数据流（Dashboard 折线图数据源）
+    从 Running 设备中随机选 1 台，取其最新一条传感记录，
+    将 timestamp 替换为当前时间使前端持续更新。
+
+    V1.2.1 修正：原"随机抽 5000 选 1"会混入大量旧 Group-1 历史数据，
+    改为从每台 Running 设备各取最新 1 条后再随机选台，确保显示值来自当前流。
     """
     import random as _random
 
-    # 从 Running 设备最近 5000 条记录中随机抽 1 条
-    qs = (
-        ProductionSensorData.objects
-        .select_related('device')
-        .filter(device__current_status='Running')
-        .order_by('-timestamp')[:5000]
-    )
-    records = list(qs)
-    if not records:
+    running_devices = list(DeviceInfo.objects.filter(current_status='Running'))
+    if not running_devices:
         return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': _LR_MODEL is not None})
 
-    rec  = _random.choice(records)
+    dev = _random.choice(running_devices)
+    rec = (
+        ProductionSensorData.objects
+        .select_related('device')
+        .filter(device=dev)
+        .order_by('-timestamp')
+        .first()
+    )
+    if not rec:
+        return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': _LR_MODEL is not None})
+
     prob = _predict_proba(rec)
     now  = timezone.now()
 
@@ -468,23 +507,20 @@ def api_device_matrix(request):
     GET /api/device-matrix/
     返回全部设备最新一条传感记录 + AI anomaly_score，
     按 anomaly_score 降序排列（最危险的设备排第一）。
-    """
-    import random as _random
 
+    V1.2.1 修正：统一使用最新单条记录进行 AI 推断。
+    原"随机抽 200 选 1"逻辑会在历史数据与实时流数据混合期导致风险值随机闪烁，
+    改为始终取 timestamp 最新的记录，确保显示值稳定且与实时流保持一致。
+    """
     devices = DeviceInfo.objects.all()
     rows = []
     for dev in devices:
-        if dev.current_status == 'Running':
-            # 从 Running 设备最近 200 条记录中随机抽 1 条，模拟实时波动
-            qs = list(ProductionSensorData.objects.filter(device=dev).order_by('-timestamp')[:200])
-            latest = _random.choice(qs) if qs else None
-        else:
-            latest = (
-                ProductionSensorData.objects
-                .filter(device=dev)
-                .order_by('-timestamp')
-                .first()
-            )
+        latest = (
+            ProductionSensorData.objects
+            .filter(device=dev)
+            .order_by('-timestamp')
+            .first()
+        )
         if latest is None:
             prob = None
             process = '--'
@@ -691,16 +727,159 @@ def api_update_device_status(request, device_id):
 def api_device_reset(request, device_id):
     try:
         device = get_object_or_404(DeviceInfo, pk=device_id)
+        if device.current_status != 'Down':
+            return JsonResponse({
+                'status': 'error',
+                'message': '仅停机(Stopped)状态下可下发处理操作',
+            }, status=400)
         with transaction.atomic():
             AnomalyAlertLog.objects.filter(
-                record__device=device, 
+                record__device=device,
                 is_handled=False
             ).update(is_handled=True)
-            
+
             device.current_group_id = 2
-            device.current_status = 'Running'
+            device.current_status = 'Idle'  # 下发完成后切到待机，不自动恢复运行
             device.save(update_fields=['current_group_id', 'current_status'])
-            
-        return JsonResponse({'status': 'ok', 'message': f'设备 {device.device_name} 已处理完毕并恢复运行性能'})
+
+        return JsonResponse({'status': 'ok', 'message': f'设备 {device.device_name} 已处理完毕，已切换至待机'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  身份认证视图  Login / Logout
+# ═══════════════════════════════════════════════════════════════════
+
+def login_view(request):
+    """
+    GET  /login/  — 渲染登录页
+    POST /login/  — 执行 Django authenticate → login → 重定向到 next 或 dashboard
+    """
+    if request.user.is_authenticated:
+        return redirect('/dashboard/')
+
+    error = None
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            if user.is_active:
+                login(request, user)
+                # 确保超级管理员有 Admin 角色的 UserProfile
+                _ensure_admin_profile(user)
+                next_url = request.GET.get('next', '/dashboard/')
+                return redirect(next_url if next_url.startswith('/') else '/dashboard/')
+            else:
+                error = '该账号已被禁用，请联系系统管理员'
+        else:
+            error = '用户名或密码错误，请重试'
+
+    return render(request, 'monitor/login.html', {'error': error})
+
+
+def logout_view(request):
+    """GET/POST /logout/  — 清除 Session 并跳转到登录页"""
+    logout(request)
+    return redirect('/login/')
+
+
+def _ensure_admin_profile(user):
+    """
+    超级用户（is_superuser=True）首次登录时自动创建 Admin 角色的 UserProfile。
+    普通用户的 Profile 应通过账号管理页面创建，不在此自动生成。
+    """
+    if not user.is_superuser:
+        return
+    profile = getattr(user, 'profile', None)
+    if profile is None:
+        # 生成不冲突的工号
+        from monitor.models import UserProfile as _UP
+        jn = f'{user.id:06d}'
+        if _UP.objects.filter(job_number=jn).exists():
+            jn = f'SU{user.id:04d}'
+        _UP.objects.get_or_create(
+            user=user,
+            defaults={
+                'role': 'Admin',
+                'real_name': user.get_full_name() or user.username,
+                'job_number': jn,
+            }
+        )
+    elif profile.role != 'Admin' and user.is_superuser:
+        profile.role = 'Admin'
+        profile.save(update_fields=['role'])
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  账号管理 API  — Toggle Status / Delete / Update Role
+# ═══════════════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_http_methods(['POST'])
+@role_required(['Admin'])
+def api_toggle_user_status(request, user_id):
+    """POST /api/accounts/<id>/toggle/ — 切换账号启用/禁用状态"""
+    try:
+        target = User.objects.get(pk=user_id)
+        if target == request.user:
+            return JsonResponse({'status': 'error', 'message': '不能禁用自己的账号'}, status=400)
+        target.is_active = not target.is_active
+        target.save(update_fields=['is_active'])
+        action = '启用' if target.is_active else '禁用'
+        return JsonResponse({'status': 'ok', 'is_active': target.is_active,
+                             'message': f'账号已{action}'})
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': '用户不存在'}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+@role_required(['Admin'])
+def api_delete_user(request, user_id):
+    """POST /api/accounts/<id>/delete/ — 删除账号（不可删除自身）"""
+    try:
+        target = User.objects.get(pk=user_id)
+        if target == request.user:
+            return JsonResponse({'status': 'error', 'message': '不能删除自己的账号'}, status=400)
+        target.delete()
+        return JsonResponse({'status': 'ok', 'message': '账号已删除'})
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': '用户不存在'}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+@role_required(['Admin'])
+def api_update_user(request, user_id):
+    """POST /api/accounts/<id>/update/ — 更新角色、真实姓名、启用状态"""
+    import json
+    try:
+        data = json.loads(request.body)
+        target = get_object_or_404(User, pk=user_id)
+        profile = getattr(target, 'profile', None)
+        if not profile:
+            return JsonResponse({'status': 'error', 'message': '用户无 Profile 记录'}, status=400)
+
+        with transaction.atomic():
+            if 'role' in data:
+                valid_roles = ['Admin', 'Engineer', 'Operator']
+                if data['role'] not in valid_roles:
+                    return JsonResponse({'status': 'error', 'message': '无效角色'}, status=400)
+                profile.role = data['role']
+            if 'real_name' in data:
+                profile.real_name = data['real_name']
+            profile.save()
+
+            if 'is_active' in data and target != request.user:
+                target.is_active = bool(data['is_active'])
+                target.save(update_fields=['is_active'])
+
+            if 'password' in data and data['password']:
+                target.password = make_password(data['password'])
+                target.save(update_fields=['password'])
+
+        return JsonResponse({'status': 'ok', 'message': '账号信息已更新'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
