@@ -1,11 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>CNC Cloud · 登录</title>
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
             font-family: -apple-system, 'Helvetica Neue', Arial, 'PingFang SC', 'Noto Sans SC', sans-serif;
@@ -100,9 +107,18 @@
             background: #fff;
         }
 
-        .fm-input::placeholder { color: #c0c4cc; }
-        .fm-input:focus { border-color: #409EFF; box-shadow: 0 0 0 3px rgba(64,158,255,.12); }
-        .fm-input.error { border-color: #f56c6c; }
+        .fm-input::placeholder {
+            color: #c0c4cc;
+        }
+
+        .fm-input:focus {
+            border-color: #409EFF;
+            box-shadow: 0 0 0 3px rgba(64, 158, 255, .12);
+        }
+
+        .fm-input.error {
+            border-color: #f56c6c;
+        }
 
         /* 密码可见切换图标 */
         .pw-toggle {
@@ -116,7 +132,9 @@
             align-items: center;
         }
 
-        .pw-toggle:hover { color: #409EFF; }
+        .pw-toggle:hover {
+            color: #409EFF;
+        }
 
         .pw-toggle svg {
             width: 18px;
@@ -158,8 +176,13 @@
             letter-spacing: 1px;
         }
 
-        .login-btn:hover { background: #337ecc; }
-        .login-btn:active { background: #2b6cb0; }
+        .login-btn:hover {
+            background: #337ecc;
+        }
+
+        .login-btn:active {
+            background: #2b6cb0;
+        }
 
         /* ── 页脚版本号 ── */
         .login-footer {
@@ -170,6 +193,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="login-card">
 
@@ -177,9 +201,10 @@
         <div class="login-brand">
             <div class="login-logo">
                 <svg viewBox="0 0 24 24">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    <path
+                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
                 </svg>
             </div>
             <span class="login-title">CNC Cloud</span>
@@ -192,8 +217,11 @@
 
             {% if error %}
             <div class="error-msg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 {{ error }}
             </div>
@@ -202,23 +230,28 @@
             <div class="fm-group">
                 <label class="fm-label" for="id_username">用户名 / 工号</label>
                 <div class="fm-wrap">
-                    <input class="fm-input {% if error %}error{% endif %}"
-                           type="text" id="id_username" name="username"
-                           placeholder="请输入用户名或工号" autofocus>
+                    <input class="fm-input {% if error %}error{% endif %}" type="text" id="id_username" name="username"
+                        placeholder="请输入用户名或工号" autofocus>
                 </div>
             </div>
 
             <div class="fm-group">
                 <label class="fm-label" for="id_password">密码</label>
                 <div class="fm-wrap">
-                    <input class="fm-input {% if error %}error{% endif %}"
-                           type="password" id="id_password" name="password"
-                           placeholder="请输入密码">
+                    <input class="fm-input {% if error %}error{% endif %}" type="password" id="id_password"
+                        name="password" placeholder="请输入密码">
                     <span class="pw-toggle" id="pw-toggle" onclick="togglePassword()" title="显示/隐藏密码">
                         <!-- Eye icon (visible state) -->
-                        <svg id="icon-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="icon-eye" viewBox="0 0 24 24">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
                         <!-- Eye-off icon (hidden by default) -->
-                        <svg id="icon-eye-off" viewBox="0 0 24 24" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <svg id="icon-eye-off" viewBox="0 0 24 24" style="display:none;">
+                            <path
+                                d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
                     </span>
                 </div>
             </div>
@@ -226,24 +259,25 @@
             <button type="submit" class="login-btn">登 录</button>
         </form>
 
-        <div class="login-footer">V1.3.0 · CNC 预警系统 · Industrial Warning System</div>
+        <div class="login-footer">V1.4.0 · CNC 预警系统 · Industrial Warning System</div>
     </div>
 
     <script>
         function togglePassword() {
             const input = document.getElementById('id_password');
-            const eyeOn  = document.getElementById('icon-eye');
+            const eyeOn = document.getElementById('icon-eye');
             const eyeOff = document.getElementById('icon-eye-off');
             if (input.type === 'password') {
                 input.type = 'text';
-                eyeOn.style.display  = 'none';
+                eyeOn.style.display = 'none';
                 eyeOff.style.display = '';
             } else {
                 input.type = 'password';
-                eyeOn.style.display  = '';
+                eyeOn.style.display = '';
                 eyeOff.style.display = 'none';
             }
         }
     </script>
 </body>
+
 </html>

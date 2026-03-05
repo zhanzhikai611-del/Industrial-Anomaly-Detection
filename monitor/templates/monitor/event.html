@@ -71,8 +71,13 @@
         outline: none;
     }
 
-    .ev-search::placeholder { color: #c0c4cc; }
-    .ev-search:focus { border-color: #409eff; }
+    .ev-search::placeholder {
+        color: #c0c4cc;
+    }
+
+    .ev-search:focus {
+        border-color: #409eff;
+    }
 
     .ev-select {
         width: 110px;
@@ -87,7 +92,9 @@
         background: #fff;
     }
 
-    .ev-select:focus { border-color: #409eff; }
+    .ev-select:focus {
+        border-color: #409eff;
+    }
 
     /* ── 表格区域：flex 列布局，使 footer 能 margin-top: auto 贴底 ── */
     .ev-table-wrap {
@@ -178,7 +185,9 @@
         margin-left: 2px;
     }
 
-    .text-nowrap { white-space: nowrap; }
+    .text-nowrap {
+        white-space: nowrap;
+    }
 
     /* ── 分页器 Footer：极简灰色边框，无蓝色高亮背景 ── */
     .ev-footer {
@@ -251,13 +260,13 @@
     <!-- ── 左侧两张图表卡片（总高度 = 225 + 16 gap + 309 = 550px）── -->
     <div style="width: 421px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;">
 
-        <!-- 统计水平条形图：225px -->
-        <div class="ev-card" style="height: 225px;">
+        <!-- 统计水平条形图：280px -->
+        <div class="ev-card" style="height: 280px;">
             <div class="ev-title-wrap" style="margin-bottom: 16px; flex-shrink: 0;">
                 <div class="ev-title-bar"></div>
                 <div class="ev-title-text">系统异常事件统计</div>
             </div>
-            <div id="statsChart" style="flex: 1; width: 100%; min-height: 130px;"></div>
+            <div id="statsChart" style="flex: 1; width: 100%; min-height: 180px;"></div>
         </div>
 
         <!-- 趋势面积图：flex:1 自动填满剩余高度 -->
@@ -310,7 +319,8 @@
                                 <div class="time-cell">{{ event.alert_time|date:"Y-m-d" }}</div>
                                 <div class="time-time">{{ event.alert_time|date:"H:i:s" }}</div>
                             </td>
-                            <td class="device-cell" style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <td class="device-cell"
+                                style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                 <span title="{{ event.record.device.device_name }}">
                                     {{ event.record.device.device_name }}
                                 </span>
@@ -353,40 +363,52 @@
                         {% if page_obj.has_previous %}
                         <li class="page-item">
                             <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
                             </a>
                         </li>
                         {% else %}
                         <li class="page-item disabled">
                             <span class="page-link">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
                             </span>
                         </li>
                         {% endif %}
 
                         <!-- 页码（当前页 ±2） -->
                         {% for num in page_obj.paginator.page_range %}
-                            {% if num == page_obj.number %}
-                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                        {% if num == page_obj.number %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %} <li
+                            class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
                             {% endif %}
-                        {% endfor %}
+                            {% endfor %}
 
-                        <!-- 下一页 -->
-                        {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                            </a>
-                        </li>
-                        {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                            </span>
-                        </li>
-                        {% endif %}
+                            <!-- 下一页 -->
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </span>
+                            </li>
+                            {% endif %}
                     </ul>
                 </div>
             </div><!-- /ev-table-wrap -->
@@ -397,154 +419,154 @@
 {% endblock %}
 
 {% block extra_js %}
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // 数据准备，使用 |safe 过滤器防止转义
-            const statsData = JSON.parse('{{ stats_data_json|safe }}');
-            const trendLabels = JSON.parse('{{ trend_labels_json|safe }}');
-            const trendValues = JSON.parse('{{ trend_values_json|safe }}');
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // 数据准备，使用 |safe 过滤器防止转义
+        const statsData = JSON.parse('{{ stats_data_json|safe }}');
+        const trendLabels = JSON.parse('{{ trend_labels_json|safe }}');
+        const trendValues = JSON.parse('{{ trend_values_json|safe }}');
 
-            // 1. 统计图表初始化与紧接着的设定
-            const statsChart = echarts.init(document.getElementById('statsChart'));
-            statsChart.setOption({
-                grid: { left: '2%', right: '2%', top: '15%', bottom: '5%', containLabel: false },
-                xAxis: { type: 'value', show: false, splitLine: { show: false } },
-                yAxis: [
-                    {
-                        type: 'category',
-                        data: ['进给速度异常报警', '主轴过载物理报警', '主轴过电流物理报警'],
-                        axisLine: { show: false }, axisTick: { show: false },
-                        axisLabel: {
-                            inside: true,
-                            color: '#606266',
-                            fontSize: 13,
-                            align: 'left',
-                            verticalAlign: 'bottom',
-                            padding: [0, 0, 12, 0]
-                        }
-                    },
-                    {
-                        type: 'category',
-                        data: statsData,
-                        position: 'right',
-                        axisLine: { show: false }, axisTick: { show: false },
-                        axisLabel: {
-                            inside: true,
-                            color: '#606266',
-                            fontSize: 14,
-                            align: 'right',
-                            verticalAlign: 'bottom',
-                            padding: [0, 0, 12, 0],
-                            fontFamily: 'monospace'
-                        }
-                    }
-                ],
-                series: [{
-                    type: 'bar',
-                    data: statsData,
-                    barWidth: 12,
-                    showBackground: true,
-                    backgroundStyle: { color: '#f3f6fa', borderRadius: 5 },
-                    itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                            { offset: 0, color: '#409EFF' },
-                            { offset: 1, color: '#a0cfff' }
-                        ]),
-                        borderRadius: 5
-                    }
-                }]
-            });
-
-            // 2. 趋势图表初始化与紧接着的设定
-            const trendChart = echarts.init(document.getElementById('trendChart'));
-            trendChart.setOption({
-                grid: { left: '3%', right: '8%', top: '15%', bottom: '10%', containLabel: true },
-                tooltip: {
-                    trigger: 'axis',
-                    formatter: '峰值 {c} @ {b}',
-                    backgroundColor: '#fff',
-                    borderColor: '#e4e7ed',
-                    textStyle: { color: '#f56c6c', fontSize: 11, fontFamily: 'monospace' }
-                },
-                xAxis: {
+        // 1. 统计图表初始化与紧接着的设定
+        const statsChart = echarts.init(document.getElementById('statsChart'));
+        statsChart.setOption({
+            grid: { left: '2%', right: '2%', top: '5%', bottom: '5%', containLabel: false },
+            xAxis: { type: 'value', show: false, splitLine: { show: false } },
+            yAxis: [
+                {
                     type: 'category',
-                    boundaryGap: false,
-                    data: trendLabels,
-                    axisLine: { show: false },
-                    axisTick: { show: false },
-                    axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace', interval: 2 }
+                    data: ['进给速度异常报警', '主轴过载物理报警', '主轴过电流物理报警'],
+                    axisLine: { show: false }, axisTick: { show: false },
+                    axisLabel: {
+                        inside: true,
+                        color: '#606266',
+                        fontSize: 13,
+                        align: 'left',
+                        verticalAlign: 'bottom',
+                        padding: [0, 0, 12, 0]
+                    }
                 },
-                yAxis: {
-                    type: 'value',
-                    min: 0,
-                    splitLine: { show: false },
-                    axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' }
-                },
-                series: [{
-                    type: 'line',
-                    smooth: true,
-                    showSymbol: false,
-                    lineStyle: { width: 2, color: '#409EFF' },
-                    areaStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(64,158,255,0.3)' },
-                            { offset: 1, color: 'rgba(64,158,255,0)' }
-                        ])
-                    },
-                    markPoint: {
-                        data: [
-                            { type: 'max', name: 'Max', symbol: 'pin', symbolSize: 45, itemStyle: { color: '#f56c6c' }, label: { show: true, color: '#fff', fontSize: 10, fontWeight: 'bold' } }
-                        ]
-                    },
-                    data: trendValues
-                }]
-            });
-
-            // 事件监听：自适应大小窗口变化
-            window.addEventListener('resize', () => {
-                if (statsChart) statsChart.resize();
-                if (trendChart) trendChart.resize();
-            });
-        });
-
-        // Handle Resize Observer for chart containers
-        document.addEventListener('DOMContentLoaded', () => {
-            const resizeObserver = new ResizeObserver(() => {
-                if (window.echarts) {
-                    const statsChart = echarts.getInstanceByDom(document.getElementById('statsChart'));
-                    if (statsChart) statsChart.resize();
-
-                    const trendChart = echarts.getInstanceByDom(document.getElementById('trendChart'));
-                    if (trendChart) trendChart.resize();
+                {
+                    type: 'category',
+                    data: statsData,
+                    position: 'right',
+                    axisLine: { show: false }, axisTick: { show: false },
+                    axisLabel: {
+                        inside: true,
+                        color: '#606266',
+                        fontSize: 14,
+                        align: 'right',
+                        verticalAlign: 'bottom',
+                        padding: [0, 0, 12, 0],
+                        fontFamily: 'monospace'
+                    }
                 }
-            });
-
-            const statsDiv = document.getElementById('statsChart');
-            if (statsDiv) resizeObserver.observe(statsDiv);
-
-            const trendDiv = document.getElementById('trendChart');
-            if (trendDiv) resizeObserver.observe(trendDiv);
+            ],
+            series: [{
+                type: 'bar',
+                data: statsData,
+                barWidth: 12,
+                showBackground: true,
+                backgroundStyle: { color: '#f3f6fa', borderRadius: 5 },
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#409EFF' },
+                        { offset: 1, color: '#a0cfff' }
+                    ]),
+                    borderRadius: 5
+                }
+            }]
         });
 
-        function applyFilter() {
-            const typeQ = document.getElementById('type-filter').value;
-            const searchQ = document.getElementById('ev-search').value.toLowerCase().trim();
-            const trs = document.querySelectorAll('#ev-tbody tr');
+        // 2. 趋势图表初始化与紧接着的设定
+        const trendChart = echarts.init(document.getElementById('trendChart'));
+        trendChart.setOption({
+            grid: { left: '3%', right: '8%', top: '15%', bottom: '10%', containLabel: true },
+            tooltip: {
+                trigger: 'axis',
+                formatter: '峰值 {c} @ {b}',
+                backgroundColor: '#fff',
+                borderColor: '#e4e7ed',
+                textStyle: { color: '#f56c6c', fontSize: 11, fontFamily: 'monospace' }
+            },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: trendLabels,
+                axisLine: { show: false },
+                axisTick: { show: false },
+                axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace', interval: 5 }
+            },
+            yAxis: {
+                type: 'value',
+                min: 0,
+                splitLine: { show: false },
+                axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' }
+            },
+            series: [{
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                lineStyle: { width: 2, color: '#409EFF' },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(64,158,255,0.3)' },
+                        { offset: 1, color: 'rgba(64,158,255,0)' }
+                    ])
+                },
+                markPoint: {
+                    symbol: 'circle', symbolSize: 8,
+                    itemStyle: { color: '#F5222D' },
+                    data: [{ type: 'max', name: '峰值', label: { formatter: p => '峰值 ' + p.value, color: '#F5222D', fontSize: 10, offset: [0, -12] } }]
+                },
+                data: trendValues
+            }]
+        });
 
-            trs.forEach(tr => {
-                if (tr.children.length === 1) return; // 'No data' row
-                const deviceName = tr.querySelector('.device-cell')?.textContent.toLowerCase() || '';
-                let rawTypeStr = tr.children[2]?.textContent || '';
-                rawTypeStr = rawTypeStr.trim();
+        // 事件监听：自适应大小窗口变化
+        window.addEventListener('resize', () => {
+            if (statsChart) statsChart.resize();
+            if (trendChart) trendChart.resize();
+        });
+    });
 
-                let isEvMatch = true;
-                if (typeQ === 'HIGH_CURRENT' && !rawTypeStr.includes('过电流')) isEvMatch = false;
-                if (typeQ === 'HIGH_POWER' && !rawTypeStr.includes('过载')) isEvMatch = false;
-                if (typeQ === 'LOW_VELOCITY' && !rawTypeStr.includes('速度')) isEvMatch = false;
+    // Handle Resize Observer for chart containers
+    document.addEventListener('DOMContentLoaded', () => {
+        const resizeObserver = new ResizeObserver(() => {
+            if (window.echarts) {
+                const statsChart = echarts.getInstanceByDom(document.getElementById('statsChart'));
+                if (statsChart) statsChart.resize();
 
-                if (searchQ && !deviceName.includes(searchQ)) isEvMatch = false;
-                tr.style.display = isEvMatch ? '' : 'none';
-            });
-        }
-    </script>
-    {% endblock %}
+                const trendChart = echarts.getInstanceByDom(document.getElementById('trendChart'));
+                if (trendChart) trendChart.resize();
+            }
+        });
+
+        const statsDiv = document.getElementById('statsChart');
+        if (statsDiv) resizeObserver.observe(statsDiv);
+
+        const trendDiv = document.getElementById('trendChart');
+        if (trendDiv) resizeObserver.observe(trendDiv);
+    });
+
+    function applyFilter() {
+        const typeQ = document.getElementById('type-filter').value;
+        const searchQ = document.getElementById('ev-search').value.toLowerCase().trim();
+        const trs = document.querySelectorAll('#ev-tbody tr');
+
+        trs.forEach(tr => {
+            if (tr.children.length === 1) return; // 'No data' row
+            const deviceName = tr.querySelector('.device-cell')?.textContent.toLowerCase() || '';
+            let rawTypeStr = tr.children[2]?.textContent || '';
+            rawTypeStr = rawTypeStr.trim();
+
+            let isEvMatch = true;
+            if (typeQ === 'HIGH_CURRENT' && !rawTypeStr.includes('过电流')) isEvMatch = false;
+            if (typeQ === 'HIGH_POWER' && !rawTypeStr.includes('过载')) isEvMatch = false;
+            if (typeQ === 'LOW_VELOCITY' && !rawTypeStr.includes('速度')) isEvMatch = false;
+
+            if (searchQ && !deviceName.includes(searchQ)) isEvMatch = false;
+            tr.style.display = isEvMatch ? '' : 'none';
+        });
+    }
+</script>
+{% endblock %}

@@ -1,6 +1,6 @@
 # 基于机器学习的 CNC 工业生产数据异常预警系统
 
-> **当前版本**：V1.3.0 · CNC Cloud Industrial Warning System
+> **当前版本**：V1.4.0 · CNC Cloud Industrial Warning System
 
 ## 1. 项目简介
 

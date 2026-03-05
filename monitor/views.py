@@ -107,13 +107,18 @@ def event_view(request):
     for tc in type_counts:
         stats_data[tc['alert_type']] = tc['count']
         
+    from django.utils.timezone import localtime
+    now_local = localtime(now)
     trend_labels = []
     trend_values = []
     for i in range(23, -1, -1):
-        start_time = now - timedelta(minutes=(i+1)*10)
-        end_time = now - timedelta(minutes=i*10)
-        trend_labels.append(end_time.strftime('%H:%M'))
-        cnt = AnomalyAlertLog.objects.filter(alert_time__gte=start_time, alert_time__lt=end_time).count()
+        start_t = now - timedelta(hours=i+1)
+        end_t   = now - timedelta(hours=i)
+        
+        end_t_local = now_local - timedelta(hours=i)
+        trend_labels.append(end_t_local.strftime('%H:00'))
+        
+        cnt = AnomalyAlertLog.objects.filter(alert_time__gte=start_t, alert_time__lt=end_t).count()
         trend_values.append(cnt)
 
     return render(request, 'monitor/event.html', {
@@ -313,7 +318,7 @@ def api_dashboard_stats(request):
     down_count    = DeviceInfo.objects.filter(current_status='Down').count()
     total_devices = DeviceInfo.objects.count() or 25
 
-    # ── 拉取今日最近流水用于聚合 ──────────────────────────────────
+    # ── 拉取今日最近流水用于聚合（OEE AI推断用，上限500条） ──────────
     today_qs = list(
         ProductionSensorData.objects
         .filter(timestamp__gte=today_start)
@@ -321,45 +326,48 @@ def api_dashboard_stats(request):
         .order_by('-timestamp')[:500]
     )
 
-    total_output, total_input = 0, 0
-    sum_actual_output = 0
-    sum_theoretical_output = 0
-
-    for rec in today_qs:
-        total_output += rec.actual_output or 0
-        total_input  += rec.input_qty or 0
-        sum_actual_output += rec.actual_output or 0
-        # 理论产出 = (loading_time - downtime) / 60 × standard_capacity
-        if rec.loading_time and rec.loading_time > 0:
-            try:
-                cap = rec.device.standard_capacity
-                actual_run = max(0, rec.loading_time - rec.downtime)
-                theo = (actual_run / 60.0) * cap
-                sum_theoretical_output += theo
-            except Exception:
-                pass
-
     # ═══════════════════════════════════════════════════════════════
-    #  OEE 级联计算模型
+    #  OEE 级联计算模型（V1.4.2 修正，适配 STEP_MINS=0.05 新格式）
     # ═══════════════════════════════════════════════════════════════
 
     # ── A（可用性）= Running设备比率 × 排班修正系数 ────────────────
-    #    排班修正：假设标准班为 25 台全部在线，实际可能有排班空置
-    SHIFT_FACTOR = 0.998  # 日班排班修正系数（约 0.2% 换班损耗）
+    SHIFT_FACTOR = 0.998
     avg_a = round((running_count / total_devices) * SHIFT_FACTOR, 4)
 
-    # ── P（性能）= Σ实际产出 / Σ理论最大产出 ──────────────────────
-    #    理论最大产出 = 该设备实际运转时间下的标准满载产量
-    if sum_theoretical_output > 0:
-        avg_p = round(sum_actual_output / sum_theoretical_output, 4)
+    # ── P（性能）= 今日实际总产量 / (全厂理论最大日产量 × 今日已过班次比例)
+    #    不再依赖 loading_time 字段（已改为 STEP_MINS=0.05，per-record 求和会失真）
+    #    改用全局公式：P = actual_total / (theoretical_max × elapsed_ratio)
+    #    theoretical_max = sum(standard_capacity × 8h) = daily_target
+    #    elapsed_ratio = 今日已过工作时间 / 8h（从8点到现在）
+    from django.utils.timezone import localtime as _lt
+    _local_now = _lt(timezone.now())
+    _work_start_hour = 8     # 标准班次从 8 点开始
+    _elapsed_hours = max(0, _local_now.hour + _local_now.minute / 60.0 - _work_start_hour)
+    _elapsed_ratio = min(1.0, _elapsed_hours / 8.0) if _elapsed_hours > 0 else 0.001  # 避免除零
+
+    # 今日实际总产量（来自下方 today_all_qs 计算，这里先用0占位，下面回填）
+    # 暂时用 today_qs 中前500条估算
+    _sample_actual = sum(r.actual_output or 0 for r in today_qs)
+    _sample_records = len(today_qs)
+
+    # 用最近500条数据估算全局生产速率，再乘以已过时间
+    if _sample_records > 0 and _elapsed_hours > 0:
+        # 500条记录覆盖的时间段：500条 / (25设备 × 3600/STEP_SECS 条/h)
+        _records_per_hour_per_device = 3600 / 3       # 1200条/h/设备
+        _sample_hours = _sample_records / (running_count * _records_per_hour_per_device) if running_count > 0 else 0.001
+        _rate_per_hour = _sample_actual / _sample_hours if _sample_hours > 0 else 0  # 产量/小时
+        # 理论满载速率（当前 Running 设备的标准产能之和）
+        _devices_with_caps = DeviceInfo.objects.filter(current_status='Running').values_list('standard_capacity', flat=True)
+        _theoretical_rate = sum(_devices_with_caps)  # 件/小时
+        if _theoretical_rate > 0:
+            avg_p = round(min(_rate_per_hour / _theoretical_rate, 1.0), 4)
+        else:
+            avg_p = None
     else:
         avg_p = None
 
     # ── Q（良率）= 1 - (高风险设备数 × 次品系数) / 总设备数 ───────
-    #    高风险设备 = anomaly_score > 0.75 的设备（来自 AI 推断）
-    #    次品系数 = 0.08（工业经验值：高风险设备平均产出 8% 次品）
     DEFECT_COEFF = 0.08
-    # 统计高风险设备数：取每台设备最新一条记录推断
     high_risk_count = 0
     if _LR_MODEL is not None:
         seen_devices = set()
@@ -378,6 +386,52 @@ def api_dashboard_stats(request):
         avg_oee = round(avg_a * avg_p * avg_q, 4)
     else:
         avg_oee = None
+
+    # ── 生产计划达成分析重构 (V1.4.2) ──────────────────────────────────
+    # V1.4.1 曾尝试用「最近2小时」窗口隔离历史数据，但由于 run_realtime_stream.py
+    # 的 _gen_running_record 未使用步长时间（每条3秒记录被当成60分钟产量），导致
+    # 2h 窗口内 actual_output 总和爆炸到 900万+。
+    # V1.4.2 真正根治：修复了 run_realtime_stream.py 的产量计算（引入 yield_buffer），
+    # 因此此处恢复使用「今日本地零点」统计，让产量随班次时间自然增长。
+    from django.db.models import Sum
+    from django.db.models.functions import TruncHour
+    from django.utils.timezone import localtime
+    from datetime import timedelta
+
+    local_now = localtime(timezone.now())
+
+    # 1. 动态产能目标计算: 全厂标准产能之和 * 8小时标准班
+    daily_target_dict = DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))
+    daily_target = (daily_target_dict['total_cap'] or 0) * 8
+
+    # 2. 全量当日良品与投入统计（从本地今日零点起）
+    start_of_local_day = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_all_qs = ProductionSensorData.objects.filter(timestamp__gte=start_of_local_day)
+
+    total_output = 0
+    total_input = 0
+    if today_all_qs.exists():
+        totals = today_all_qs.aggregate(
+            actual_total=Sum('actual_output'),
+            input_total=Sum('input_qty')
+        )
+        total_output = totals['actual_total'] or 0
+        total_input = totals['input_total'] or 0
+
+    # 3. 按小时(8点至今)分布的真实良品产量
+    hourly_output_array = []
+    if today_all_qs.exists():
+        hourly_map = {}
+        for rec in today_all_qs.values('timestamp', 'actual_output'):
+            if rec.get('timestamp'):
+                h = localtime(rec['timestamp']).hour
+                hourly_map[h] = hourly_map.get(h, 0) + (rec.get('actual_output') or 0)
+        
+        current_hour = local_now.hour
+        start_hour = 8
+        if current_hour >= start_hour:
+            for h in range(start_hour, current_hour + 1):
+                hourly_output_array.append(hourly_map.get(h, 0))
 
     # ── 今日报警分类频次 ──────────────────────────────────────────
     from django.db.models import Count
@@ -399,9 +453,11 @@ def api_dashboard_stats(request):
         'availability':    avg_a,
         'performance':     avg_p,
         'quality':         avg_q,
-        # 产量
+        # 产量与计划
         'total_output':    total_output,
         'total_input':     total_input,
+        'daily_target':    daily_target,
+        'hourly_output':   hourly_output_array,
         # 设备状态
         'running_devices': running_count,
         'idle_devices':    idle_count,
@@ -494,7 +550,8 @@ def api_latest_alerts(request):
             'spindle_power':      a.record.spindle_power,
             'feed_velocity':      a.record.feed_velocity,
         })
-    return JsonResponse({'status': 'ok', 'count': len(data), 'data': data})
+    total_unhandled = AnomalyAlertLog.objects.filter(is_handled=False).count()
+    return JsonResponse({'status': 'ok', 'count': len(data), 'total': total_unhandled, 'data': data})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -512,25 +569,61 @@ def api_device_matrix(request):
     原"随机抽 200 选 1"逻辑会在历史数据与实时流数据混合期导致风险值随机闪烁，
     改为始终取 timestamp 最新的记录，确保显示值稳定且与实时流保持一致。
     """
+        # ── V1.4.3 动态时间窗口 OEE 计算 ──
+    from django.utils import timezone
+    from django.utils.timezone import localtime
+    from django.db.models import Sum
+    
+    local_now = localtime(timezone.now())
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+
     devices = DeviceInfo.objects.all()
     rows = []
+    
     for dev in devices:
+        # 1. 获取最新记录用于展示基础信息与 AI 推断
         latest = (
             ProductionSensorData.objects
             .filter(device=dev)
             .order_by('-timestamp')
             .first()
         )
+        
         if latest is None:
             prob = None
             process = '--'
             sc, sp, fv = 0, 0, 0
+            oee_val = 0.0  # 缺省为 0
         else:
             prob    = _predict_proba(latest)
             process = latest.machining_process
             sc      = latest.spindle_current
             sp      = latest.spindle_power
             fv      = latest.feed_velocity
+            
+            # == 计算今日动态 OEE ==
+            today_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=today_start).order_by('timestamp')
+            first_rec = today_recs.first()
+            if first_rec and latest.timestamp > first_rec.timestamp:
+                # 实际运转时长（小时）
+                delta_t_hours = (latest.timestamp - first_rec.timestamp).total_seconds() / 3600.0
+                if delta_t_hours > 0:
+                    # 理论最大产量 = 标准产能 * 运转时长
+                    theo_max = dev.standard_capacity * delta_t_hours
+                    
+                    # 汇总今日实际产出与投入
+                    agg = today_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
+                    actual_out = agg['s'] or 0
+                    input_qty = agg['i'] or 0
+                    
+                    # 计算 P 和 Q （A 假定 100% 因为这是单机的全运转时段）
+                    p_val = min(actual_out / theo_max, 1.0) if theo_max > 0 else 0.0
+                    q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
+                    oee_val = round(p_val * q_val, 4)
+                else:
+                    oee_val = 0.0
+            else:
+                oee_val = 0.0
 
         # 最新未处理报警
         latest_alert = (
@@ -550,7 +643,7 @@ def api_device_matrix(request):
             'spindle_power':    sp,
             'feed_velocity':    fv,
             'anomaly_score':    prob,
-            'oee':              latest.oee if latest else None,   # OEE 字段
+            'oee':              oee_val,   # 新的动态 OEE
             'ai_alert':         prob is not None and prob > 0.8,
             'unhandled_alert_id': latest_alert.id if latest_alert else None,
             'standard_capacity': dev.standard_capacity,
@@ -653,7 +746,38 @@ def api_device_stream(request, device_id):
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  API 7（新增）：标记报警已处理 /api/alerts/<id>/handle/
+#  API 7（新增）：24h 报警频率趋势 /api/alert-trend/
+# ═══════════════════════════════════════════════════════════════════
+
+@require_http_methods(['GET'])
+def api_alert_trend(request):
+    """
+    GET /api/alert-trend/
+    统计过去 24 小时（以整点小时为桶，共 24 桶）的报警频次。
+    """
+    from django.utils.timezone import localtime
+    from datetime import timedelta
+    now_utc = timezone.now()
+    now_local = localtime(now_utc)
+    labels, values = [], []
+    for i in range(23, -1, -1):
+        start_t = now_utc - timedelta(hours=(i + 1))
+        end_t   = now_utc - timedelta(hours=i)
+        
+        # Calculate the local time for the label
+        end_t_local = now_local - timedelta(hours=i)
+        labels.append(end_t_local.strftime('%H:00'))
+        
+        cnt = AnomalyAlertLog.objects.filter(
+            alert_time__gte=start_t,
+            alert_time__lt=end_t
+        ).count()
+        values.append(cnt)
+    return JsonResponse({'status': 'ok', 'labels': labels, 'values': values})
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  API 8（原 7）：标记报警已处理 /api/alerts/<id>/handle/
 # ═══════════════════════════════════════════════════════════════════
 
 @csrf_exempt
@@ -738,7 +862,7 @@ def api_device_reset(request, device_id):
                 is_handled=False
             ).update(is_handled=True)
 
-            device.current_group_id = 2
+            device.current_group_id = 1  # V1.4.0: 全新设备组，sc_mean→15.0A，AI风险→0-40%
             device.current_status = 'Idle'  # 下发完成后切到待机，不自动恢复运行
             device.save(update_fields=['current_group_id', 'current_status'])
 

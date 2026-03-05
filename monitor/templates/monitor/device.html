@@ -479,6 +479,19 @@
             const d = await fetch('/api/device-matrix/').then(r => r.json());
             if (d.status !== 'ok') return;
             allDevices = d.data;
+
+            // 自动拦截 URL 的 device 参数进行筛选
+            if (!window._urlDeviceChecked) {
+                window._urlDeviceChecked = true;
+                const queryDevId = new URLSearchParams(window.location.search).get('device');
+                if (queryDevId) {
+                    const matchedDev = allDevices.find(x => String(x.device_id) === String(queryDevId));
+                    if (matchedDev) {
+                        document.getElementById('dev-search').value = matchedDev.device_name;
+                    }
+                }
+            }
+
             updateFilterCounts();
             sortAndRender();
         } catch (e) { console.warn('[devices]', e); }
@@ -676,7 +689,7 @@
         btn.disabled = true; btn.textContent = '处理中…';
         try {
             const csrfToken = getCsrf();
-            const res  = await fetch(`/api/device/${repairDevId}/reset/`, {
+            const res = await fetch(`/api/device/${repairDevId}/reset/`, {
                 method: 'POST', headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ note: document.getElementById('repair-desc').value })
             });

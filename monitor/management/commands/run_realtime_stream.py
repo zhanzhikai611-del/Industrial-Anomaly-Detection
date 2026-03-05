@@ -63,8 +63,9 @@ STAGE_LABELS = [s[0] for s in _STAGES]
 STAGE_PROBS  = [s[1] / sum(w for _, w in _STAGES) for s in _STAGES]
 
 ANOMALY_PROB  = 0.15    # 磨损工况概率（与历史脚本保持一致）
-LOADING_TIME  = 60.0    # 负荷时间（分钟/记录）
 STREAM_INTERVAL = 3     # 守护进程轮询间隔（秒）
+STEP_SECS       = float(STREAM_INTERVAL)          # 每步真实时长（秒）
+STEP_MINS       = STEP_SECS / 60.0               # 每步真实时长（分钟）= 0.05
 
 # ── 滚动数据保留策略 ──────────────────────────────────────────────────
 RETENTION_DAYS = 1      # 保留最近 N 天的传感与报警数据
@@ -76,29 +77,54 @@ CLEANUP_EVERY  = 300    # 每 N 次心跳执行一次清理（300 × 3s ≈ 15 �
 # ═══════════════════════════════════════════════════════════════════
 
 def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
+    """
+    BUG FIX (V1.4.2): 原实现使用固定 LOADING_TIME=60分钟 计算每条 3秒 记录的产量，
+    导致每条 3 秒记录产出约 1000 件（等于按整小时满负荷计算），造成日产量爆炸。
+
+    修复方案：使用 V5 脉冲累加器（yield_buffer），与 simulate_real_cnc_data.py 一致：
+      - 每步理论产量 = cap / 3600 * STEP_SECS（精确时间份额，一步约 0.833 件）
+      - yield_buffer 积累小数部分，整数溢出时才计入一件产量
+      - loading_time 写入实际步长 STEP_MINS（0.05 分钟），而非固定 60 分钟
+    """
     sc_mean, sp_mean = GROUP_PARAMS[group_idx]
-    
+
     sc = float(np.random.normal(sc_mean, 1.5))
     sp = float(max(0.0, np.random.normal(sp_mean, 0.015)))
-    fv = float(np.random.normal(-0.19, 2.0))
+    
+    # V1.4.2 修复：防止正常进给速度随机值过小而持续触发 LOW_VELOCITY 报警
+    fv_mean = 20.0 if group_idx < 3 else 18.0
+    fv = float(np.random.normal(fv_mean, 2.0))
+
+    # 人工注入物理极限预警，以确保不同类型异常均匀分布
+    cfg = SystemConfig.get()
+    if group_idx >= 2 and random.random() < (ANOMALY_PROB * 0.1): 
+        spike_type = random.choice(['HIGH_CURRENT', 'HIGH_POWER', 'LOW_VELOCITY'])
+        if spike_type == 'HIGH_CURRENT':
+            sc = cfg.spindle_current_high + random.uniform(2.0, 10.0)
+        elif spike_type == 'HIGH_POWER':
+            sp = cfg.spindle_power_high + random.uniform(5.0, 20.0)
+        elif spike_type == 'LOW_VELOCITY':
+            fv = random.uniform(0.0, max(0.1, cfg.feed_velocity_low - 0.1))
+
     machining_proc = np.random.choice(STAGE_LABELS, p=STAGE_PROBS)
 
     is_worn = (group_idx >= 3)
     cap = device.standard_capacity
 
-    # ── 可用性 A：分组停机时间 ──────────────────────────────────────
+    # ── 可用性 A：本步是否发生停机（概率性，以设备组别为权重）──────
+    # 由于步长极短 (3s)，将分钟级停机概率转换为每步概率
     if group_idx == 0:
-        downtime = 0.0
+        dt = 0.0
     elif group_idx == 1:
-        downtime = round(random.uniform(0, 2), 1)
+        dt = round(random.uniform(0, 2), 1) if random.random() < 0.01 else 0.0
     elif group_idx == 2:
-        downtime = round(random.uniform(1, 5), 1)
+        dt = round(random.uniform(0, STEP_MINS), 2) if random.random() < 0.03 else 0.0
     elif group_idx == 3:
-        downtime = round(random.uniform(3, 12), 1)
+        dt = round(random.uniform(0, STEP_MINS), 2) if random.random() < 0.08 else 0.0
     else:
-        downtime = round(random.uniform(8, 20), 1)
+        dt = round(random.uniform(0, STEP_MINS), 2) if random.random() < 0.15 else 0.0
 
-    # ── 性能 P：主轴倍率下降 → 实际产出 < 理论产出 ─────────────────
+    # ── 性能 P：主轴倍率下降 ─────────────────────────────────────────
     if group_idx == 0:
         perf_ratio = random.uniform(0.96, 1.00)
     elif group_idx == 1:
@@ -110,23 +136,43 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
     else:
         perf_ratio = random.uniform(0.65, 0.82)
 
-    actual_run = max(0.0, LOADING_TIME - downtime)
-    theoretical_output = (actual_run / 60.0) * cap
-    out = max(0, int(theoretical_output * perf_ratio))
+    # ── V5 脉冲累加器：每步精确时间份额，积累到整数才出一件 ─────────
+    input_fraction = cap / 3600.0 * STEP_SECS        # 本步理论产量份额（精确小数）
 
-    # ── 良率 Q：高风险设备产出次品 ─────────────────────────────────
-    input_qty_val = max(1, int(theoretical_output))
-    if group_idx <= 1:
-        defect_rate = random.uniform(0.0, 0.01)
-    elif group_idx == 2:
-        defect_rate = random.uniform(0.01, 0.04)
-    elif group_idx == 3:
-        defect_rate = random.uniform(0.03, 0.08)
+    if dt > 0:   # 停机：本步产出=0
+        good_output   = 0
+        input_qty_val = 0
     else:
-        defect_rate = random.uniform(0.06, 0.15)
+        pulse = input_fraction * perf_ratio
+        device.yield_buffer += pulse
 
-    defects = int(out * defect_rate)
-    good_output = max(0, out - defects)
+        if device.yield_buffer >= 1.0:
+            # 物理限制：3秒内产量无论如何堆积，单次输出强限制为不超过1件，
+            # 避免瞬间 OEE 性能 P 除法溢出超 100%
+            produced = min(1, int(device.yield_buffer))
+            device.yield_buffer -= produced
+        else:
+            produced = 0
+
+        # ── 良率 Q：次品 buffer 精确积累 ────────────────────────────
+        if group_idx <= 1:
+            defect_rate = random.uniform(0.0, 0.01)
+        elif group_idx == 2:
+            defect_rate = random.uniform(0.01, 0.04)
+        elif group_idx == 3:
+            defect_rate = random.uniform(0.03, 0.08)
+        else:
+            defect_rate = random.uniform(0.06, 0.15)
+
+        defects = 0
+        if produced > 0:
+            device.defect_buffer += produced * defect_rate
+            if device.defect_buffer >= 1.0:
+                defects = min(1, int(device.defect_buffer))
+                device.defect_buffer -= defects
+
+        good_output   = max(0, produced - defects)
+        input_qty_val = produced
 
     return ProductionSensorData(
         device            = device,
@@ -136,8 +182,8 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
         feed_velocity     = round(fv,   4),
         machining_process = machining_proc,
         tool_condition    = is_worn,
-        loading_time      = LOADING_TIME,
-        downtime          = downtime,
+        loading_time      = STEP_MINS,     # 实际步长（0.05分钟），而非固定60分钟
+        downtime          = dt,
         input_qty         = input_qty_val,
         actual_output     = good_output,
     )
@@ -151,7 +197,7 @@ def _gen_idle_record(device, ts) -> ProductionSensorData:
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process='Idle', tool_condition=False,
         loading_time=0.0, downtime=0.0,
-        input_qty=device.standard_capacity, actual_output=0,
+        input_qty=0, actual_output=0,   # 待机不投料
     )
 
 def _gen_down_record(device, ts) -> ProductionSensorData:
@@ -159,8 +205,8 @@ def _gen_down_record(device, ts) -> ProductionSensorData:
         device=device, timestamp=ts,
         spindle_current=0.0, spindle_power=0.0, feed_velocity=0.0,
         machining_process='Down', tool_condition=False,
-        loading_time=0.0, downtime=float(STREAM_INTERVAL),
-        input_qty=device.standard_capacity, actual_output=0,
+        loading_time=0.0, downtime=STEP_MINS,   # 停机时长=实际步长
+        input_qty=0, actual_output=0,            # 停机不投料
     )
 
 
@@ -210,6 +256,15 @@ class Command(BaseCommand):
         ))
 
         tick = 0
+        # ★ 关键：在 while 循环外初始化设备列表和 yield_buffer
+        #   每次循环内只调用 refresh_from_db(fields=[...]) 更新状态，
+        #   而不重建对象，从而让 yield_buffer/defect_buffer 持续积累。
+        devices = list(DeviceInfo.objects.all())
+        for dev in devices:
+            dev.yield_buffer  = 0.0
+            dev.defect_buffer = 0.0
+        known_device_ids = {d.id for d in devices}
+
         try:
             while True:
                 tick += 1
@@ -221,9 +276,19 @@ class Command(BaseCommand):
                     time.sleep(STREAM_INTERVAL)
                     continue
 
+                # ── 若设备数量变化则重新加载列表（如新增/删除设备） ──
+                current_ids = set(DeviceInfo.objects.values_list('id', flat=True))
+                if current_ids != known_device_ids:
+                    devices = list(DeviceInfo.objects.all())
+                    for dev in devices:
+                        if not hasattr(dev, 'yield_buffer'):
+                            dev.yield_buffer  = 0.0
+                        if not hasattr(dev, 'defect_buffer'):
+                            dev.defect_buffer = 0.0
+                    known_device_ids = current_ids
+
                 # ── 激活状态：为每台设备生成并追加一条数据 ──────────
-                now     = timezone.now()
-                devices = list(DeviceInfo.objects.all())
+                now = timezone.now()
 
                 if not devices:
                     self.stdout.write(self.style.WARNING(
@@ -236,6 +301,7 @@ class Command(BaseCommand):
                 alerts_created  = 0
 
                 for idx, dev in enumerate(devices):
+                    # 只更新会动态变化的字段，保留 yield_buffer/defect_buffer
                     dev.refresh_from_db(fields=['current_status', 'current_group_id'])
                     status = dev.current_status
                     group_idx = min(max(dev.current_group_id - 1, 0), 4)

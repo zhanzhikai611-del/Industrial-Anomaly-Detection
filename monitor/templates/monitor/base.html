@@ -722,7 +722,7 @@
                 事件中心
             </a>
 
-                {% if show_admin_nav %}
+            {% if show_admin_nav %}
             <!-- 账号管理 — user icon（仅 Admin 可见）-->
             <a href="/accounts/" class="nav-link {% block nav_account %}{% endblock %}">
                 <svg viewBox="0 0 24 24">
@@ -744,14 +744,15 @@
             {% endif %}
         </nav>
 
-        <div class="sidebar-footer">V1.3.0 · CNC预警系统</div>
+        <div class="sidebar-footer">V1.4.0 · CNC预警系统</div>
     </aside>
 
     <!-- ══════ Header ══════ -->
     <header class="header">
         <!-- 用户头像 + 下拉菜单 -->
         <div style="position:relative;">
-            <div class="avatar" id="user-avatar-btn" title="{{ user_display_name }}" onclick="toggleUserMenu()" style="cursor:pointer;">
+            <div class="avatar" id="user-avatar-btn" title="{{ user_display_name }}" onclick="toggleUserMenu()"
+                style="cursor:pointer;">
                 {{ user_initial }}
             </div>
             <!-- 下拉卡片 -->
@@ -788,9 +789,11 @@
                     text-decoration: none;
                     transition: background 0.15s;
                 " onmouseover="this.style.background='#f5f7fa'" onmouseout="this.style.background=''">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
                     </svg>
                     安全退出
                 </a>
@@ -803,8 +806,8 @@
             const menu = document.getElementById('user-dropdown');
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         }
-        document.addEventListener('click', function(e) {
-            const btn  = document.getElementById('user-avatar-btn');
+        document.addEventListener('click', function (e) {
+            const btn = document.getElementById('user-avatar-btn');
             const menu = document.getElementById('user-dropdown');
             if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
                 menu.style.display = 'none';

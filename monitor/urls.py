@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/stats/',           views.api_dashboard_stats, name='api_stats'),
     path('api/stream/',          views.api_realtime_stream, name='api_stream'),
     path('api/alerts/',          views.api_latest_alerts,   name='api_alerts'),
+    path('api/alert-trend/',     views.api_alert_trend,     name='api_alert_trend'),
     path('api/device-matrix/',             views.api_device_matrix,  name='api_device_matrix'),
     path('api/sensor-logs/',               views.api_sensor_logs,    name='api_sensor_logs'),
     path('api/stream/<int:device_id>/',    views.api_device_stream,  name='api_device_stream'),

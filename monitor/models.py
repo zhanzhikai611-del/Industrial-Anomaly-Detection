@@ -58,6 +58,16 @@ class DeviceInfo(models.Model):
         verbose_name='运行状态',
         help_text='Running=运行 | Idle=待机 | Down=停机，用于大屏状态指示灯',
     )
+    yield_buffer = models.FloatField(
+        default=0.0,
+        verbose_name='产量累加器',
+        help_text='实时流计算时持久化存放的良品小数余数'
+    )
+    defect_buffer = models.FloatField(
+        default=0.0,
+        verbose_name='次品累加器',
+        help_text='实时流计算时持久化存放的次品小数余数'
+    )
     current_group_id = models.IntegerField(
         default=1, 
         verbose_name='当前特征组 ID', 

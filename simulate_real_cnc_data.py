@@ -154,10 +154,6 @@ def _gen_running_record(device, ts, group_idx):
         dt = round(random.uniform(8, 20), 1)              # 故障边缘
 
     # ── 性能 P：主轴倍率下降导致实际产出低于标准 ─────────────────
-    #    Standard_Cycle_Time 隐含在 cap 中：cap = 理论 1h 最大产出
-    #    actual_run_hours = (loading_time - dt) / 60
-    #    理论产出 = actual_run_hours * cap
-    #    performance_ratio: 高风险设备因倍率下降而低于 100%
     if group_idx == 0:
         perf_ratio = random.uniform(0.96, 1.00)           # 新设备接近满载
     elif group_idx == 1:
@@ -169,32 +165,55 @@ def _gen_running_record(device, ts, group_idx):
     else:
         perf_ratio = random.uniform(0.65, 0.82)           # 故障边缘，严重降速
 
-    actual_run = max(0.0, LOADING_TIME - dt)               # 实际运行分钟
-    theoretical_output = (actual_run / 60.0) * cap         # 理论满载产出
-    out = max(0, int(theoretical_output * perf_ratio))     # 实际产出
+    # ── V5 引擎：脉冲余数累加器 (Yield Buffer / Pulse Accumulator) ────────
+    # 本 step 代表的秒数：实时=3s，静态历史=INTERVAL_MINS*60s
+    step_secs = getattr(device, 'step_secs', INTERVAL_MINS * 60)
 
-    # ── 良率 Q：高风险设备产出中包含次品 ──────────────────────────
-    #    input_qty = 投入数 = 理论满载产出（扣除停机时间的标准值）
-    #    actual_output = 良品数 = out - defects
-    input_qty_val = max(1, int(theoretical_output))        # 投入数 = 理论产出
-    if group_idx <= 1:
-        defect_rate = random.uniform(0.0, 0.01)            # 1% 以内
-    elif group_idx == 2:
-        defect_rate = random.uniform(0.01, 0.04)           # 1-4%
-    elif group_idx == 3:
-        defect_rate = random.uniform(0.03, 0.08)           # 3-8%
+    # 每步理论投入 = cap / 3600 * step_secs（精确的时间份额）
+    input_fraction = cap / 3600.0 * step_secs
+    input_qty_val  = input_fraction        # 存储为 float 比例（DB 字段是 Int，见下面 round）
+
+    # 停机时该步产出为 0；否则累积产量
+    if dt > 0:
+        good_output = 0
+        input_qty_val = 0
     else:
-        defect_rate = random.uniform(0.06, 0.15)           # 6-15% 次品
+        # 累加本步产出脉冲到 yield_buffer
+        pulse = input_fraction * perf_ratio
+        device.yield_buffer = getattr(device, 'yield_buffer', 0.0) + pulse
 
-    defects = int(out * defect_rate)
-    good_output = max(0, out - defects)
+        if device.yield_buffer >= 1.0:
+            produced = int(device.yield_buffer)
+            device.yield_buffer -= produced
+        else:
+            produced = 0
+
+        # ── 良率 Q -次品缓冲器 ──────────────────────────────
+        if group_idx <= 1:
+            defect_rate = random.uniform(0.0, 0.01)
+        elif group_idx == 2:
+            defect_rate = random.uniform(0.01, 0.04)
+        elif group_idx == 3:
+            defect_rate = random.uniform(0.03, 0.08)
+        else:
+            defect_rate = random.uniform(0.06, 0.15)
+
+        defects = 0
+        if produced > 0:
+            device.defect_buffer = getattr(device, 'defect_buffer', 0.0) + produced * defect_rate
+            if device.defect_buffer >= 1.0:
+                defects = int(device.defect_buffer)
+                device.defect_buffer -= defects
+
+        good_output    = max(0, produced - defects)
+        input_qty_val  = produced          # 投入 = 本步实际出件数（整数）
 
     return ProductionSensorData(
         device=device, timestamp=ts,
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process=np.random.choice(STAGE_LABELS, p=STAGE_PROBS),
         tool_condition=is_worn, loading_time=LOADING_TIME,
-        downtime=dt, input_qty=input_qty_val, actual_output=good_output,
+        downtime=dt, input_qty=int(input_qty_val), actual_output=good_output,
     )
 
 
@@ -202,22 +221,27 @@ def _gen_idle_record(device, ts):
     sc = float(max(0, np.random.normal(0.3, 0.05)))
     sp = float(max(0, np.random.normal(0.002, 0.001)))
     fv = float(np.random.normal(0.0, 0.02))
+    # input_qty 必须是本步长的时间份额，而非整点产能（防止 OEE-P 崩溃）
+    step_secs     = getattr(device, 'step_secs', INTERVAL_MINS * 60)
+    input_qty_val = 0  # Idle 时不投料，产出=0
     return ProductionSensorData(
         device=device, timestamp=ts,
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process='Idle', tool_condition=False,
         loading_time=0.0, downtime=0.0,
-        input_qty=device.standard_capacity, actual_output=0,
+        input_qty=input_qty_val, actual_output=0,
     )
 
 
 def _gen_down_record(device, ts):
+    step_secs     = getattr(device, 'step_secs', INTERVAL_MINS * 60)
+    input_qty_val = 0  # Down 时不投料，产出=0
     return ProductionSensorData(
         device=device, timestamp=ts,
         spindle_current=0.0, spindle_power=0.0, feed_velocity=0.0,
         machining_process='Down', tool_condition=False,
-        loading_time=0.0, downtime=float(INTERVAL_MINS),
-        input_qty=device.standard_capacity, actual_output=0,
+        loading_time=0.0, downtime=float(step_secs / 60.0),
+        input_qty=input_qty_val, actual_output=0,
     )
 
 
@@ -238,6 +262,9 @@ def simulate_sensor_data(devices):
 
         for m in range(total_mins):
             ts = start_time + timedelta(minutes=m * INTERVAL_MINS)
+
+            # V5：明确传入步长（秒），让 yield_buffer 使用正确的时间份额
+            dev.step_secs = INTERVAL_MINS * 60   # 1分钟→60秒
 
             if status == 'Running':
                 rec = _gen_running_record(dev, ts, group_idx)
@@ -395,6 +422,10 @@ def run_realtime_simulation():
         config.save()
 
     devices = list(DeviceInfo.objects.all())
+    # 💡 关键：重置所有设备的 yield_buffer，防止 7 天历史数据累积的余量污染实时轮询
+    for dev in devices:
+        dev.yield_buffer  = 0.0
+        dev.defect_buffer = 0.0
     
     with ThreadPoolExecutor(max_workers=25) as executor:
         while True:
@@ -414,6 +445,11 @@ def run_realtime_simulation():
                 for idx, dev in enumerate(devices):
                     # 重新从 DB 读取最新状态与分组，支持前台动态更改及回春逻辑
                     dev.refresh_from_db(fields=['current_status', 'current_group_id'])
+                    
+                    # V5: 3 秒步长，用 step_secs 统一表示
+                    dev.step_secs = 3.0
+                    dev.current_interval_mins = 3.0 / 60.0  # 保留兼容
+
                     group_idx = min(max(dev.current_group_id - 1, 0), 4)
                     futures.append(executor.submit(_generate_single_device_realtime, dev, ts, group_idx))
                 
