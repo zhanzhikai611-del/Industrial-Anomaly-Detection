@@ -32,6 +32,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'simpleui',                          # django-simpleui 必须放在 admin 之前
     'django.contrib.admin',
     'django.contrib.auth',
@@ -39,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'monitor',                           # 工业监控子应用
 ]
 
@@ -71,7 +73,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'IndustrialWarningSystem.wsgi.application'
+ASGI_APPLICATION = 'IndustrialWarningSystem.asgi.application'
 
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases

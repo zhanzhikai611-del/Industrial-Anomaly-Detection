@@ -334,31 +334,24 @@ def api_dashboard_stats(request):
     SHIFT_FACTOR = 0.998
     avg_a = round((running_count / total_devices) * SHIFT_FACTOR, 4)
 
-    # ── P（性能）= 今日实际总产量 / (全厂理论最大日产量 × 今日已过班次比例)
-    #    不再依赖 loading_time 字段（已改为 STEP_MINS=0.05，per-record 求和会失真）
-    #    改用全局公式：P = actual_total / (theoretical_max × elapsed_ratio)
-    #    theoretical_max = sum(standard_capacity × 8h) = daily_target
-    #    elapsed_ratio = 今日已过工作时间 / 8h（从8点到现在）
-    from django.utils.timezone import localtime as _lt
-    _local_now = _lt(timezone.now())
-    _work_start_hour = 8     # 标准班次从 8 点开始
-    _elapsed_hours = max(0, _local_now.hour + _local_now.minute / 60.0 - _work_start_hour)
-    _elapsed_ratio = min(1.0, _elapsed_hours / 8.0) if _elapsed_hours > 0 else 0.001  # 避免除零
+    # ── P（性能）= 近期实际生产速率 / 理论满载速率 ──────────────────────────
+    # 使用近 500 条流水日志（today_qs），估算当前的全局生产速率。
+    # 废弃原本的 8 点早班时间锁，使 24 小时任何时段都能进行准确的瞬时性能核算
 
-    # 今日实际总产量（来自下方 today_all_qs 计算，这里先用0占位，下面回填）
-    # 暂时用 today_qs 中前500条估算
     _sample_actual = sum(r.actual_output or 0 for r in today_qs)
     _sample_records = len(today_qs)
 
-    # 用最近500条数据估算全局生产速率，再乘以已过时间
-    if _sample_records > 0 and _elapsed_hours > 0:
+    # 用最近500条数据估算全局生产速率
+    if _sample_records > 0 and running_count > 0:
         # 500条记录覆盖的时间段：500条 / (25设备 × 3600/STEP_SECS 条/h)
         _records_per_hour_per_device = 3600 / 3       # 1200条/h/设备
-        _sample_hours = _sample_records / (running_count * _records_per_hour_per_device) if running_count > 0 else 0.001
+        _sample_hours = _sample_records / (running_count * _records_per_hour_per_device)
         _rate_per_hour = _sample_actual / _sample_hours if _sample_hours > 0 else 0  # 产量/小时
+        
         # 理论满载速率（当前 Running 设备的标准产能之和）
         _devices_with_caps = DeviceInfo.objects.filter(current_status='Running').values_list('standard_capacity', flat=True)
         _theoretical_rate = sum(_devices_with_caps)  # 件/小时
+        
         if _theoretical_rate > 0:
             avg_p = round(min(_rate_per_hour / _theoretical_rate, 1.0), 4)
         else:
@@ -418,20 +411,20 @@ def api_dashboard_stats(request):
         total_output = totals['actual_total'] or 0
         total_input = totals['input_total'] or 0
 
-    # 3. 按小时(8点至今)分布的真实良品产量
+    # 3. 按小时(最近8小时)分布的真实良品产量
     hourly_output_array = []
-    if today_all_qs.exists():
-        hourly_map = {}
-        for rec in today_all_qs.values('timestamp', 'actual_output'):
-            if rec.get('timestamp'):
-                h = localtime(rec['timestamp']).hour
-                hourly_map[h] = hourly_map.get(h, 0) + (rec.get('actual_output') or 0)
+    hourly_labels = []
+    
+    for i in range(7, -1, -1):
+        start_t = local_now - timedelta(hours=i)
+        start_h = start_t.replace(minute=0, second=0, microsecond=0)
+        end_h = start_h + timedelta(hours=1)
         
-        current_hour = local_now.hour
-        start_hour = 8
-        if current_hour >= start_hour:
-            for h in range(start_hour, current_hour + 1):
-                hourly_output_array.append(hourly_map.get(h, 0))
+        hourly_labels.append(start_h.strftime('%Hh'))
+        
+        h_qs = ProductionSensorData.objects.filter(timestamp__gte=start_h, timestamp__lt=end_h)
+        val = h_qs.aggregate(s=Sum('actual_output'))['s'] or 0
+        hourly_output_array.append(val)
 
     # ── 今日报警分类频次 ──────────────────────────────────────────
     from django.db.models import Count
@@ -457,6 +450,7 @@ def api_dashboard_stats(request):
         'total_output':    total_output,
         'total_input':     total_input,
         'daily_target':    daily_target,
+        'hourly_labels':   hourly_labels,
         'hourly_output':   hourly_output_array,
         # 设备状态
         'running_devices': running_count,
@@ -602,26 +596,28 @@ def api_device_matrix(request):
             fv      = latest.feed_velocity
             
             # == 计算今日动态 OEE ==
-            today_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=today_start).order_by('timestamp')
-            first_rec = today_recs.first()
-            if first_rec and latest.timestamp > first_rec.timestamp:
-                # 实际运转时长（小时）
-                delta_t_hours = (latest.timestamp - first_rec.timestamp).total_seconds() / 3600.0
-                if delta_t_hours > 0:
-                    # 理论最大产量 = 标准产能 * 运转时长
-                    theo_max = dev.standard_capacity * delta_t_hours
-                    
-                    # 汇总今日实际产出与投入
-                    agg = today_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
-                    actual_out = agg['s'] or 0
-                    input_qty = agg['i'] or 0
-                    
-                    # 计算 P 和 Q （A 假定 100% 因为这是单机的全运转时段）
-                    p_val = min(actual_out / theo_max, 1.0) if theo_max > 0 else 0.0
-                    q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
-                    oee_val = round(p_val * q_val, 4)
-                else:
-                    oee_val = 0.0
+            today_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=today_start)
+            agg = today_recs.aggregate(
+                s=Sum('actual_output'), 
+                i=Sum('input_qty'),
+                tl=Sum('loading_time'),
+                td=Sum('downtime')
+            )
+            actual_out = agg['s'] or 0
+            input_qty = agg['i'] or 0
+            total_loading = agg['tl'] or 0
+            total_down = agg['td'] or 0
+
+            # 实际运转时长（小时）
+            actual_run_hours = (total_loading - total_down) / 60.0
+            if actual_run_hours > 0:
+                # 理论最大产量 = 标准产能 * 运转时长
+                theo_max = dev.standard_capacity * actual_run_hours
+                
+                # 计算 P 和 Q （A 假定 100% 因为这是单机的全运转时段）
+                p_val = min(actual_out / theo_max, 1.0) if theo_max > 0 else 0.0
+                q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
+                oee_val = round(p_val * q_val, 4)
             else:
                 oee_val = 0.0
 

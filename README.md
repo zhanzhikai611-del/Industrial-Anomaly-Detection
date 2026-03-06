@@ -1,6 +1,6 @@
 # 基于机器学习的 CNC 工业生产数据异常预警系统
 
-> **当前版本**：V1.4.0 · CNC Cloud Industrial Warning System
+> **当前版本**：V2.0.0 · CNC Cloud Industrial Warning System
 
 ## 1. 项目简介
 
@@ -9,6 +9,7 @@
 ## 2. 核心功能
 
 - **SaaS 化极简看板**：提供全厂 OEE、生产产出及设备状态分布的宏观监控。
+- **Copilot 智能体模式 (V2.0)**：引入 AI Agent，实时监控设备状态，在发现异常时自动中断生产、抓取传感数据快照并调用大语言模型（Qwen）进行智能诊断和软复位，实现零人工干预的自动化异常闭环处理。
 - **AI 故障预警**：实时计算每台设备的磨损概率，并根据风险值（Anomaly Score）按梯度分级展示。
 - **深度钻取诊断**：支持点击单台设备查看"主轴电流 vs 故障概率"的双轴时序波形图。
 - **传感黑匣子**：全量记录 25 台设备的高频传感流水（电流、功率、速度等），实现故障溯源。
@@ -19,10 +20,10 @@
 
 | 层级 | 技术栈 |
 |------|--------|
-| 后端 | Python 3.12 / Django 4.x |
+| 后端 | Python 3.12 / Django 4.x / Django Channels (ASGI) / Daphne |
 | 数据库 | MySQL 8.x（`industrial_warning_db`）|
-| 前端 | Vanilla JS / ECharts 5.5.0 / Bootstrap 5（纯白 SaaS 风格）|
-| AI 算法 | Logistic Regression（scikit-learn），9 维特征，二分类刀具磨损检测 |
+| 前端 | Vanilla JS / ECharts 5.5.0 / Bootstrap 5 / WebSocket 实时终端交互 |
+| AI 算法 | Logistic Regression (scikit-learn) 二分类检测 / Qwen 大模型 (Copilot诊断) |
 | 仿真引擎 | Django Management Command（`run_realtime_stream`），每 3 秒生成 25 台设备数据 |
 
 ## 4. 首次运行完整指南
@@ -71,18 +72,17 @@ venv/bin/python simulate_real_cnc_data.py
 ```
 
 此脚本将：
-1. 在 `device_info` 表中创建 **25 台 CNC 设备**，并按生命周期分组（Group 1-5）分配 `current_group_id`
-2. 生成**过去 7 天**的历史传感流水（约 252,000 条）与报警记录
-3. 历史数据写入完成后**自动退出**（不再进入实时循环）
+1. 检测库中已有设备，若低于 25 台则会清空数据重置环境。
+2. 在 `device_info` 表中创建 **25 台 CNC 设备**，并按生命周期分组（Group 1-5）分配 `current_group_id`。
+3. 生成**过去 7 天**的历史传感流水（约 252,000 条）以铺陈图表历史序列。
+4. 历史数据初始化完成后，随后会顺便切入实时生成循环（但不含滚动清理机制）。推荐初始化完成后 `Ctrl+C` 退出，以专门的守护进程替代。
 
-> 脚本会检测设备数量，若数据库已有 25 台设备则直接退出，无需重复运行。
+### Step 5 — 启动 Django ASGI 服务器
 
-### Step 5 — 启动 Django 开发服务器
-
-新开一个终端窗口：
+新开一个终端窗口（由于 V2.0 引入了 WebSockets 与 Copilot 长连接，请勿使用原本的 `runserver`，并请确保已正确配置 `DASHSCOPE_API_KEY` 环境变量指向千问大模型 API 密钥）：
 
 ```bash
-venv/bin/python manage.py runserver
+venv/bin/daphne -p 8000 IndustrialWarningSystem.asgi:application
 ```
 
 ### Step 6 — 启动实时数据流守护进程（⚠️ 必须单独运行此命令）
@@ -93,10 +93,8 @@ venv/bin/python manage.py runserver
 venv/bin/python manage.py run_realtime_stream
 ```
 
-> **重要**：请务必使用 `manage.py run_realtime_stream` 作为正式的实时数据守护进程，**不要**依赖 `simulate_real_cnc_data.py` 产生实时流。原因如下：
->
-> - `simulate_real_cnc_data.py` 的实时循环存在已知缺陷：设备分组（`current_group_id`）只在启动时加载一次，之后不再从数据库刷新，导致**"维修回春"操作无效**——即使通过 UI 重置了设备组别，该脚本仍会继续用旧的高风险参数生成数据。
-> - `manage.py run_realtime_stream` 每轮均重新读取设备的最新状态与分组，完全支持回春逻辑与前端反向控制。
+> **重要**：强烈建议使用 `manage.py run_realtime_stream` 作为日常 7x24 进行实时压测流生成的守护进程。
+> 尽管最新的 `simulate_real_cnc_data.py` 的仿真机制与它表现一致，但后者缺乏**实时滚动定时清理**的手段安全机制。`run_realtime_stream` 持有 `RETENTION_DAYS = 1`，将有效避免数据库由于持续堆积 3 秒一条的流水而不受控制地爆满。
 
 ### Step 7 — 访问系统
 
@@ -131,21 +129,21 @@ venv/bin/python manage.py run_realtime_stream
 系统已配置启动自检（`apps.py`），重启 Django 服务器后将自动验证并修复设备分组梯度，无需手动干预。
 
 ```bash
-# 终端 1：Web 服务器
-venv/bin/python manage.py runserver
+# 终端 1：Web 服务器 (ASGI)
+venv/bin/daphne -p 8000 IndustrialWarningSystem.asgi:application
 
 # 终端 2：实时数据流守护进程（⚠️ 必须使用此命令，勿用 simulate_real_cnc_data.py）
 venv/bin/python manage.py run_realtime_stream
 ```
 
-> **两个脚本的关键区别：**
+> **两个测试数据脚本的核心差异对比：**
 >
-> | | `simulate_real_cnc_data.py` | `manage.py run_realtime_stream` |
+> | 对比项 | `simulate_real_cnc_data.py` | `manage.py run_realtime_stream` |
 > |---|---|---|
-> | 用途 | 一次性初始化历史数据 | 持续实时数据守护进程 |
-> | 每轮是否重新读取设备分组 | ❌ 否（启动时加载一次） | ✅ 是（每 3 秒刷新） |
-> | 支持维修回春（`current_group_id` 动态变更） | ❌ 不支持 | ✅ 完整支持 |
-> | 支持前端反向状态控制 | ✅ 部分支持 | ✅ 完整支持 |
+> | 一次性初始化 7 天历史流 | ✅ 支持，适合冷启动 | ❌ 不支持 |
+> | V5 实时脉冲计算引擎与级联预警 | ✅ 支持 | ✅ 支持 |
+> | 支持维修回春与前端操作反向控制 | ✅ 支持 | ✅ 支持 |
+> | 数据量防爆与滚动清理 (15分钟频次) | ❌ 缺失 (持续运行会导致表过大) | ✅ 支持 (最近 1 天保留清理上限) |
 
 ---
 
