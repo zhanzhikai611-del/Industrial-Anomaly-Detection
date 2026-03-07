@@ -266,6 +266,61 @@
         border-bottom-left-radius: 2px;
     }
 
+    /* Markdown 渲染样式增强 (V2.1.1) */
+    .msg-ai table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0;
+        font-size: 13px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .msg-ai th,
+    .msg-ai td {
+        padding: 8px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: left;
+    }
+
+    .msg-ai th {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--primary);
+        font-weight: 600;
+    }
+
+    .msg-ai p {
+        margin-bottom: 8px;
+    }
+
+    .msg-ai p:last-child {
+        margin-bottom: 0;
+    }
+
+    .msg-ai h1,
+    .msg-ai h2,
+    .msg-ai h3 {
+        margin: 12px 0 8px 0;
+        color: #fff;
+        font-size: 1.1em;
+        font-weight: 700;
+    }
+
+    .msg-ai ul,
+    .msg-ai ol {
+        padding-left: 20px;
+        margin-bottom: 8px;
+    }
+
+    .msg-ai code {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+    }
+
     .ask-input-area {
         padding: 16px 20px;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -858,7 +913,7 @@
         div.style.background = 'rgba(255,255,255,0.03)';
         div.style.border = '1px solid rgba(255,255,255,0.08)';
 
-        let html = `<div style="color:rgba(255,255,255,0.9);">${msg}</div>`;
+        let html = `<div class="md-content" style="color:rgba(255,255,255,0.9);">${marked.parse(msg)}</div>`;
 
         // Render data context as high-contrast diagnostic cards if provided
         if (context && context.length > 0) {
