@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from openai import OpenAI
 from typing import List, Tuple, Dict, Any
 
@@ -8,8 +7,8 @@ from .models import DeviceInfo, AnomalyAlertLog, ProductionSensorData
 
 logger = logging.getLogger(__name__)
 
-# Load from environment variable for security
-API_KEY = os.getenv("DASHSCOPE_API_KEY", "your-default-key-here")
+# Hardcoded for dev as requested (Repository is currently private)
+API_KEY = "sk-6244491a10cd439b9d9013b557450741"
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 MODEL_NAME = "qwen-max"
 
