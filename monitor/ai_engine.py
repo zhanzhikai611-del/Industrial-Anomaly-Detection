@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Hardcoded for dev as requested (Repository is currently private)
 API_KEY = "sk-6244491a10cd439b9d9013b557450741"
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-MODEL_NAME = "qwen-max"
+MODEL_NAME = "qwen3.5-flash"
 
 client = OpenAI(
     api_key=API_KEY,
