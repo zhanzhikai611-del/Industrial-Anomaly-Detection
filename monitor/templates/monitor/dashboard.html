@@ -631,8 +631,10 @@
             <div style="display:flex;align-items:center;gap:12px;">
                 <div
                     style="width:28px;height:28px;background:rgba(255,255,255,0.05);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--primary);">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    <svg viewBox="0 0 1024 1024" width="16" height="16">
+                        <path
+                            d="M240 658.08h220.784l55.744 65.04 55.744-65.04h220.768V272H240v386.08z m-48 32V240a16 16 0 0 1 16-16h617.04a16 16 0 0 1 16 16v450.08a16 16 0 0 1-16 16H594.336l-65.664 76.64a16 16 0 0 1-24.304 0l-65.664-76.64H208a16 16 0 0 1-16-16zM366.256 498.56a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z m150.272 0a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z m150.24 0a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z"
+                            fill="currentColor"></path>
                     </svg>
                 </div>
                 <div>
@@ -706,7 +708,7 @@
 
 {% block extra_js %}
 <script>
-    const $ = id => document.getElementById(id);
+    window.$ = window.$ || (id => document.getElementById(id));
 
     /* ══════════════════════════════════════
        AI Dual-Mode Agent Logic (V2.1.0)
@@ -719,7 +721,7 @@
         agentSocket = new WebSocket(`${prot}://${window.location.host}/ws/copilot/`);
 
         agentSocket.onmessage = (e) => {
-            const data = json.loads(e.data);
+            const data = JSON.parse(e.data);
             if (data.type === 'log') {
                 appendTerminalLog(data.message, data.timestamp);
             } else if (data.type === 'ask_response') {
@@ -777,17 +779,22 @@
 
         let coloredMsg = msg;
 
-        // Phase 3 Color Specs
-        const actionColor = '#FF4D4F';
-        const systemColor = '#1890FF';
-        const aiColor = '#722ED1';
-        const warningColor = '#FAAD14';
+        // Field Labels Mapping (CNC Cloud Design System)
+        const labelColors = {
+            '[System]': '#3ABFF8',
+            '[Target]': '#FFB703',
+            '[Action]': '#F87171',
+            '[Data]': '#9CA3AF',
+            '[Info]': '#34D399',
+            '[AI]': '#C084FC'
+        };
 
-        // Tag Highlighting
-        coloredMsg = coloredMsg.replace(/(\[Action\])/g, `<span style="color:${actionColor};font-weight:700;margin-right:8px;">$1</span>`);
-        coloredMsg = coloredMsg.replace(/(\[Info\]|\[System\])/g, `<span style="color:${systemColor};font-weight:700;margin-right:8px;">$1</span>`);
-        coloredMsg = coloredMsg.replace(/(\[AI\])/g, `<span style="color:${aiColor};font-weight:700;margin-right:8px;">$1</span>`);
-        coloredMsg = coloredMsg.replace(/(\[Warning\]|\[Alert\])/g, `<span style="color:${warningColor};font-weight:700;margin-right:8px;">$1</span>`);
+        // Apply Tag Highlighting
+        Object.entries(labelColors).forEach(([tag, color]) => {
+            const escapedTag = tag.replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+            const regex = new RegExp('(' + escapedTag + ')', 'g');
+            coloredMsg = coloredMsg.replace(regex, `<span style="color:${color};font-weight:700;margin-right:8px;">$1</span>`);
+        });
 
         // Baseline text color
         const timeStr = `<span style="color:rgba(255,255,255,0.2);margin-right:12px;font-size:11px;">${time || new Date().toLocaleTimeString()}</span>`;
@@ -893,16 +900,10 @@
     /* ═══════ ECharts: 各时段产量柱 ═══════ */
     const cHourly = echarts.init($('chart-hourly'));
     // 生成当日已过的小时标签（从早8点开始）
-    function buildHourlyLabels() {
-        const h = new Date().getHours();
-        const labels = [];
-        for (let i = 8; i <= Math.min(h, 20); i++) labels.push(i + 'h');
-        return labels.length ? labels : ['8h', '9h', '10h', '11h', '12h', '13h', '14h', '15h'];
-    }
     cHourly.setOption({
         grid: { left: 0, right: 0, top: 4, bottom: 18, containLabel: false },
         xAxis: {
-            type: 'category', data: buildHourlyLabels(),
+            type: 'category', data: [],
             axisLine: { show: false }, axisTick: { show: false },
             axisLabel: { fontSize: 10, color: '#909399' }
         },
@@ -1264,11 +1265,9 @@
             $('prod-quality-pct').textContent = (input > 0 ? (actual / input * 100).toFixed(1) : '--') + '%';
             $('prod-defects').textContent = Number(defects).toLocaleString() + ' 件';
 
-            // 各时段产量图表 (真实数据绑定)
-            const labels = buildHourlyLabels();
-            const hourlyData = d.hourly_output || [];
-            // 如果后端返回的小时数组较短，补齐 0
-            const barData = labels.map((_, i) => hourlyData[i] || 0);
+            // 各时段产量图表 (同步后端滚动标签与数据)
+            const labels = d.hourly_labels || [];
+            const barData = d.hourly_output || [];
             cHourly.setOption({ xAxis: { data: labels }, series: [{ data: barData }] });
         } catch (e) { console.warn('[stats]', e); }
     }
@@ -1353,7 +1352,7 @@
     async function pollAll() {
         try {
             const st = await fetch('/api/stream-status/').then(r => r.json());
-            if (!st.is_realtime_active) return;
+            // if (!st.is_realtime_active) return; // [Bugfix] Removed to ensure data loads even if stream script is off
             fetchStats(); fetchMatrix(); fetchAlerts(); fetchStream();
             if (++trendTick === 1 || trendTick % 20 === 0) fetchTrend();
         } catch (e) { console.warn('[poll]', e); }

@@ -165,7 +165,7 @@
             height: 32px;
             background: #fff;
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: 15px;
             overflow: visible;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
@@ -189,7 +189,7 @@
             font-weight: 500;
             color: var(--text-sec);
             transition: background 0.2s;
-            border-radius: 16px 0 0 16px;
+            border-radius: 15px 0 0 15px;
         }
 
         .ai-main-action:hover {
@@ -220,7 +220,7 @@
             cursor: pointer;
             color: var(--text-hint);
             transition: background 0.2s;
-            border-radius: 0 16px 16px 0;
+            border-radius: 0 15px 15px 0;
         }
 
         .ai-dropdown-toggle:hover {
@@ -876,21 +876,21 @@
             {% endif %}
         </nav>
 
-        <div class="sidebar-footer">V2.1.0 · CNC智能云</div>
+        <div class="sidebar-footer">V2.1.0.CNC智能监控系统</div>
     </aside>
 
     <!-- ══════ Header ══════ -->
     <header class="header">
         <!-- AI 交互中心 Split Button (V2.1.0) -->
+        <!-- AI 交互中心 Split Button (V1.4.5: Only show on Dashboard) -->
+        {% if request.resolver_match.url_name == 'dashboard' %}
         <div class="ai-split-btn" id="ai-agent-btn">
             <div class="ai-main-action" id="ai-main-trigger" onclick="handleAiMainClick()">
-                <svg id="ai-status-icon" viewBox="0 0 24 24">
+                <svg id="ai-status-icon" viewBox="0 0 1024 1024">
                     <!-- Default Robot Icon (Copilot) -->
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <circle cx="12" cy="5" r="2" />
-                    <path d="M12 7v4" />
-                    <line x1="8" y1="16" x2="8" y2="16" />
-                    <line x1="16" y1="16" x2="16" y2="16" />
+                    <path
+                        d="M618.666667 106.666667H405.333333v85.333333h64v42.666667H149.333333v661.333333h725.333334V234.666667H554.666667V192h64V106.666667zM234.666667 810.666667V320h554.666666v490.666667H234.666667zM21.333333 448v234.666667h85.333334V448H21.333333z m896 0v234.666667h85.333334V448h-85.333334z m-469.333333 64h-106.666667v106.666667h106.666667v-106.666667z m234.666667 0h-106.666667v106.666667h106.666667v-106.666667z"
+                        fill="currentColor"></path>
                 </svg>
                 <span id="ai-status-text">Copilot 模式</span>
             </div>
@@ -903,21 +903,24 @@
 
             <div class="ai-menu" id="ai-mode-menu">
                 <div class="ai-menu-item" onclick="setAiMode('copilot')">
-                    <svg viewBox="0 0 24 24">
-                        <rect x="3" y="11" width="18" height="10" rx="2" />
-                        <circle cx="12" cy="5" r="2" />
-                        <path d="M12 7v4" />
+                    <svg viewBox="0 0 1024 1024">
+                        <path
+                            d="M618.666667 106.666667H405.333333v85.333333h64v42.666667H149.333333v661.333333h725.333334V234.666667H554.666667V192h64V106.666667zM234.666667 810.666667V320h554.666666v490.666667H234.666667zM21.333333 448v234.666667h85.333334V448H21.333333z m896 0v234.666667h85.333334V448h-85.333334z m-469.333333 64h-106.666667v106.666667h106.666667v-106.666667z m234.666667 0h-106.666667v106.666667h106.666667v-106.666667z"
+                            fill="currentColor"></path>
                     </svg>
                     Copilot 智能接管
                 </div>
                 <div class="ai-menu-item" onclick="setAiMode('ask')">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    <svg viewBox="0 0 1024 1024">
+                        <path
+                            d="M240 658.08h220.784l55.744 65.04 55.744-65.04h220.768V272H240v386.08z m-48 32V240a16 16 0 0 1 16-16h617.04a16 16 0 0 1 16 16v450.08a16 16 0 0 1-16 16H594.336l-65.664 76.64a16 16 0 0 1-24.304 0l-65.664-76.64H208a16 16 0 0 1-16-16zM366.256 498.56a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z m150.272 0a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z m150.24 0a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z"
+                            fill="currentColor"></path>
                     </svg>
                     Ask 智能咨询
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- 用户头像 + 下拉菜单 -->
         <div style="position:relative;">
@@ -983,12 +986,17 @@
         function updateAiButtonUI() {
             const text = document.getElementById('ai-status-text');
             const icon = document.getElementById('ai-status-icon');
+            if (!text || !icon) return;
+
             if (currentAiMode === 'copilot') {
                 text.innerText = 'Copilot 模式';
-                icon.innerHTML = '<rect x="3" y="11" width="18" height="10" rx="2" /><circle cx="12" cy="5" r="2" /><path d="M12 7v4" />';
+                // New Robot SVG with 1024 viewBox
+                icon.setAttribute('viewBox', '0 0 1024 1024');
+                icon.innerHTML = '<path d="M618.666667 106.666667H405.333333v85.333333h64v42.666667H149.333333v661.333333h725.333334V234.666667H554.666667V192h64V106.666667zM234.666667 810.666667V320h554.666666v490.666667H234.666667zM21.333333 448v234.666667h85.333334V448H21.333333z m896 0v234.666667h85.333334V448h-85.333334z m-469.333333 64h-106.666667v106.666667h106.666667v-106.666667z m234.666667 0h-106.666667v106.666667h106.666667v-106.666667z" fill="currentColor"></path>';
             } else {
                 text.innerText = 'Ask 模式';
-                icon.innerHTML = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>';
+                icon.setAttribute('viewBox', '0 0 1024 1024');
+                icon.innerHTML = '<path d="M240 658.08h220.784l55.744 65.04 55.744-65.04h220.768V272H240v386.08z m-48 32V240a16 16 0 0 1 16-16h617.04a16 16 0 0 1 16 16v450.08a16 16 0 0 1-16 16H594.336l-65.664 76.64a16 16 0 0 1-24.304 0l-65.664-76.64H208a16 16 0 0 1-16-16zM366.256 498.56a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z m150.272 0a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z m150.24 0a33.488 33.488 0 1 1 0-66.992 33.488 33.488 0 0 1 0 66.992z" fill="currentColor"></path>';
             }
         }
 
