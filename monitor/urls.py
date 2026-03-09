@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/stop-stream/',   views.stop_stream,   name='stop_stream'),
     path('api/stream-status/', views.stream_status, name='stream_status'),
     path('api/system/toggle_stream/', views.api_toggle_stream, name='api_toggle_stream'),
+    path('api/system/reset_groups/',  views.api_reset_groups,  name='api_reset_groups'),
 
     # ── SaaS 多页面路由 ──────────────────────────────────────────
     path('dashboard/', views.dashboard_view, name='dashboard'),

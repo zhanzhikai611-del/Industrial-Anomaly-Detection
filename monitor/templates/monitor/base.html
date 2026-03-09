@@ -12,7 +12,7 @@
            Design Tokens  —  Figma V1.0.2
         ══════════════════════════════════════ */
         :root {
-            --sidebar-w: 240px;
+            --sidebar-w: 200px;
             --navbar-h: 56px;
             --bg: #f4f7fa;
             --card-bg: #ffffff;
@@ -75,7 +75,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 0 20px;
+            padding: 0 16px;
             border-bottom: 1px solid var(--border);
             text-decoration: none;
             font-size: 15px;
@@ -115,7 +115,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 10px 20px;
+            padding: 10px 16px;
             height: 37px;
             color: var(--text-sec);
             text-decoration: none;
@@ -149,7 +149,8 @@
 
         /* 底部版本号 */
         .sidebar-footer {
-            padding: 16px 20px;
+            padding: 16px 15px;
+            white-space: nowrap;
             border-top: 1px solid var(--border);
             border-right: 1px solid var(--border);
             font-size: 12px;
@@ -506,7 +507,8 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 16px 20px;
+            padding: 16px 15px;
+            white-space: nowrap;
             border-bottom: 1px solid var(--border);
         }
 
@@ -877,12 +879,12 @@
             {% endif %}
         </nav>
 
-        <div class="sidebar-footer">V2.1.0.CNC智能监控系统</div>
+        <div class="sidebar-footer">V2.1.2.CNC智能监控系统</div>
     </aside>
 
     <!-- ══════ Header ══════ -->
     <header class="header">
-        <!-- AI 交互中心 Split Button (V2.1.0) -->
+        <!-- AI 交互中心 Split Button (V2.1.2) -->
         <!-- AI 交互中心 Split Button (V1.4.5: Only show on Dashboard) -->
         {% if request.resolver_match.url_name == 'dashboard' %}
         <div class="ai-split-btn" id="ai-agent-btn">

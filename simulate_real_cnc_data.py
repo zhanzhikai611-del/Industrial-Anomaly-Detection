@@ -69,7 +69,6 @@ TOTAL_DEVICES = RUNNING_COUNT + IDLE_COUNT + DOWN_COUNT  # 25
 DAYS          = 7
 INTERVAL_MINS = 1
 ANOMALY_PROB  = 0.15
-LOADING_TIME  = 60.0
 BATCH_SIZE    = 3000
 
 
@@ -212,7 +211,7 @@ def _gen_running_record(device, ts, group_idx):
         device=device, timestamp=ts,
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process=np.random.choice(STAGE_LABELS, p=STAGE_PROBS),
-        tool_condition=is_worn, loading_time=LOADING_TIME,
+        tool_condition=is_worn, loading_time=float(step_secs / 60.0),
         downtime=dt, input_qty=int(input_qty_val), actual_output=good_output,
     )
 
@@ -228,7 +227,7 @@ def _gen_idle_record(device, ts):
         device=device, timestamp=ts,
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process='Idle', tool_condition=False,
-        loading_time=0.0, downtime=0.0,
+        loading_time=float(step_secs / 60.0), downtime=0.0,
         input_qty=input_qty_val, actual_output=0,
     )
 

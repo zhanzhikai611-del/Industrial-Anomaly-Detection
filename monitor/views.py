@@ -290,6 +290,32 @@ def stream_status(request):
     })
 
 
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_reset_groups(request):
+    """POST /api/system/reset_groups/ — 全量重置设备生命周期分组梯度"""
+    from django.db import transaction
+    
+    def _get_initial_group(idx):
+        """逻辑回归梯度分布规则 (0-indexed)"""
+        if idx < 5:    return 1  # 1-5
+        elif idx < 11: return 2  # 6-11
+        elif idx < 18: return 3  # 12-18
+        elif idx < 23: return 4  # 19-23
+        else:          return 5  # 24-25
+
+    try:
+        with transaction.atomic():
+            devices = DeviceInfo.objects.all().order_by('id')
+            for i, dev in enumerate(devices):
+                dev.current_group_id = _get_initial_group(i)
+                dev.save(update_fields=['current_group_id'])
+        
+        return JsonResponse({'status': 'ok', 'message': '风险梯度已重置为初始状态'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  API 1：看板概览统计 /api/stats/
 # ═══════════════════════════════════════════════════════════════════
@@ -310,7 +336,9 @@ def api_dashboard_stats(request):
       Q = 1 - (高风险设备数 × 次品系数) / 总设备数
       OEE = A × P × Q
     """
-    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    from django.utils.timezone import localtime
+    local_now = localtime(timezone.now())
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # ── 设备状态分布 ──────────────────────────────────────────────
     running_count = DeviceInfo.objects.filter(current_status='Running').count()
@@ -330,9 +358,8 @@ def api_dashboard_stats(request):
     #  OEE 级联计算模型（V1.4.2 修正，适配 STEP_MINS=0.05 新格式）
     # ═══════════════════════════════════════════════════════════════
 
-    # ── A（可用性）= Running设备比率 × 排班修正系数 ────────────────
-    SHIFT_FACTOR = 0.998
-    avg_a = round((running_count / total_devices) * SHIFT_FACTOR, 4)
+    # ── A（可用性）= Running设备比率 ────────────────
+    avg_a = round(running_count / total_devices, 4)
 
     # ── P（性能）= 近期实际生产速率 / 理论满载速率 ──────────────────────────
     # 使用近 500 条流水日志（today_qs），估算当前的全局生产速率。
@@ -341,11 +368,16 @@ def api_dashboard_stats(request):
     _sample_actual = sum(r.actual_output or 0 for r in today_qs)
     _sample_records = len(today_qs)
 
-    # 用最近500条数据估算全局生产速率
+    # 用最近 500 条数据估算全局生产速率 (V2.1.1 墙钟法优化)
     if _sample_records > 0 and running_count > 0:
-        # 500条记录覆盖的时间段：500条 / (25设备 × 3600/STEP_SECS 条/h)
-        _records_per_hour_per_device = 3600 / 3       # 1200条/h/设备
-        _sample_hours = _sample_records / (running_count * _records_per_hour_per_device)
+        # 墙钟法：从样本中最老的一条至今的真实物理耗时
+        _earliest_ts = today_qs[-1].timestamp
+        _sample_hours = (local_now - _earliest_ts).total_seconds() / 3600.0
+        
+        # 兜底：如果样本极其新鲜（小于理论步长），使用理论步长，防止 P 值因分母过小而突波
+        _theo_step_hours = _sample_records / (running_count * (3600 / 3.0))
+        _sample_hours = max(_sample_hours, _theo_step_hours)
+        
         _rate_per_hour = _sample_actual / _sample_hours if _sample_hours > 0 else 0  # 产量/小时
         
         # 理论满载速率（当前 Running 设备的标准产能之和）
@@ -359,45 +391,16 @@ def api_dashboard_stats(request):
     else:
         avg_p = None
 
-    # ── Q（良率）= 1 - (高风险设备数 × 次品系数) / 总设备数 ───────
-    DEFECT_COEFF = 0.08
-    high_risk_count = 0
-    if _LR_MODEL is not None:
-        seen_devices = set()
-        for rec in today_qs:
-            dev_id = rec.device_id
-            if dev_id in seen_devices:
-                continue
-            seen_devices.add(dev_id)
-            prob = _predict_proba(rec)
-            if prob is not None and prob > 0.75:
-                high_risk_count += 1
-    avg_q = round(1.0 - (high_risk_count * DEFECT_COEFF) / total_devices, 4)
-
-    # ── OEE = A × P × Q（严格连乘）────────────────────────────────
-    if avg_a is not None and avg_p is not None and avg_q is not None:
-        avg_oee = round(avg_a * avg_p * avg_q, 4)
-    else:
-        avg_oee = None
-
-    # ── 生产计划达成分析重构 (V1.4.2) ──────────────────────────────────
-    # V1.4.1 曾尝试用「最近2小时」窗口隔离历史数据，但由于 run_realtime_stream.py
-    # 的 _gen_running_record 未使用步长时间（每条3秒记录被当成60分钟产量），导致
-    # 2h 窗口内 actual_output 总和爆炸到 900万+。
-    # V1.4.2 真正根治：修复了 run_realtime_stream.py 的产量计算（引入 yield_buffer），
-    # 因此此处恢复使用「今日本地零点」统计，让产量随班次时间自然增长。
+    # ── 生产计划基础统计 (用于看板展示及 Q 指标计算) ────────────────
     from django.db.models import Sum
     from django.db.models.functions import TruncHour
-    from django.utils.timezone import localtime
     from datetime import timedelta
-
-    local_now = localtime(timezone.now())
 
     # 1. 动态产能目标计算: 全厂标准产能之和 * 8小时标准班
     daily_target_dict = DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))
     daily_target = (daily_target_dict['total_cap'] or 0) * 8
 
-    # 2. 全量当日良品与投入统计（从本地今日零点起）
+    # 2. 全量当日良品与投入统计（用于计算真实良率 Q）
     start_of_local_day = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_all_qs = ProductionSensorData.objects.filter(timestamp__gte=start_of_local_day)
 
@@ -410,6 +413,25 @@ def api_dashboard_stats(request):
         )
         total_output = totals['actual_total'] or 0
         total_input = totals['input_total'] or 0
+
+    # ── Q（良率）= 实际良品产出 / 实际投入总量 (V2.1.2 物理实测逻辑) ──
+    if total_input > 0:
+        avg_q = round(total_output / total_input, 4)
+    else:
+        avg_q = 1.0  # 无产出时默认为 100% 良率
+
+    # ── OEE = A × P × Q（严格连乘）────────────────────────────────
+    if avg_a is not None and avg_p is not None and avg_q is not None:
+        avg_oee = round(avg_a * avg_p * avg_q, 4)
+    else:
+        avg_oee = None
+
+    # ── 生产计划达成分析重构 (V1.4.2) ──────────────────────────────────
+    from django.db.models import Sum
+    from django.db.models.functions import TruncHour
+    from datetime import timedelta
+
+    # (注：total_output 和 total_input 已在上方 Q 计算部分完成聚合)
 
     # 3. 按小时(最近8小时)分布的真实良品产量
     hourly_output_array = []
@@ -497,11 +519,9 @@ def api_realtime_stream(request):
         return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': _LR_MODEL is not None})
 
     prob = _predict_proba(rec)
-    now  = timezone.now()
-
     data = [{
         'id':                  rec.id,
-        'timestamp':           now.isoformat(),          # ← 当前时间，保证每次不同
+        'timestamp':           rec.timestamp.isoformat(),  # 使用数据库真实时间戳，暂停时不再变化
         'device_id':           rec.device_id,
         'device_name':         rec.device.device_name,
         'spindle_current':     rec.spindle_current,
@@ -595,29 +615,33 @@ def api_device_matrix(request):
             sp      = latest.spindle_power
             fv      = latest.feed_velocity
             
-            # == 计算今日动态 OEE ==
-            today_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=today_start)
-            agg = today_recs.aggregate(
-                s=Sum('actual_output'), 
-                i=Sum('input_qty'),
-                tl=Sum('loading_time'),
-                td=Sum('downtime')
-            )
-            actual_out = agg['s'] or 0
-            input_qty = agg['i'] or 0
-            total_loading = agg['tl'] or 0
-            total_down = agg['td'] or 0
-
-            # 实际运转时长（小时）
-            actual_run_hours = (total_loading - total_down) / 60.0
-            if actual_run_hours > 0:
-                # 理论最大产量 = 标准产能 * 运转时长
-                theo_max = dev.standard_capacity * actual_run_hours
+            # == V2.1.2 滑动窗口 OEE 计算 (最近 30 分钟瞬时快照) ==
+            from datetime import timedelta
+            window_start = local_now - timedelta(minutes=30)
+            window_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
+            first_rec = window_recs.order_by('timestamp').first()
+            
+            if first_rec:
+                agg = window_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
+                actual_out = agg['s'] or 0
+                input_qty = agg['i'] or 0
                 
-                # 计算 P 和 Q （A 假定 100% 因为这是单机的全运转时段）
-                p_val = min(actual_out / theo_max, 1.0) if theo_max > 0 else 0.0
-                q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
-                oee_val = round(p_val * q_val, 4)
+                # ΔT = Now - Window First Record Timestamp (滑动窗口墙钟法)
+                delta_t_hours = (local_now - first_rec.timestamp).total_seconds() / 3600.0
+                
+                # 启动阶段/样本过少保护：不足 10 分钟则按 10 分钟基准计算，防止数值爆表
+                delta_t_hours = max(delta_t_hours, 10 / 60.0)
+                
+                # 理论最大产量 = 标准产能 * 物理历经时长 (小时)
+                theo_max = dev.standard_capacity * delta_t_hours
+                
+                if theo_max > 0:
+                    # 计算 P 和 Q
+                    p_val = min(actual_out / theo_max, 1.0)
+                    q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
+                    oee_val = round(p_val * q_val, 4)
+                else:
+                    oee_val = 0.0
             else:
                 oee_val = 0.0
 

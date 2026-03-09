@@ -45,7 +45,15 @@
         border-radius: 8px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
         border: 1px solid rgba(0, 0, 0, .05);
-        padding: 16px 18px;
+        padding: 12px 16px;
+    }
+
+    /* ── 固定下方三个卡片的高度与对齐 ── */
+    .db-card-bottom {
+        flex: 1;
+        min-height: 260px;
+        display: flex;
+        flex-direction: column;
     }
 
     .db-title {
@@ -168,7 +176,7 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
-        margin-top: 24px;
+        margin-top: 16px;
     }
 
     .prod-kpi-card {
@@ -551,8 +559,8 @@
             </div>
         </div>
 
-        <!-- 生产计划卡 (flex:1 撑满剩余高度，与中心等高) -->
-        <div class="db-card" style="flex:1;">
+        <!-- 生产计划卡 (固定高度并撑满，与中心等高) -->
+        <div class="db-card db-card-bottom">
             <div class="db-title"><span class="db-title-bar"></span>生产计划达成看板</div>
             <div style="font-size:11px;color:#909399;margin-bottom:2px;">今日总产量</div>
             <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
@@ -570,13 +578,12 @@
             </div>
             <!-- 各时段产量 ECharts -->
             <div style="font-size:11px;color:#909399;margin-bottom:4px;">各时段产量（件）</div>
-            <div id="chart-hourly" style="height:80px;"></div>
+            <div id="chart-hourly" style="height:150px; margin-top:4px;"></div>
             <!-- 良品 / 次品 双卡 -->
-            <div class="prod-duo">
+            <div class="prod-duo" style="margin-top: 10px;">
                 <div class="prod-kpi-card" style="background:#f0f9eb;border:1px solid #b7eb8f;">
                     <div class="prod-kpi-label" style="color:#52c41a;">良品</div>
-                    <div class="prod-kpi-val" id="prod-quality" style="color:#52c41a;">--</div>
-                    <div style="font-size:10px;color:#73d13d;margin-top:2px;" id="prod-quality-pct">--%</div>
+                    <div class="prod-kpi-val" id="prod-quality" style="color:#52c41a;">-- 件</div>
                 </div>
                 <div class="prod-kpi-card" style="background:#fff2f0;border:1px solid #ffa39e;">
                     <div class="prod-kpi-label" style="color:#F5222D;">次品（损耗）</div>
@@ -616,13 +623,15 @@
             </div>
         </div>
 
-        <!-- 故障多维关联可视化 -->
-        <div class="db-card">
+        <!-- 故障多维关联可视化 (固定高度并撑满) -->
+        <div class="db-card db-card-bottom">
             <div class="db-title">
                 <span class="db-title-bar"></span>设备故障预警多维关联可视化
                 <span style="font-size:11px;color:#909399;font-weight:400;margin-left:6px;">主轴电流 ↔ AI预警概率</span>
+                <span id="stream-status-badge"
+                    style="margin-left:auto; display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700;"></span>
             </div>
-            <div id="chart-line" style="height:200px;"></div>
+            <div id="chart-line" style="height:230px;"></div>
         </div>
     </div>
 
@@ -635,8 +644,8 @@
             <div id="chart-trend" style="height:200px;"></div>
         </div>
 
-        <!-- 实时异常上报 (flex:1 撑满剩余高度) -->
-        <div class="db-card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+        <!-- 实时异常上报 (固定高度并撑满) -->
+        <div class="db-card db-card-bottom" style="overflow:hidden;">
 
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                 <div class="db-title" style="margin-bottom:0;"><span class="db-title-bar"></span>实时异常上报</div>
@@ -956,7 +965,7 @@
     const cHourly = echarts.init($('chart-hourly'));
     // 生成当日已过的小时标签（从早8点开始）
     cHourly.setOption({
-        grid: { left: 0, right: 0, top: 4, bottom: 18, containLabel: false },
+        grid: { left: 4, right: 4, top: 12, bottom: 20, containLabel: false },
         xAxis: {
             type: 'category', data: [],
             axisLine: { show: false }, axisTick: { show: false },
@@ -1316,8 +1325,7 @@
             $('prod-bar').style.width = rate.toFixed(1) + '%';
             $('prod-badge').textContent = rate.toFixed(1) + '%';
 
-            $('prod-quality').textContent = Number(actual).toLocaleString();
-            $('prod-quality-pct').textContent = (input > 0 ? (actual / input * 100).toFixed(1) : '--') + '%';
+            $('prod-quality').textContent = Number(actual).toLocaleString() + ' 件';
             $('prod-defects').textContent = Number(defects).toLocaleString() + ' 件';
 
             // 各时段产量图表 (同步后端滚动标签与数据)
@@ -1368,7 +1376,7 @@
                 <div style="font-size:10px;color:#c0c4cc;">${relTime}</div>
               </div>
               <div class="arow-desc">
-                <div class="dev" style="color:${isHigh ? '#F5222D' : '#303133'};">
+                <div class="dev" style="color:${sc};">
                   <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dot};margin-right:4px;vertical-align:middle;"></span>${a.device_name || '--'}
                 </div>
                 <div style="color:#606266;font-size:11px;margin-top:1px;">${desc}</div>
@@ -1407,6 +1415,17 @@
     async function pollAll() {
         try {
             const st = await fetch('/api/stream-status/').then(r => r.json());
+
+            // Update UI status badge
+            const badge = $('stream-status-badge');
+            if (badge) {
+                if (st.is_realtime_active) {
+                    badge.innerHTML = `<span style="width:7px;height:7px;background:#52c41a;border-radius:50%;box-shadow:0 0 5px #52c41a;animation:pulse 1.5s infinite;"></span><span style="color:#52c41a;">LIVE</span>`;
+                } else {
+                    badge.innerHTML = `<span style="width:7px;height:7px;background:#909399;border-radius:50%;"></span><span style="color:#909399;">PAUSED</span>`;
+                }
+            }
+
             // if (!st.is_realtime_active) return; // [Bugfix] Removed to ensure data loads even if stream script is off
             fetchStats(); fetchMatrix(); fetchAlerts(); fetchStream();
             if (++trendTick === 1 || trendTick % 20 === 0) fetchTrend();
