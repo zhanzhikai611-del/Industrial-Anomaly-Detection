@@ -630,7 +630,7 @@ def api_device_matrix(request):
                 delta_t_hours = (local_now - first_rec.timestamp).total_seconds() / 3600.0
                 
                 # 启动阶段/样本过少保护：不足 10 分钟则按 10 分钟基准计算，防止数值爆表
-                delta_t_hours = max(delta_t_hours, 10 / 60.0)
+                delta_t_hours = max(delta_t_hours, 5 / 60.0)
                 
                 # 理论最大产量 = 标准产能 * 物理历经时长 (小时)
                 theo_max = dev.standard_capacity * delta_t_hours
