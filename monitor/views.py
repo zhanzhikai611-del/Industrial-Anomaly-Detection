@@ -314,7 +314,8 @@ def api_reset_groups(request):
             devices = DeviceInfo.objects.all().order_by('id')
             for i, dev in enumerate(devices):
                 dev.current_group_id = _get_initial_group(i)
-                dev.save(update_fields=['current_group_id'])
+                dev.maintenance_advice = '设备运行平稳，暂无维修建议。' # V2.2.0: 重置时同步清空建议文字
+                dev.save(update_fields=['current_group_id', 'maintenance_advice'])
         
         return JsonResponse({'status': 'ok', 'message': '风险梯度已重置为初始状态'})
     except Exception as e:
@@ -882,6 +883,14 @@ def api_device_reset(request, device_id):
                 'message': '仅停机(Stopped)状态下可下发处理操作',
             }, status=400)
         with transaction.atomic():
+            # 解析工单说明内容
+            import json
+            try:
+                data = json.loads(request.body)
+                note = data.get('note', '设备已处理完毕，环境已重置。')
+            except:
+                note = '设备已处理完毕，环境已重置。'
+
             AnomalyAlertLog.objects.filter(
                 record__device=device,
                 is_handled=False
@@ -889,7 +898,8 @@ def api_device_reset(request, device_id):
 
             device.current_group_id = 1  # V1.4.0: 全新设备组，sc_mean→15.0A，AI风险→0-40%
             device.current_status = 'Idle'  # 下发完成后切到待机，不自动恢复运行
-            device.save(update_fields=['current_group_id', 'current_status'])
+            device.maintenance_advice = note # 保存到设备信息表中
+            device.save(update_fields=['current_group_id', 'current_status', 'maintenance_advice'])
 
         return JsonResponse({'status': 'ok', 'message': f'设备 {device.device_name} 已处理完毕，已切换至待机'})
     except Exception as e:

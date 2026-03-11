@@ -88,13 +88,15 @@ def _repair_device_groups():
         elif idx < 18: expected = 3
         elif idx < 23: expected = 4
         else:          expected = 5
-        if dev.current_group_id != expected:
-            dev.current_group_id = expected
-            to_update.append(dev)
+        
+        # 联动重置 (V2.2.0): 重启时清空工单文本
+        dev.maintenance_advice = '设备运行平稳，暂无维修建议。'
+        dev.current_group_id = expected
+        to_update.append(dev)
 
     if to_update:
-        DeviceInfo.objects.bulk_update(to_update, ['current_group_id'])
+        DeviceInfo.objects.bulk_update(to_update, ['current_group_id', 'maintenance_advice'])
         logger.info(
-            '[MonitorConfig] startup group reset: %d devices restored to gradient 1-5.',
+            '[MonitorConfig] startup group reset: %d devices restored to gradient 1-5 and advice cleared.',
             len(to_update),
         )

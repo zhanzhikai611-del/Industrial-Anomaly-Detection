@@ -395,7 +395,8 @@ class FactoryConsumer(AsyncWebsocketConsumer):
         with transaction.atomic():
             for i, dev in enumerate(DeviceInfo.objects.all().order_by('id')):
                 dev.current_group_id = _grp(i)
-                dev.save(update_fields=['current_group_id'])
+                dev.maintenance_advice = '设备运行平稳，暂无维修建议。' # V2.2.0 同步清空工单
+                dev.save(update_fields=['current_group_id', 'maintenance_advice'])
 
     @sync_to_async
     def _get_device_history(self, device_id):
@@ -415,14 +416,9 @@ class FactoryConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def _get_maintenance_advice(self, device_id):
-        """从最新的预警记录中获取 AI 诊断/维修建议。"""
-        alert = (
-            AnomalyAlertLog.objects
-            .filter(record__device_id=device_id)
-            .order_by('-alert_time')
-            .first()
-        )
-        if alert and alert.anomaly_score and alert.anomaly_score > 0.8:
-            return f"[AI 建议] 该设备风险值达 {alert.anomaly_score:.1%}，建议检查主轴负荷及刀具磨损。"
+        """从设备基础信息表中获取人工录入的维修建议 (V2.2.0)。"""
+        device = DeviceInfo.objects.filter(pk=device_id).first()
+        if device:
+            return device.maintenance_advice
         return "设备运行平稳，暂无维修建议。"
 

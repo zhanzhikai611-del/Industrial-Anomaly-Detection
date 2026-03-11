@@ -73,6 +73,11 @@ class DeviceInfo(models.Model):
         verbose_name='当前特征组 ID', 
         help_text='取值 1~5，由重置逻辑变更为 2(准新) 实现回春'
     )
+    maintenance_advice = models.TextField(
+        default='设备运行平稳，暂无维修建议。',
+        verbose_name='维修建议/工单说明',
+        help_text='下发维修工单时填写的建议文本，将实时同步至数字孪生面板'
+    )
 
     class Meta:
         db_table = 'device_info'

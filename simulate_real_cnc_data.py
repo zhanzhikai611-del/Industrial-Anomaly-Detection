@@ -422,9 +422,12 @@ def run_realtime_simulation():
 
     devices = list(DeviceInfo.objects.all())
     # 💡 关键：重置所有设备的 yield_buffer，防止 7 天历史数据累积的余量污染实时轮询
+    # 同时重置维修建议 (V2.2.0 同步 PRD 逻辑)
     for dev in devices:
         dev.yield_buffer  = 0.0
         dev.defect_buffer = 0.0
+        dev.maintenance_advice = '设备运行平稳，暂无维修建议。'
+        dev.save(update_fields=['yield_buffer', 'defect_buffer', 'maintenance_advice'])
     
     with ThreadPoolExecutor(max_workers=25) as executor:
         while True:
