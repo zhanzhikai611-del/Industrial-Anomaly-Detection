@@ -88,6 +88,40 @@ class DeviceInfo(models.Model):
     def __str__(self):
         return f'[{self.id}] {self.device_name} ({self.get_current_status_display()})'
 
+    @staticmethod
+    def initial_repair_all():
+        """
+        [V2.2.0 中心化重置逻辑]
+        将全量 25 台设备重置为初始梯度分布，并清空所有维修建议文字。
+        用于：
+        1. apps.py (服务器启动自检)
+        2. views.py (系统设置页手动重置)
+        """
+        from django.db import transaction
+        
+        def _get_ideal_group(idx):
+            if idx < 5:    return 1  # 5台
+            elif idx < 11: return 2  # 6台
+            elif idx < 18: return 3  # 7台
+            elif idx < 23: return 4  # 5台
+            else:          return 5  # 2台
+
+        devices = list(DeviceInfo.objects.all().order_by('id'))
+        to_update = []
+        
+        with transaction.atomic():
+            for i, dev in enumerate(devices):
+                expected_group = _get_ideal_group(i)
+                # 统一重置内容
+                dev.current_group_id = expected_group
+                dev.maintenance_advice = '设备运行平稳，暂无维修建议。'
+                to_update.append(dev)
+            
+            if to_update:
+                DeviceInfo.objects.bulk_update(to_update, ['current_group_id', 'maintenance_advice'])
+        
+        return len(to_update)
+
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('Admin', 'Admin'),

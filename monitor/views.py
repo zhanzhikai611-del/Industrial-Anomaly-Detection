@@ -299,25 +299,13 @@ def stream_status(request):
 @require_http_methods(['POST'])
 def api_reset_groups(request):
     """POST /api/system/reset_groups/ — 全量重置设备生命周期分组梯度"""
-    from django.db import transaction
-    
-    def _get_initial_group(idx):
-        """逻辑回归梯度分布规则 (0-indexed)"""
-        if idx < 5:    return 1  # 1-5
-        elif idx < 11: return 2  # 6-11
-        elif idx < 18: return 3  # 12-18
-        elif idx < 23: return 4  # 19-23
-        else:          return 5  # 24-25
-
     try:
-        with transaction.atomic():
-            devices = DeviceInfo.objects.all().order_by('id')
-            for i, dev in enumerate(devices):
-                dev.current_group_id = _get_initial_group(i)
-                dev.maintenance_advice = '设备运行平稳，暂无维修建议。' # V2.2.0: 重置时同步清空建议文字
-                dev.save(update_fields=['current_group_id', 'maintenance_advice'])
-        
-        return JsonResponse({'status': 'ok', 'message': '风险梯度已重置为初始状态'})
+        count = DeviceInfo.initial_repair_all()
+        return JsonResponse({
+            'status': 'ok', 
+            'message': f'风险梯度已重置，共影响 {count} 台设备',
+            'count': count
+        })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 

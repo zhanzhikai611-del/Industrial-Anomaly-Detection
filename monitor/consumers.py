@@ -99,7 +99,12 @@ class CopilotConsumer(AsyncWebsocketConsumer):
             data_str += f"Time: {r.timestamp.strftime('%H:%M:%S')} | Current: {r.spindle_current:.2f}A | Power: {r.spindle_power:.1f}W | Velocity: {r.feed_velocity:.2f}\\n"
         return data_str
 
-    async def run_ai_diagnosis(self, device_name, harvest_data):
+    @sync_to_async
+    def _save_maintenance_advice(self, device_id, advice):
+        """将 AI 诊断结论持久化到数据库 (V2.2.0 新增)"""
+        DeviceInfo.objects.filter(id=device_id).update(maintenance_advice=advice)
+
+    async def run_ai_diagnosis(self, device_id, device_name, harvest_data):
         await self.push_log(f"[AI] 正在通过 LLM 进行多维关联分析...")
         
         # Simulate typing/thinking delay
@@ -135,6 +140,9 @@ class CopilotConsumer(AsyncWebsocketConsumer):
             loop = asyncio.get_event_loop()
             ai_response = await loop.run_in_executor(None, _call_api)
             await self.push_log(f"[AI] 诊断意见：{ai_response}")
+            
+            # V2.2.0: 将诊断意见写回数据库，供数字孪生大屏展示
+            await self._save_maintenance_advice(device_id, ai_response)
             
         except Exception as e:
             await self.push_log(f"[AI/Error] LLM 调用失败: {str(e)}")
@@ -185,7 +193,7 @@ class CopilotConsumer(AsyncWebsocketConsumer):
             await asyncio.sleep(1)
             
             # AI Diagnosis
-            await self.run_ai_diagnosis(device.device_name, harvest_data)
+            await self.run_ai_diagnosis(device.id, device.device_name, harvest_data)
             await asyncio.sleep(3)
             
             # Recovery
@@ -385,18 +393,11 @@ class FactoryConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def _reset_device_groups(self):
-        def _grp(idx):
-            if idx < 5:    return 1
-            elif idx < 11: return 2
-            elif idx < 18: return 3
-            elif idx < 23: return 4
-            else:          return 5
-        from django.db import transaction
-        with transaction.atomic():
-            for i, dev in enumerate(DeviceInfo.objects.all().order_by('id')):
-                dev.current_group_id = _grp(i)
-                dev.maintenance_advice = '设备运行平稳，暂无维修建议。' # V2.2.0 同步清空工单
-                dev.save(update_fields=['current_group_id', 'maintenance_advice'])
+        # V2.2.0: 逻辑下沉，调用模型层统一接口
+        try:
+            DeviceInfo.initial_repair_all()
+        except Exception as e:
+            print(f"WS Reset Error: {e}")
 
     @sync_to_async
     def _get_device_history(self, device_id):

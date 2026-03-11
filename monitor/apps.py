@@ -63,40 +63,15 @@ def _repair_on_first_connection(sender, connection, **kwargs):
 def _repair_device_groups():
     """
     每次项目启动时无条件将所有设备的 current_group_id 重置为初始梯度分布。
-
-    映射规则（按 id 升序位置）：
-      idx  0- 4 → Group 1 (新设备    · sc≈15A · 低风险   0-40%)
-      idx  5-10 → Group 2 (准新设备  · sc≈24A · 低中风险 30-50%)
-      idx 11-17 → Group 3 (正常磨损  · sc≈27A · 中风险   41-75%)
-      idx 18-22 → Group 4 (老旧设备  · sc≈31A · 中高风险 60-85%)
-      idx 23-24 → Group 5 (故障边缘  · sc≈40A · 高风险   76-100%)
-
-    设计意图（V1.2.0 RRD §2.5 第 67 条）：
-      "项目重启后初始化脚本将重置所有设备的组别配置"
-      ——回春效果仅在当次运行期间有效，重启即恢复初始梯度，实现每次启动都是一次新的演示。
+    V2.2.0: 已下沉逻辑至 DeviceInfo.initial_repair_all()
     """
     from .models import DeviceInfo
-
-    devices = list(DeviceInfo.objects.order_by('id'))
-    if len(devices) < 5:
-        return
-
-    to_update = []
-    for idx, dev in enumerate(devices):
-        if idx < 5:    expected = 1
-        elif idx < 11: expected = 2
-        elif idx < 18: expected = 3
-        elif idx < 23: expected = 4
-        else:          expected = 5
-        
-        # 联动重置 (V2.2.0): 重启时清空工单文本
-        dev.maintenance_advice = '设备运行平稳，暂无维修建议。'
-        dev.current_group_id = expected
-        to_update.append(dev)
-
-    if to_update:
-        DeviceInfo.objects.bulk_update(to_update, ['current_group_id', 'maintenance_advice'])
-        logger.info(
-            '[MonitorConfig] startup group reset: %d devices restored to gradient 1-5 and advice cleared.',
-            len(to_update),
-        )
+    try:
+        count = DeviceInfo.initial_repair_all()
+        if count > 0:
+            logger.info(
+                '[MonitorConfig] startup group reset: %d devices restored to gradient 1-5 via central logic.',
+                count,
+            )
+    except Exception as exc:
+        logger.error('[MonitorConfig] Failed to run initial_repair_all: %s', exc)
