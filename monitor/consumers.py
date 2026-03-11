@@ -199,3 +199,163 @@ class CopilotConsumer(AsyncWebsocketConsumer):
             
             # 多停留一段时间让上一轮修复的设备回升到正常风险值，避免连续操作同一台设备
             await asyncio.sleep(5)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  FactoryConsumer — 数字孪生工厂实时推送 (V2.2.0)
+#  路由: ws/factory/
+#  行为: 每 3s 推送 25 台设备全量快照
+# ═══════════════════════════════════════════════════════════════════
+
+class FactoryConsumer(AsyncWebsocketConsumer):
+    INTERVAL = 3  # 推送间隔（秒）
+
+    async def connect(self):
+        await self.accept()
+        self._running = True
+        self._push_task = asyncio.create_task(self._push_loop())
+
+    async def disconnect(self, close_code):
+        self._running = False
+        if self._push_task:
+            self._push_task.cancel()
+
+    async def receive(self, text_data):
+        """处理前端控制指令：start_stream / stop_stream / reset_groups"""
+        try:
+            data = json.loads(text_data)
+            action = data.get('action')
+            if action == 'start_stream':
+                await self._set_stream_active(True)
+            elif action == 'stop_stream':
+                await self._set_stream_active(False)
+            elif action == 'reset_groups':
+                await self._reset_device_groups()
+        except Exception as e:
+            print(f'[FactoryConsumer] receive error: {e}')
+
+    # ── 核心推送循环 ────────────────────────────────────────────────
+    async def _push_loop(self):
+        while self._running:
+            try:
+                snapshot = await self._build_snapshot()
+                await self.send(text_data=json.dumps(snapshot))
+            except Exception as e:
+                print(f'[FactoryConsumer] push error: {e}')
+            await asyncio.sleep(self.INTERVAL)
+
+    # ── 构建全量快照 Payload ─────────────────────────────────────────
+    @sync_to_async
+    def _build_snapshot(self):
+        """一次性拉取所有设备最新传感记录，打包为 factory_snapshot。"""
+        import joblib
+        from pathlib import Path
+        import numpy as np
+        from django.utils.timezone import localtime
+
+        now = timezone.now()
+        local_now = localtime(now)
+
+        # 加载 LR 模型（轻量缓存：模块级已由 views.py 加载，这里按需重试）
+        try:
+            _ml_dir = Path(__file__).resolve().parent.parent / 'ml_models'
+            _model  = joblib.load(_ml_dir / 'logistic_model.pkl')
+            _scaler = joblib.load(_ml_dir / 'scaler.pkl')
+        except Exception:
+            _model = _scaler = None
+
+        def _predict(rec):
+            if _model is None or rec is None:
+                return None
+            try:
+                sc, sp, fv = rec.spindle_current, rec.spindle_power, rec.feed_velocity
+                x = np.array([[sc, sp, fv, sc, sp, fv, 0.0, 0.0, 0.0]])
+                return round(float(_model.predict_proba(_scaler.transform(x))[0, 1]), 4)
+            except Exception:
+                return None
+
+        devices = list(DeviceInfo.objects.all().order_by('id'))
+        cfg     = SystemConfig.get()
+
+        rows = []
+        for dev in devices:
+            latest = (
+                ProductionSensorData.objects
+                .filter(device=dev)
+                .order_by('-timestamp')
+                .first()
+            )
+            prob = _predict(latest)
+
+            # 30-min 滑动窗口 OEE（与 views.py 逻辑一致）
+            oee_val = 0.0
+            if latest:
+                from datetime import timedelta
+                from django.db.models import Sum
+                window_start = local_now - timedelta(minutes=30)
+                w_qs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
+                first_rec = w_qs.order_by('timestamp').first()
+                if first_rec:
+                    agg = w_qs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
+                    actual_out = agg['s'] or 0
+                    input_qty  = agg['i'] or 0
+                    dt_h = (local_now - first_rec.timestamp).total_seconds() / 3600.0
+                    dt_h = max(dt_h, 5 / 60.0)
+                    theo = dev.standard_capacity * dt_h
+                    if theo > 0:
+                        p_val = min(actual_out / theo, 1.0)
+                        q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
+                        oee_val = round(p_val * q_val, 4)
+
+            # Session yield：今日 00:00 起的累计良品（简化实现，无 session_uuid）
+            from django.utils.timezone import localtime as lt2
+            from datetime import timedelta as td
+            today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            session_yield = (
+                ProductionSensorData.objects
+                .filter(device=dev, timestamp__gte=today_start)
+                .aggregate(s=Sum('actual_output'))['s'] or 0
+            )
+
+            rows.append({
+                'device_id':        dev.id,
+                'device_name':      dev.device_name,
+                'device_type':      dev.device_type or '',
+                'current_status':   dev.current_status,
+                'spindle_current':  round(latest.spindle_current, 2) if latest else 0,
+                'spindle_power':    round(latest.spindle_power, 4)   if latest else 0,
+                'feed_velocity':    round(latest.feed_velocity, 2)   if latest else 0,
+                'machining_process': latest.machining_process        if latest else '--',
+                'anomaly_score':    prob,
+                'oee':              oee_val,
+                'session_yield':    session_yield,
+            })
+
+        return {
+            'type':      'factory_snapshot',
+            'timestamp': local_now.strftime('%H:%M:%S'),
+            'is_stream_active': cfg.is_realtime_active,
+            'devices':   rows,
+        }
+
+    # ── 控制指令辅助 ─────────────────────────────────────────────────
+    @sync_to_async
+    def _set_stream_active(self, value: bool):
+        cfg = SystemConfig.get()
+        cfg.is_realtime_active = value
+        cfg.save()
+
+    @sync_to_async
+    def _reset_device_groups(self):
+        def _grp(idx):
+            if idx < 5:    return 1
+            elif idx < 11: return 2
+            elif idx < 18: return 3
+            elif idx < 23: return 4
+            else:          return 5
+        from django.db import transaction
+        with transaction.atomic():
+            for i, dev in enumerate(DeviceInfo.objects.all().order_by('id')):
+                dev.current_group_id = _grp(i)
+                dev.save(update_fields=['current_group_id'])
+

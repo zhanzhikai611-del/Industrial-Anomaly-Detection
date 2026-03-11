@@ -135,6 +135,11 @@ def setting_view(request):
     return render(request, 'monitor/setting.html')
 
 @login_required
+def factory_view(request):
+    """Digital Factory 数字孪生工厂大屏（V2.2.0）"""
+    return render(request, 'monitor/factory.html')
+
+@login_required
 @role_required(['Admin'])
 def account_view(request):
     """Account 账号管理页（仅 Admin 可访问）"""
@@ -629,7 +634,7 @@ def api_device_matrix(request):
                 # ΔT = Now - Window First Record Timestamp (滑动窗口墙钟法)
                 delta_t_hours = (local_now - first_rec.timestamp).total_seconds() / 3600.0
                 
-                # 启动阶段/样本过少保护：不足 10 分钟则按 10 分钟基准计算，防止数值爆表
+                # 启动阶段/样本过少保护：不足 5 分钟则按 5 分钟基准计算，防止数值爆表
                 delta_t_hours = max(delta_t_hours, 5 / 60.0)
                 
                 # 理论最大产量 = 标准产能 * 物理历经时长 (小时)

@@ -24,6 +24,7 @@ urlpatterns = [
     path('events/',    views.event_view,    name='event'),
     path('accounts/',  views.account_view,  name='account'),
     path('setting/',   views.setting_view,  name='setting'),
+    path('factory/',   views.factory_view,  name='factory'),  # V2.2.0 Digital Factory
 
     # ── ECharts 数据接口 ─────────────────────────────────────────
     path('api/stats/',           views.api_dashboard_stats, name='api_stats'),

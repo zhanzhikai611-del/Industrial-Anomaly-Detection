@@ -295,6 +295,31 @@
         }
 
         /* ══════════════════════════════════════
+           V2.2.0 双中心 Tab
+        ══════════════════════════════════════ */
+        .nav-center-tab {
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            height: 100%;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-sec);
+            text-decoration: none;
+            border-bottom: 3px solid transparent;
+            transition: color .2s, border-color .2s;
+        }
+
+        .nav-center-tab:hover {
+            color: var(--text);
+        }
+
+        .nav-center-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* ══════════════════════════════════════
            顶部 Header  (固定, left=240px)
         ══════════════════════════════════════ */
         .header {
@@ -883,7 +908,17 @@
     </aside>
 
     <!-- ══════ Header ══════ -->
-    <header class="header">
+    <header class="header" style="justify-content: flex-start; gap: 0;">
+        <!-- V2.2.0 Dual-Center Tab: CNC Vision ↔ Digital Factory -->
+        <div style="display:flex; align-items:stretch; height:100%; margin-right:auto;">
+            <a href="/dashboard/"
+                class="nav-center-tab {% if request.resolver_match.url_name != 'factory' %}active{% endif %}">CNC
+                Vision</a>
+            <a href="/factory/"
+                class="nav-center-tab {% if request.resolver_match.url_name == 'factory' %}active{% endif %}">Digital
+                Twin</a>
+        </div>
+
         <!-- AI 交互中心 Split Button (V2.1.2) -->
         <!-- AI 交互中心 Split Button (V1.4.5: Only show on Dashboard) -->
         {% if request.resolver_match.url_name == 'dashboard' %}
