@@ -3,7 +3,7 @@ import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from django.utils import timezone
-from .models import DeviceInfo, AnomalyAlertLog, ProductionSensorData, SystemConfig
+from .models import DeviceInfo, AnomalyAlertLog, ProductionSensorData, SystemConfig, SystemLog
 import os
 from openai import OpenAI
 
@@ -213,6 +213,7 @@ class FactoryConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
         self._running = True
+        self._last_log_id = 0
         self._push_task = asyncio.create_task(self._push_loop())
 
     async def disconnect(self, close_code):
@@ -231,6 +232,16 @@ class FactoryConsumer(AsyncWebsocketConsumer):
                 await self._set_stream_active(False)
             elif action == 'reset_groups':
                 await self._reset_device_groups()
+            elif action == 'fetch_device_history':
+                device_id = data.get('device_id')
+                history = await self._get_device_history(device_id)
+                advice = await self._get_maintenance_advice(device_id)
+                await self.send(text_data=json.dumps({
+                    'type': 'device_mode_data',
+                    'device_id': device_id,
+                    'history': history,
+                    'advice': advice
+                }))
         except Exception as e:
             print(f'[FactoryConsumer] receive error: {e}')
 
@@ -238,11 +249,38 @@ class FactoryConsumer(AsyncWebsocketConsumer):
     async def _push_loop(self):
         while self._running:
             try:
+                # 1. 发送 3D 状态快照
                 snapshot = await self._build_snapshot()
                 await self.send(text_data=json.dumps(snapshot))
+                
+                # 2. 发送增量引擎日志 (降级方案：无 Redis 时轮询数据库)
+                await self._poll_and_send_logs()
             except Exception as e:
                 print(f'[FactoryConsumer] push error: {e}')
             await asyncio.sleep(self.INTERVAL)
+
+    async def _poll_and_send_logs(self):
+        """轮询并发送新产生的 SystemLog 日志。"""
+        new_logs, last_id = await self._get_new_logs(self._last_log_id)
+        if last_id:
+            self._last_log_id = last_id
+        for log in new_logs:
+            await self.send(text_data=json.dumps(log))
+
+    @sync_to_async
+    def _get_new_logs(self, last_id):
+        """从数据库获取比 last_id 更大的新日志。"""
+        qs = SystemLog.objects.filter(id__gt=last_id).order_by('id')
+        logs = []
+        new_last_id = last_id
+        for row in qs:
+            logs.append({
+                'type': 'engine_log',
+                'message': row.message,
+                'timestamp': row.timestamp.strftime('%H:%M:%S')
+            })
+            new_last_id = row.id
+        return logs, new_last_id
 
     # ── 构建全量快照 Payload ─────────────────────────────────────────
     @sync_to_async
@@ -358,4 +396,33 @@ class FactoryConsumer(AsyncWebsocketConsumer):
             for i, dev in enumerate(DeviceInfo.objects.all().order_by('id')):
                 dev.current_group_id = _grp(i)
                 dev.save(update_fields=['current_group_id'])
+
+    @sync_to_async
+    def _get_device_history(self, device_id):
+        """获取该设备最近 20 条传感记录。"""
+        records = (
+            ProductionSensorData.objects
+            .filter(device_id=device_id)
+            .order_by('-timestamp')[:20]
+        )
+        return [
+            {
+                'time': r.timestamp.strftime('%H:%M:%S'),
+                'cur':  round(r.spindle_current, 2),
+                'pow':  round(r.spindle_power, 2)
+            } for r in records
+        ]
+
+    @sync_to_async
+    def _get_maintenance_advice(self, device_id):
+        """从最新的预警记录中获取 AI 诊断/维修建议。"""
+        alert = (
+            AnomalyAlertLog.objects
+            .filter(record__device_id=device_id)
+            .order_by('-alert_time')
+            .first()
+        )
+        if alert and alert.anomaly_score and alert.anomaly_score > 0.8:
+            return f"[AI 建议] 该设备风险值达 {alert.anomaly_score:.1%}，建议检查主轴负荷及刀具磨损。"
+        return "设备运行平稳，暂无维修建议。"
 

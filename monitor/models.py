@@ -378,3 +378,24 @@ class SystemConfig(models.Model):
         status = '▶ 运行中' if self.is_realtime_active else '⏸ 已暂停'
         return f'实时数据流：{status}'
 
+
+# ═══════════════════════════════════════════════════════════════════
+#  表 5：引擎运行日志表（跨进程通信中介）
+# ═══════════════════════════════════════════════════════════════════
+
+class SystemLog(models.Model):
+    """
+    系统引擎日志表 (system_log)
+    在没有 Redis 的环境下，作为 run_realtime_stream 和 FactoryConsumer 之间的跨进程通信中介。
+    FactoryConsumer 会轮询近 3 秒内产生的日志并广播至前端。
+    """
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    message = models.TextField(verbose_name='日志内容')
+    log_type = models.CharField(max_length=20, default='engine_log', verbose_name='日志类型')
+
+    class Meta:
+        db_table = 'system_log'
+        ordering = ['-timestamp']
+        verbose_name = '引擎日志'
+        verbose_name_plural = '引擎日志'
+

@@ -264,7 +264,21 @@
 
         .ins-val {
             font-weight: 800;
+        }
+
+        .log-entry {
             font-family: var(--font-mono);
+            font-size: 11px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f5f9;
+            line-height: 1.5;
+            color: #475569;
+            animation: fadeInLog 0.3s ease-out;
+        }
+
+        @keyframes fadeInLog {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .log-entry {
@@ -408,6 +422,29 @@
                     <div class="ins-row"><span>表现度 [P]</span><span id="ins-oee" class="ins-val">--</span></div>
                     <div class="ins-row"><span>主轴电流</span><span id="ins-cur" class="ins-val">--</span></div>
                     <div class="ins-row"><span>主轴功率</span><span id="ins-pow" class="ins-val">--</span></div>
+                    
+                    <!-- 跨中心指令 (Maintenance Advice) -->
+                    <div style="margin-top: 24px;">
+                        <div class="st-title" style="margin-bottom:8px; color:var(--primary)">MAINTENANCE ADVICE</div>
+                        <div id="ins-advice" style="
+                            background: var(--primary-bg);
+                            border-left: 4px solid var(--primary);
+                            padding: 10px;
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: var(--text);
+                            line-height: 1.4;
+                            border-radius: 4px;
+                        ">--</div>
+                    </div>
+
+                    <!-- 历史轨迹 (Historical Trace) -->
+                    <div style="margin-top: 24px;">
+                        <div class="st-title" style="margin-bottom:8px;">HISTORICAL TRACE (LATEST 20)</div>
+                        <div id="ins-history" style="font-family: var(--font-mono); font-size: 10px; max-height: 200px; overflow-y: auto;">
+                            <!-- Items will be injected here -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -424,6 +461,55 @@
         let mouse = new THREE.Vector2();
         let focusId = null;
         let clock = new THREE.Clock();
+        let ws;
+
+        function connectWS() {
+            const loc = window.location;
+            const wsUrl = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.host + '/ws/factory/';
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log("[WS] Connected to Factory Stream");
+                addLog("ENGINE: Connected to Real-time Stream.");
+            };
+
+            ws.onmessage = (e) => {
+                const data = json_parse_safe(e.data);
+                if (!data) return;
+
+                if (data.type === 'factory_snapshot') {
+                    currentDevices = data.devices.sort((a, b) => a.device_id - b.device_id);
+                    sync3DStates();
+                    updateStatsDisplay();
+                    if (focusId) updateInspector(focusId);
+                } else if (data.type === 'engine_log') {
+                    // 全局监控日志始终展示，不再受 focusId 屏蔽
+                    addLog(data.message);
+                } else if (data.type === 'device_mode_data') {
+                    // 设备专项数据展示
+                    if (focusId && data.device_id == focusId) {
+                        renderDeviceDetails(data);
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                console.warn("[WS] Disconnected. Retrying in 3s...");
+                setTimeout(connectWS, 3000);
+            };
+        }
+
+        function json_parse_safe(str) {
+            try { return JSON.parse(str); } catch (e) { return null; }
+        }
+
+        function updateStatsDisplay() {
+            const r = currentDevices.filter(d => d.current_status === 'Running').length;
+            const s = currentDevices.filter(d => d.current_status === 'Down').length;
+            document.getElementById('st-run').innerText = r;
+            document.getElementById('st-std').innerText = currentDevices.length - r - s;
+            document.getElementById('st-stop').innerText = s;
+        }
 
         function createGlowTex() {
             const canvas = document.createElement('canvas');
@@ -461,10 +547,22 @@
             const logList = document.getElementById('logList');
             const entry = document.createElement('div');
             entry.className = 'log-entry';
+            
+            // Highlight production optimization or system events
+            if (msg.includes('OPTIMIZED') || msg.includes('SUCCESS') || msg.includes('ENGINE:')) {
+                entry.style.color = 'var(--primary)';
+                entry.style.fontWeight = '700';
+            }
+            
             const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-            entry.innerHTML = `<span style="color:#94a3b8">[${time}]</span> ${msg}`;
-            logList.prepend(entry);
-            if (logList.children.length > 50) logList.lastChild.remove();
+            entry.innerHTML = `<span style="color:#94a3b8; font-weight:400;">[${time}]</span> ${msg}`;
+            logList.appendChild(entry);
+            
+            if (logList.children.length > 50) logList.firstChild.remove();
+
+            // 自动滚动到底部
+            const railBody = logList.parentElement;
+            railBody.scrollTop = railBody.scrollHeight;
         }
 
         function init() {
@@ -516,6 +614,7 @@
             container.addEventListener('click', onClick);
 
             animate();
+            connectWS();
             addLog("v4.5 Simulation Active.");
         }
 
@@ -755,7 +854,16 @@
 
         function focusMachine(id) {
             focusId = id;
-            const m = machines.get(id);
+            // Find the machine instance in the map that has this device_id
+            let m = null;
+            for (let val of machines.values()) {
+                if (val.group.userData.id == id) {
+                    m = val;
+                    break;
+                }
+            }
+            if (!m) return;
+            
             const targetPos = m.group.position;
             const camTarget = targetPos.clone().add(new THREE.Vector3(600, 500, 600));
 
@@ -779,10 +887,34 @@
                 .onUpdate(() => camera.updateProjectionMatrix())
                 .start();
 
-            document.getElementById('railLabel').innerText = "Node Inspector";
+            document.getElementById('railLabel').innerText = "Device Mode: " + id;
             document.getElementById('logList').style.display = 'none';
             document.getElementById('inspectEl').style.display = 'block';
+            
+            // 初次更新基础信息，随后请求设备追踪数据
             updateInspector(id);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    'action': 'fetch_device_history',
+                    'device_id': id
+                }));
+            }
+        }
+
+        function renderDeviceDetails(data) {
+            // 渲染维修建议
+            document.getElementById('ins-advice').innerText = data.advice || '--';
+            
+            // 渲染历史轨迹
+            const histEl = document.getElementById('ins-history');
+            histEl.innerHTML = '';
+            (data.history || []).forEach(h => {
+                const row = document.createElement('div');
+                row.style.borderBottom = '1px solid #f1f5f9';
+                row.style.padding = '4px 0';
+                row.innerHTML = `<span style="color:#94a3b8">[${h.time}]</span> Cur: ${h.cur}A | Pow: ${h.pow}W`;
+                histEl.appendChild(row);
+            });
         }
 
         function unfocus() {
@@ -811,20 +943,23 @@
         }
 
         function updateInspector(id) {
-            const dev = currentDevices.find(d => d.device_id === id);
+            const dev = currentDevices.find(d => d.device_id == id);
             if (!dev) return;
+            
             document.getElementById('ins-name').innerText = dev.device_name;
             let statusZh = dev.current_status;
             if (statusZh === 'Running') statusZh = '运行中';
             else if (statusZh === 'Idle') statusZh = '待机中';
             else if (statusZh === 'Down') statusZh = '故障停机';
 
-            document.getElementById('ins-stat').innerText = statusZh;
-            document.getElementById('ins-stat').style.color = dev.current_status === 'Running' ? '#67c23a' :
+            const statEl = document.getElementById('ins-stat');
+            statEl.innerText = statusZh;
+            statEl.style.color = dev.current_status === 'Running' ? '#67c23a' :
                 (dev.current_status === 'Idle' ? '#E6A23C' : '#f56c6c');
+                
             document.getElementById('ins-oee').innerText = (dev.oee * 100).toFixed(1) + '%';
-            document.getElementById('ins-cur').innerText = dev.spindle_current.toFixed(2) + ' A';
-            document.getElementById('ins-pow').innerText = dev.spindle_power.toFixed(2) + ' kW';
+            document.getElementById('ins-cur').innerText = (dev.spindle_current || 0).toFixed(2) + ' A';
+            document.getElementById('ins-pow').innerText = (dev.spindle_power || 0).toFixed(2) + ' W';
         }
 
         async function fetchData() {
@@ -832,30 +967,43 @@
                 const res = await fetch('/api/device-matrix/');
                 const json = await res.json();
                 if (json.status === 'ok') {
-                    // Problem 1: Fix name jumping by sorting definitively by name/ID
                     currentDevices = json.data.sort((a, b) => a.device_id - b.device_id);
-
                     sync3DStates();
-                    const r = currentDevices.filter(d => d.current_status === 'Running').length;
-                    const s = currentDevices.filter(d => d.current_status === 'Down').length;
-                    document.getElementById('st-run').innerText = r;
-                    document.getElementById('st-std').innerText = currentDevices.length - r - s;
-                    document.getElementById('st-stop').innerText = s;
+                    updateStatsDisplay();
                     if (focusId) updateInspector(focusId);
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error("Fetch Data Error:", e);
+            }
+        }
+
+        async function cmd(action) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ 'action': action }));
+                addLog(action === 'start_stream' ? "Simulation Command: START" : "Simulation Command: STOP");
+            } else {
+                // Fallback to API if WS is down
+                try {
+                    await fetch(`/api/system/toggle_stream/`, {
+                        method: 'POST', body: JSON.stringify({ action: action === 'start_stream' ? 'start' : 'stop' }),
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    addLog(action === 'start_stream' ? "Simulation Started (Fallback)." : "Simulation Paused (Fallback).");
+                } catch (e) {
+                    addLog("Error: Could not send simulation command.");
+                }
+            }
         }
 
         function sync3DStates() {
-            // Map devices to the 3D grid based on sequence index to avoid ID mismatch (PK issues)
             currentDevices.forEach((dev, idx) => {
-                const machineId = idx + 1; // 1 to 25 mapping
-                const m = machines.get(machineId);
+                const meshId = idx + 1; // 原始网格位置编号
+                const m = machines.get(meshId);
                 if (m) {
+                    // 【关键修复】将物理节点的交互 ID 绑定为真实的数据库主键
+                    m.group.userData.id = dev.device_id; 
                     m.status = dev.current_status;
                     m.oee = dev.oee || 0;
-
-                    // Task 2: Update Hardware Label with real DB Name
                     if (dev.device_name && m.group.userData.name !== dev.device_name) {
                         m.group.userData.name = dev.device_name;
                         m.labelPlate.material.map = createSideLabelTex(dev.device_name);
@@ -864,17 +1012,9 @@
             });
         }
 
-        async function cmd(action) {
-            await fetch(`/api/system/toggle_stream/`, {
-                method: 'POST', body: JSON.stringify({ action: action === 'start_stream' ? 'start' : 'stop' }),
-                headers: { 'Content-Type': 'application/json' }
-            });
-            addLog(action === 'start_stream' ? "Simulation Started." : "Simulation Paused.");
-        }
-
         function toggleUserMenu() {
             const menu = document.getElementById('user-dropdown');
-            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         }
 
         document.addEventListener('click', function (e) {
@@ -886,8 +1026,9 @@
         });
 
         init();
-        setInterval(fetchData, 3000);
-        fetchData();
+        // 取消 fetchData 轮询，改用 WebSocket 推送
+        // setInterval(fetchData, 3000);
+        // fetchData();
     </script>
 </body>
 
