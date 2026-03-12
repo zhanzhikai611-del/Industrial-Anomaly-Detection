@@ -1,6 +1,6 @@
 # 基于机器学习的 CNC 工业生产数据异常预警系统
 
-> **当前版本**：V2.1.0 · Dual-Mode Agent Vision
+> **当前版本**：V2.2.1 · Digital Twin Elite Edition
 
 ## 1. 项目简介
 
@@ -10,7 +10,11 @@
 
 - **双模态 AI 交互中心 (V2.1.0)**：
     - **Copilot 模式 (自动态)**：全时段扫描异常，自动执行安全停机、快照采集与诊断，形成无人值守的运维闭环。
-    - **Ask 模式 (交互态)**：基于 Function Calling 与 RAG。支持语义化询问（问答/分析/数据穿透），大模型（qwen3.5-flash）直接调取数据库快照进行专业回复。
+    - **Ask 模式 (交互态)**：基于 Function Calling 与 RAG。支持语义化询问（问答/分析/数据穿透），大模型（qwen-max）直接调取数据库快照进行专业回复。
+- **3D 数字孪生工厂 (V2.2.1)**：
+    - **等轴测空间驾驶舱**：基于 Three.js 实现 5x5 工业设备模型阵列，提供工业级空间感知。
+    - **智慧生命脉冲**：实时 OEE驱动模型呼吸灯效，具象化展示生产节奏。
+    - **全息节点检查器**：通过 3D 射线交互唤起设备详情 HUD，同步 CNC Vision 下发的真实维修建议。
 - **SaaS 化极简看板**：提供全厂 OEE、生产产出及设备状态分布的宏观监控。
 - **AI 故障预警**：实时计算每台设备的磨损概率，并根据风险值（Anomaly Score）按梯度分级展示。
 - **深度钻取诊断**：支持点击单台设备查看"主轴电流 vs 故障概率"的双轴时序波形图。
@@ -25,8 +29,8 @@
 |------|--------|
 | 后端 | Python 3.12 / Django 4.x / Django Channels (ASGI) / Daphne |
 | 数据库 | MySQL 8.x（`industrial_warning_db`）|
-| 前端 | Vanilla JS / ECharts 5.5.0 / Bootstrap 5 / WebSocket 实时终端交互 |
-| AI 算法 | Logistic Regression (scikit-learn) 二分类检测 / Qwen 大模型 (Copilot诊断) |
+| 前端 | Vanilla JS / Three.js v145 / ECharts 5.5 / Bootstrap 5 / WebSocket |
+| AI 算法 | Logistic Regression 二分类检测 / Qwen-max (诊断与咨询) |
 | 仿真引擎 | Django Management Command（`run_realtime_stream`），每 3 秒生成 25 台设备数据 |
 
 ## 4. 首次运行完整指南
@@ -151,8 +155,14 @@ venv/bin/python manage.py run_realtime_stream
 ---
 
 ## 7. 版本更新日志
- 
- ### V2.1.0 — Dual-Mode Agent Vision (2026-03-07)
+
+ ### V2.2.1 — Digital Twin Elite Edition (2026-03-12)
+ - **[新增] 3D 数字孪生视图**：正式上线基于 Three.js 的数字工厂页面。
+ - **[新增] 智慧脉冲系统**：实现了根据设备实时 OEE 动态调整呼吸频率的视觉特效。
+ - **[新增] 端到端监控联动**：实现监控中心录入的维修建议在 3D 检查器中实时投影展示。
+ - **[优化] 全局设计规范**：采用“旗舰工业灰” (Elite Industrial Grey) 调色盘，定义了标准的 5x5 正交相机坐标系。
+
+  ### V2.1.0 — Dual-Mode Agent Vision (2026-03-07)
  - **[新增] 双模态切换引擎**：在 Dashboard 实现 Copilot (自动闭环) 与 Ask (即时问答) 模式的秒级无缝切换与协程隔离。
  - **[新增] Ask 手动咨询模式**：接入 Qwen-max，支持通过对话形式实时查询设备状态及异常原因。
  - **[优化] 视觉系统升级**：AI Agent 入口按钮更换为 Split Button 样式。更新 Copilot/Ask 专属 SVG 图标。主圆角调整为更为利落的 15px。
