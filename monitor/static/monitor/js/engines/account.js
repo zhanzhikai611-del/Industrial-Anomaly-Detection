@@ -1,8 +1,8 @@
-<script>
 /**
- * AccountApp Namespace
- * Encapsulates CRUD and UI logic for account management.
+ * Account Management Engine
+ * V2.2.3 [Modularized]
  */
+
 window.AccountApp = {
     state: {
         isProcessing: false
@@ -10,7 +10,10 @@ window.AccountApp = {
 
     ui: {
         init: function() {
-            // Global click listener for closing modals and custom selects
+            // Ensure helper $ exists if needed, though this file uses standard DOM
+            window.$ = window.$ || (id => document.getElementById(id));
+
+            // Global click listener for routing events to dynamically or statically rendered elements
             document.addEventListener('click', e => {
                 const editBtn = e.target.closest('.edit-btn');
                 const delBtn = e.target.closest('.del-btn');
@@ -97,13 +100,15 @@ window.AccountApp = {
             document.getElementById('edit-role').value = role;
             document.getElementById('edit-active').value = String(isActive);
             document.getElementById('edit-pwd').value = '';
-            document.getElementById('edit-modal-sub').textContent = `编辑账号：${username}`;
+            const sub = document.getElementById('edit-modal-sub');
+            if (sub) sub.textContent = `编辑账号：${username}`;
             AccountApp.ui.openModal('edit-modal');
         },
 
         confirmDelete: function(uid, username) {
             document.getElementById('del-uid').value = uid;
-            document.getElementById('del-msg').innerHTML = `您确定要永久删除账号「<strong>${username}</strong>」吗？这将使其立即失去访问权限。`;
+            const msg = document.getElementById('del-msg');
+            if (msg) msg.innerHTML = `您确定要永久删除账号「<strong>${username}</strong>」吗？这将使其立即失去访问权限。`;
             AccountApp.ui.openModal('del-modal');
         }
     },
@@ -260,4 +265,3 @@ window.AccountApp = {
 
 // Initialization
 document.addEventListener('DOMContentLoaded', AccountApp.ui.init);
-</script>

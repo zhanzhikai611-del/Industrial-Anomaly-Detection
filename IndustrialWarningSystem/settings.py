@@ -136,6 +136,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [
+    BASE_DIR / "monitor" / "static",
+]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # ── 认证重定向 ──────────────────────────────────────────────────────
 LOGIN_URL = '/login/'

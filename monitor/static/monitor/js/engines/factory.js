@@ -1,8 +1,8 @@
-<script>
 /**
- * FactoryApp Namespace
- * Encapsulates Three.js logic, WebSocket stream handling, and 3D UI interactions.
+ * Digital Twin Factory Engine
+ * V2.2.3 [Modularized]
  */
+
 window.FactoryApp = {
     // ══════════════════════════════════════
     // State & Core Vars
@@ -261,9 +261,9 @@ window.FactoryApp = {
     engine: {
         animate: function() {
             requestAnimationFrame(FactoryApp.engine.animate);
-            TWEEN.update();
+            if (window.TWEEN) TWEEN.update();
             const state = FactoryApp.state;
-            state.controls.update();
+            if (state.controls) state.controls.update();
 
             const delta = state.clock.getDelta();
 
@@ -311,7 +311,9 @@ window.FactoryApp = {
                 if (p.userData.life < 0) FactoryApp.engine.resetParticle(p);
             });
 
-            state.renderer.render(state.scene, state.camera);
+            if (state.renderer && state.scene && state.camera) {
+                state.renderer.render(state.scene, state.camera);
+            }
         },
 
         resetParticle: function(p) {
@@ -357,7 +359,7 @@ window.FactoryApp = {
                 }
             }
             if (!hoverId) {
-                tip.style.display = 'none';
+                if (tip) tip.style.display = 'none';
                 container.style.cursor = 'default';
             }
         },
@@ -412,9 +414,12 @@ window.FactoryApp = {
             const state = FactoryApp.state;
             const r = state.currentDevices.filter(d => d.current_status === 'Running').length;
             const s = state.currentDevices.filter(d => d.current_status === 'Down').length;
-            document.getElementById('st-run').innerText = r;
-            document.getElementById('st-std').innerText = state.currentDevices.length - r - s;
-            document.getElementById('st-stop').innerText = s;
+            const rEl = document.getElementById('st-run');
+            const sEl = document.getElementById('st-std');
+            const stEl = document.getElementById('st-stop');
+            if (rEl) rEl.innerText = r;
+            if (sEl) sEl.innerText = state.currentDevices.length - r - s;
+            if (stEl) stEl.innerText = s;
         },
 
         focusMachine: function(id) {
@@ -432,27 +437,32 @@ window.FactoryApp = {
             const targetPos = m.group.position;
             const camTarget = targetPos.clone().add(new THREE.Vector3(600, 500, 600));
 
-            TWEEN.removeAll();
+            if (window.TWEEN) {
+                TWEEN.removeAll();
 
-            new TWEEN.Tween(state.camera.position)
-                .to({ x: camTarget.x, y: camTarget.y, z: camTarget.z }, 1000)
-                .easing(TWEEN.Easing.Quintic.Out)
-                .start();
+                new TWEEN.Tween(state.camera.position)
+                    .to({ x: camTarget.x, y: camTarget.y, z: camTarget.z }, 1000)
+                    .easing(TWEEN.Easing.Quintic.Out)
+                    .start();
 
-            new TWEEN.Tween(state.controls.target)
-                .to({ x: targetPos.x, y: targetPos.y, z: targetPos.z }, 1000)
-                .easing(TWEEN.Easing.Quintic.Out)
-                .start();
+                new TWEEN.Tween(state.controls.target)
+                    .to({ x: targetPos.x, y: targetPos.y, z: targetPos.z }, 1000)
+                    .easing(TWEEN.Easing.Quintic.Out)
+                    .start();
 
-            new TWEEN.Tween(state.camera)
-                .to({ zoom: 2.5 }, 1000)
-                .easing(TWEEN.Easing.Quintic.Out)
-                .onUpdate(() => state.camera.updateProjectionMatrix())
-                .start();
+                new TWEEN.Tween(state.camera)
+                    .to({ zoom: 2.5 }, 1000)
+                    .easing(TWEEN.Easing.Quintic.Out)
+                    .onUpdate(() => state.camera.updateProjectionMatrix())
+                    .start();
+            }
 
-            document.getElementById('railLabel').innerText = "Device Mode: " + id;
-            document.getElementById('logList').style.display = 'none';
-            document.getElementById('inspectEl').style.display = 'block';
+            const labelEl = document.getElementById('railLabel');
+            if (labelEl) labelEl.innerText = "Device Mode: " + id;
+            const logEl = document.getElementById('logList');
+            const insEl = document.getElementById('inspectEl');
+            if (logEl) logEl.style.display = 'none';
+            if (insEl) insEl.style.display = 'block';
             
             FactoryApp.ui.updateInspector(id);
             if (state.ws && state.ws.readyState === WebSocket.OPEN) {
@@ -466,27 +476,32 @@ window.FactoryApp = {
         unfocus: function() {
             const state = FactoryApp.state;
             state.focusId = null;
-            TWEEN.removeAll();
+            if (window.TWEEN) {
+                TWEEN.removeAll();
 
-            new TWEEN.Tween(state.camera.position)
-                .to({ x: 1200, y: 1000, z: 1200 }, 1000)
-                .easing(TWEEN.Easing.Quintic.Out)
-                .start();
+                new TWEEN.Tween(state.camera.position)
+                    .to({ x: 1200, y: 1000, z: 1200 }, 1000)
+                    .easing(TWEEN.Easing.Quintic.Out)
+                    .start();
 
-            new TWEEN.Tween(state.controls.target)
-                .to({ x: 0, y: 0, z: 0 }, 1000)
-                .easing(TWEEN.Easing.Quintic.Out)
-                .start();
+                new TWEEN.Tween(state.controls.target)
+                    .to({ x: 0, y: 0, z: 0 }, 1000)
+                    .easing(TWEEN.Easing.Quintic.Out)
+                    .start();
 
-            new TWEEN.Tween(state.camera)
-                .to({ zoom: 1.0 }, 1000)
-                .easing(TWEEN.Easing.Quintic.Out)
-                .onUpdate(() => state.camera.updateProjectionMatrix())
-                .start();
+                new TWEEN.Tween(state.camera)
+                    .to({ zoom: 1.0 }, 1000)
+                    .easing(TWEEN.Easing.Quintic.Out)
+                    .onUpdate(() => state.camera.updateProjectionMatrix())
+                    .start();
+            }
 
-            document.getElementById('railLabel').innerText = "Engine Log";
-            document.getElementById('logList').style.display = 'block';
-            document.getElementById('inspectEl').style.display = 'none';
+            const labelEl = document.getElementById('railLabel');
+            if (labelEl) labelEl.innerText = "Engine Log";
+            const logEl = document.getElementById('logList');
+            const insEl = document.getElementById('inspectEl');
+            if (logEl) logEl.style.display = 'block';
+            if (insEl) insEl.style.display = 'none';
         },
 
         updateInspector: function(id) {
@@ -494,24 +509,32 @@ window.FactoryApp = {
             const dev = state.currentDevices.find(d => d.device_id == id);
             if (!dev) return;
             
-            document.getElementById('ins-name').innerText = dev.device_name;
+            const nameEl = document.getElementById('ins-name');
+            if (nameEl) nameEl.innerText = dev.device_name;
+            
             let statusZh = dev.current_status;
             if (statusZh === 'Running') statusZh = '运行中';
             else if (statusZh === 'Idle') statusZh = '待机中';
             else if (statusZh === 'Down') statusZh = '故障停机';
 
             const statEl = document.getElementById('ins-stat');
-            statEl.innerText = statusZh;
-            statEl.style.color = dev.current_status === 'Running' ? '#67c23a' :
-                (dev.current_status === 'Idle' ? '#E6A23C' : '#f56c6c');
+            if (statEl) {
+                statEl.innerText = statusZh;
+                statEl.style.color = dev.current_status === 'Running' ? '#67c23a' :
+                    (dev.current_status === 'Idle' ? '#E6A23C' : '#f56c6c');
+            }
                 
-            document.getElementById('ins-oee').innerText = (dev.oee * 100).toFixed(1) + '%';
-            document.getElementById('ins-cur').innerText = (dev.spindle_current || 0).toFixed(2) + ' A';
-            document.getElementById('ins-pow').innerText = (dev.spindle_power || 0).toFixed(2) + ' W';
+            const oeeEl = document.getElementById('ins-oee');
+            const curEl = document.getElementById('ins-cur');
+            const powEl = document.getElementById('ins-pow');
+            if (oeeEl) oeeEl.innerText = (dev.oee * 100).toFixed(1) + '%';
+            if (curEl) curEl.innerText = (dev.spindle_current || 0).toFixed(2) + ' A';
+            if (powEl) powEl.innerText = (dev.spindle_power || 0).toFixed(2) + ' W';
         },
 
         renderDeviceDetails: function(data) {
-            document.getElementById('ins-advice').innerText = data.advice || '--';
+            const advEl = document.getElementById('ins-advice');
+            if (advEl) advEl.innerText = data.advice || '--';
             const histEl = document.getElementById('ins-history');
             if (!histEl) return;
             histEl.innerHTML = '';
@@ -576,4 +599,3 @@ document.addEventListener('click', function (e) {
 document.addEventListener('DOMContentLoaded', () => {
     FactoryApp.scene.init();
 });
-</script>

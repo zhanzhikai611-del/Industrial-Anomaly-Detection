@@ -1,0 +1,204 @@
+/* ══════════════════════════════════════
+   Generic UI Components
+   ══════════════════════════════════════ */
+
+/* ── AI Agent Split Button ── */
+.ai-split-btn {
+    display: flex; align-items: center; height: 32px;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 15px; overflow: visible; position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-right: 8px;
+}
+
+.ai-split-btn:hover {
+    border-color: var(--primary); box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.ai-main-action {
+    display: flex; align-items: center; gap: 6px; padding: 0 12px;
+    height: 100%; cursor: pointer; font-size: 13px; font-weight: 500;
+    color: var(--text-sec); border-radius: 15px 0 0 15px;
+}
+
+.ai-main-action:hover { background: var(--primary-bg); color: var(--primary); }
+.ai-main-action svg { width: 16px; height: 16px; stroke-width: 1.8; stroke: currentColor; fill: none; }
+
+.ai-divider { width: 1px; height: 14px; background: var(--border); }
+
+.ai-dropdown-toggle {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 100%; cursor: pointer; color: var(--text-hint);
+    border-radius: 0 15px 15px 0;
+}
+
+.ai-dropdown-toggle:hover { background: var(--bg); color: var(--primary); }
+.ai-dropdown-toggle svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
+
+.ai-menu {
+    display: none; position: absolute; top: calc(100% + 8px); right: 0;
+    background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); min-width: 180px; padding: 6px;
+    z-index: 1000; transform-origin: top right;
+}
+
+.ai-menu.show { display: block; animation: ai-slide-up 0.25s cubic-bezier(0, 0, 0.2, 1); }
+
+@keyframes ai-slide-up {
+    from { opacity: 0; transform: translateY(12px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.ai-menu-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    font-size: 13px; color: var(--text-sec); cursor: pointer; border-radius: 6px;
+}
+
+.ai-menu-item:hover { background: var(--primary-bg); color: var(--primary); }
+.ai-menu-item svg { width: 16px; height: 16px; stroke: currentColor; fill: none; }
+
+/* ── Cards ── */
+.card {
+    background: var(--card-bg); border-radius: var(--radius);
+    box-shadow: var(--card-shadow); padding: 20px;
+}
+
+.card-title {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    margin-bottom: 14px; display: flex; align-items: center;
+}
+
+.card-title-bar {
+    display: inline-block; width: 3px; height: 14px; background: var(--primary);
+    border-radius: 2px; margin-right: 8px; flex-shrink: 0;
+}
+
+.section-label { font-size: 12px; color: var(--text-hint); margin-bottom: 4px; }
+
+/* ── Grid System (Figma Custom) ── */
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.col-3 { flex: 0 0 calc(25% - 12px); }
+.col-4 { flex: 0 0 calc(33.333% - 11px); }
+.col-5 { flex: 0 0 calc(41.667% - 10px); }
+.col-6 { flex: 0 0 calc(50% - 8px); }
+.col-7 { flex: 0 0 calc(58.333% - 9px); }
+.col-8 { flex: 0 0 calc(66.667% - 11px); }
+.col-9 { flex: 0 0 calc(75% - 12px); }
+.col-12 { flex: 0 0 100%; }
+.mb-4 { margin-bottom: 16px; }
+
+/* ── Tables ── */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th {
+    background: #fafafa; color: var(--text-hint); font-weight: 500;
+    padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+}
+.tbl td { padding: 10px 12px; border-bottom: 1px solid var(--row-div); color: var(--text); }
+.tbl tbody tr:hover { background: #f5f7ff; }
+.tbl tbody tr:last-child td { border-bottom: none; }
+
+/* ── Modals ── */
+.modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 999;
+    align-items: flex-start; justify-content: center; padding-top: 80px;
+    background: rgba(0, 0, 0, .35);
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+    background: var(--card-bg); border-radius: var(--radius);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, .12); width: 860px;
+    max-width: 95vw; position: relative;
+}
+.modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 15px; border-bottom: 1px solid var(--border);
+}
+.modal-header-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.modal-close-btn {
+    width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border);
+    background: none; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; color: var(--text-hint); font-size: 15px;
+}
+.modal-close-btn:hover { background: var(--bg); color: var(--danger); }
+.modal-body { padding: 20px; display: flex; gap: 16px; }
+
+/* ── Buttons ── */
+.btn {
+    padding: 5px 14px; border-radius: 4px; font-size: 12px;
+    cursor: pointer; border: 1px solid; transition: all .15s;
+    font-family: var(--font);
+}
+.btn-primary { border-color: var(--primary); background: var(--primary); color: #fff; }
+.btn-primary:hover { opacity: .85; }
+.btn-default { border-color: var(--border); background: #fff; color: var(--text-sec); }
+.btn-default:hover { border-color: var(--primary); color: var(--primary); }
+.btn-sm { padding: 3px 10px; font-size: 12px; }
+
+/* ── Icon Buttons ── */
+.icon-btn { color: var(--text-hint); cursor: pointer; display: flex; align-items: center; }
+.icon-btn:hover { color: var(--primary); }
+.icon-btn svg {
+    width: 20px; height: 20px; fill: none; stroke: currentColor;
+    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ── Risks & Semantic Colors ── */
+.risk-high { color: var(--danger); font-weight: 600; }
+.risk-med { color: var(--warning); font-weight: 600; }
+.risk-low { color: var(--success); font-weight: 600; }
+
+/* ── Progress Bar ── */
+.progress-bar-wrap { height: 8px; background: #f0f2f5; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+.progress-bar-fill { height: 100%; border-radius: 4px; background: var(--primary); transition: width .5s; }
+
+/* ── States & Rows ── */
+.stat-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 0; border-bottom: 1px solid var(--row-div);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; margin-right: 7px; }
+.stat-val { font-size: 16px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+
+/* ── Specific Component Fragments ── */
+.snapshot-card { background: #f4f7fa; border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; }
+.snapshot-card .sk-label { font-size: 12px; color: var(--text-hint); margin-bottom: 6px; }
+.snapshot-card .sk-val { font-size: 20px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+.snapshot-card .sk-unit { font-size: 12px; color: var(--text-hint); margin-left: 4px; }
+
+.filter-cards-row { display: flex; gap: 14px; }
+.filter-card {
+    flex: 1; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; background: #fff; cursor: pointer;
+    transition: all .15s; display: flex; align-items: center; justify-content: space-between;
+}
+.filter-card:hover { border-color: var(--primary); }
+.filter-card .fc-label { font-size: 14px; font-weight: 500; }
+.filter-card .fc-num { font-size: 22px; font-weight: 700; font-family: var(--font-mono); }
+.filter-card.all { border-color: #c0c4cc; }
+.filter-card.high { border-color: var(--danger); }
+.filter-card.high .fc-label, .filter-card.high .fc-num { color: var(--danger); }
+.filter-card.med { border-color: var(--warning); }
+.filter-card.med .fc-label, .filter-card.med .fc-num { color: var(--warning); }
+.filter-card.low { border-color: var(--success); }
+.filter-card.low .fc-label, .filter-card.low .fc-num { color: var(--success); }
+
+/* ── Pagination ── */
+.pagination { display: flex; gap: 4px; justify-content: flex-end; margin-top: 16px; }
+.page-btn {
+    min-width: 32px; height: 32px; border: 1px solid var(--border);
+    background: #fff; border-radius: 4px; cursor: pointer;
+    font-size: 13px; color: var(--text-sec); display: flex;
+    align-items: center; justify-content: center; padding: 0 6px;
+}
+.page-btn:hover, .page-btn.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+
+/* ── Sections & Chart Mixins ── */
+.chart-section-title {
+    font-size: 12px; font-weight: 500; color: var(--text-sec);
+    display: flex; align-items: center; gap: 4px; margin: 0 0 8px;
+}
+.chart-section-title::before {
+    content: ''; display: inline-block; width: 3px; height: 12px;
+    background: var(--primary); border-radius: 2px;
+}

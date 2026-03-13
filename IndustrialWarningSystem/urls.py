@@ -17,9 +17,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('monitor.urls')),  # 实时流 API：/api/start-stream/ 等
 ]
+
+if settings.DEBUG:
+    # 确保开发环境下能正确找到静态资源物理路径
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0] if settings.STATICFILES_DIRS else settings.STATIC_ROOT)
 

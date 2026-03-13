@@ -1,8 +1,8 @@
-<script>
 /**
- * SettingApp Namespace
- * Encapsulates system settings, stream control, and configuration logic.
+ * System Settings Engine
+ * V2.2.3 [Modularized]
  */
+
 window.SettingApp = {
     state: {
         isStreamRunning: false,
@@ -29,6 +29,7 @@ window.SettingApp = {
     ui: {
         init: function() {
             SettingApp.stream.checkStatus();
+            // Regular status polling
             setInterval(SettingApp.stream.checkStatus, 5000);
         },
 
@@ -162,7 +163,7 @@ window.SettingApp = {
         },
 
         refreshStats: function() {
-            // Future implementation for real-time stats update
+            // Future implementation for real-time stats update if needed
         }
     },
 
@@ -178,7 +179,7 @@ window.SettingApp = {
             const msg = document.getElementById('thresh-msg');
             if (msg) msg.innerText = '保存中...';
 
-            // Mock saving delay
+            // Mock saving delay for feedback
             setTimeout(() => {
                 if (msg) {
                     msg.innerText = '✓ 保存成功';
@@ -189,6 +190,5 @@ window.SettingApp = {
     }
 };
 
-// Initialize on DOM load
+// Initial entry point
 document.addEventListener('DOMContentLoaded', SettingApp.ui.init);
-</script>

@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load static %}
 <html lang="zh-CN">
 
 <head>
@@ -11,14 +12,12 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/21.0.0/tween.umd.js"></script>
     
+    <link rel="stylesheet" href="{% static 'monitor/css/factory.css' %}">
     <style>
+        /* Base Variables - Same as base.html */
         :root {
-            /* Design Tokens synced with base.html */
             --sidebar-w: 200px;
             --navbar-h: 56px;
-            --bg-iso: #dbe2e9;
-            --card-bg: #ffffff;
-            --panel-bg: rgba(255, 255, 255, 0.75);
             --primary: #409EFF;
             --primary-bg: #ecf5ff;
             --text: #303133;
@@ -28,78 +27,6 @@
             --border: #e4e7ed;
             --font: -apple-system, 'Helvetica Neue', Arial, 'PingFang SC', sans-serif;
             --font-mono: 'Menlo', 'Courier New', monospace;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            width: 100%; height: 100%; overscroll-behavior: none;
-            background: var(--bg-iso); color: var(--text); font-family: var(--font);
-            overflow: hidden;
-        }
-
-        /* ── Header (Standalone) ── */
-        .header {
-            position: fixed; top: 0; left: 0; right: 0; height: var(--navbar-h);
-            background: #fff; border-bottom: 1px solid var(--border);
-            display: flex; align-items: center; z-index: 1000;
-        }
-        .sidebar-brand {
-            width: var(--sidebar-w); display: flex; align-items: center; gap: 10px;
-            padding: 0 16px; text-decoration: none; color: var(--text);
-            font-weight: 700; font-size: 15px;
-        }
-        .logo-box { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .logo-box svg { width: 24px; height: 24px; fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        .nav-center-tabs { display: flex; align-items: stretch; height: 100%; margin-right: auto; padding-left: 24px; }
-        .nav-center-tab {
-            font-size: 14px; font-weight: 500; color: var(--text-sec); text-decoration: none;
-            padding: 0 20px; height: 100%; display: flex; align-items: center;
-            border-bottom: 3px solid transparent; transition: 0.2s;
-        }
-        .nav-center-tab:hover { color: var(--text); }
-        .nav-center-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .header-right { padding-right: 24px; display: flex; align-items: center; gap: 14px; }
-        .avatar {
-            width: 32px; height: 32px; border-radius: 50%; background: var(--primary);
-            color: #fff; display: flex; align-items: center; justify-content: center;
-            font-weight: 600; font-size: 13px; cursor: pointer;
-        }
-
-        /* ── Layout ── */
-        .main-wrapper { position: fixed; top: var(--navbar-h); bottom: 0; left: 0; right: 0; display: flex; }
-        #canvasArea { flex: 1; position: relative; background: var(--bg-iso); }
-
-        /* HUD */
-        .hud { pointer-events: none; position: absolute; inset: 0; padding: 20px; z-index: 10; }
-        .stats-view {
-            pointer-events: auto; background: var(--panel-bg); backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 16px;
-            padding: 20px; width: 220px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
-        }
-        .st-title { font-size: 10px; font-weight: 900; color: var(--text-hint); text-transform: uppercase; margin-bottom: 14px; letter-spacing: 0.1em; }
-        .st-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
-        .st-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; }
-
-        /* Right Panel */
-        .right-rail { width: 320px; background: #fff; border-left: 1px solid rgba(0, 0, 0, 0.05); display: flex; flex-direction: column; }
-        .rail-head {
-            height: 50px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); display: flex;
-            align-items: center; padding: 0 20px; font-weight: 800; font-size: 11px;
-            text-transform: uppercase; color: var(--text-hint);
-        }
-        .rail-body { flex: 1; overflow-y: auto; padding: 16px; }
-        .inspector { display: none; }
-        .ins-head { font-size: 16px; font-weight: 900; color: var(--primary); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        .ins-close { cursor: pointer; font-size: 9px; padding: 2px 8px; border: 1px solid #ddd; border-radius: 4px; color: var(--text-hint); }
-        .ins-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f8fafc; font-size: 12px; }
-        .ins-val { font-weight: 800; }
-        .log-entry { font-family: var(--font-mono); font-size: 11px; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; color: #475569; }
-
-        #tooltip {
-            position: absolute; pointer-events: none; background: rgba(0, 0, 0, 0.85); color: #fff;
-            padding: 6px 12px; border-radius: 4px; font-size: 11px; display: none; z-index: 2000;
-            font-family: var(--font-mono); font-weight: 700;
         }
     </style>
 </head>
@@ -117,7 +44,7 @@
     </div>
 
     <!-- Factory App Engine -->
-    {% include 'monitor/includes/factory/js_factory_engine.html' %}
+    <script src="{% static 'monitor/js/engines/factory.js' %}"></script>
 </body>
 
 </html>

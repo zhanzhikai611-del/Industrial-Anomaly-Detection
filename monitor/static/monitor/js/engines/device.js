@@ -1,8 +1,8 @@
-<script>
 /**
- * DeviceApp Namespace
- * Encapsulates all state and logic for device.html to avoid scope issues.
+ * Device Monitoring Engine
+ * V2.2.3 [Modularized]
  */
+
 window.DeviceApp = {
     state: {
         allDevices: [],
@@ -17,12 +17,23 @@ window.DeviceApp = {
 
     engine: {
         init: async function() {
+            // Ensure $ helper exists
             window.$ = window.$ || (id => document.getElementById(id));
+            
             DeviceApp.engine.setFilter('all');
             await DeviceApp.engine.fetchDevices();
+            
+            // Background polling
             setInterval(DeviceApp.engine.fetchDevices, 5000);
+            
+            // Global events
             window.addEventListener('resize', () => { 
                 if (DeviceApp.state.modalChartInst) DeviceApp.state.modalChartInst.resize(); 
+            });
+
+            // Global click listener for dropdowns
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.status-dropdown.show, .sort-dropdown.show').forEach(m => m.classList.remove('show'));
             });
         },
 
@@ -33,7 +44,7 @@ window.DeviceApp = {
                 if (d.status !== 'ok') return;
                 DeviceApp.state.allDevices = d.data;
 
-                // Handle URL parameters for initial load
+                // Handle URL parameters for initial load (deeplinking)
                 if (!DeviceApp.state._urlDeviceChecked) {
                     DeviceApp.state._urlDeviceChecked = true;
                     const queryDevId = new URLSearchParams(window.location.search).get('device');
@@ -417,11 +428,5 @@ window.DeviceApp = {
     }
 };
 
-// Global Click listener for closing menus
-document.addEventListener('click', () => {
-    document.querySelectorAll('.status-dropdown.show, .sort-dropdown.show').forEach(m => m.classList.remove('show'));
-});
-
 // Initialization
 document.addEventListener('DOMContentLoaded', DeviceApp.engine.init);
-</script>

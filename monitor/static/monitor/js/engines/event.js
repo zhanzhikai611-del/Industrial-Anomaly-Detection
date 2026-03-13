@@ -1,25 +1,28 @@
-<script>
 /**
- * EventApp Namespace
- * Encapsulates logic for charts and filtering on event.html.
+ * Event Center Engine
+ * V2.2.3 [Modularized]
  */
+
 window.EventApp = {
     state: {
         statsChart: null,
         trendChart: null,
-        resizeObserver: null
+        resizeObserver: null,
+        // Chart data to be initialized from template
+        data: {
+            stats: [],
+            trendLabels: [],
+            trendValues: []
+        }
     },
 
     charts: {
         init: function() {
-            // Data preparation from template context
-            const statsData = JSON.parse('{{ stats_data_json|safe }}');
-            const trendLabels = JSON.parse('{{ trend_labels_json|safe }}');
-            const trendValues = JSON.parse('{{ trend_values_json|safe }}');
+            const { stats, trendLabels, trendValues } = EventApp.state.data;
 
             // 1. Stats Chart (Horizontal Bar)
             const statsEl = document.getElementById('statsChart');
-            if (statsEl) {
+            if (statsEl && stats.length > 0) {
                 EventApp.state.statsChart = echarts.init(statsEl);
                 EventApp.state.statsChart.setOption({
                     grid: { left: '2%', right: '2%', top: '5%', bottom: '5%', containLabel: false },
@@ -40,7 +43,7 @@ window.EventApp = {
                         },
                         {
                             type: 'category',
-                            data: statsData,
+                            data: stats,
                             position: 'right',
                             axisLine: { show: false }, axisTick: { show: false },
                             axisLabel: {
@@ -56,7 +59,7 @@ window.EventApp = {
                     ],
                     series: [{
                         type: 'bar',
-                        data: statsData,
+                        data: stats,
                         barWidth: 12,
                         showBackground: true,
                         backgroundStyle: { color: '#f3f6fa', borderRadius: 5 },
@@ -73,7 +76,7 @@ window.EventApp = {
 
             // 2. Trend Chart (Area Line)
             const trendEl = document.getElementById('trendChart');
-            if (trendEl) {
+            if (trendEl && trendLabels.length > 0) {
                 EventApp.state.trendChart = echarts.init(trendEl);
                 EventApp.state.trendChart.setOption({
                     grid: { left: '3%', right: '8%', top: '15%', bottom: '10%', containLabel: true },
@@ -132,7 +135,7 @@ window.EventApp = {
             const trs = document.querySelectorAll('#ev-tbody tr');
 
             trs.forEach(tr => {
-                if (tr.children.length === 1) return; // 'No data' row
+                if (tr.children.length === 1 && tr.innerText.includes('暂无')) return; 
                 const deviceCell = tr.querySelector('.device-cell');
                 const deviceName = deviceCell ? deviceCell.textContent.toLowerCase() : '';
                 let rawTypeStr = tr.children[2] ? tr.children[2].textContent : '';
@@ -172,9 +175,9 @@ window.EventApp = {
     }
 };
 
-// Start logic when DOM is ready
+// Application entry point
 document.addEventListener('DOMContentLoaded', () => {
+    // Note: EventApp.state.data must be populated before calling this
     EventApp.charts.init();
     EventApp.utils.initResize();
 });
-</script>

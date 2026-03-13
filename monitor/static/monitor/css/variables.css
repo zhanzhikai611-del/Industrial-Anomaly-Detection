@@ -1,0 +1,26 @@
+/* ══════════════════════════════════════
+   Design Tokens — CNC Cloud Design System
+   ══════════════════════════════════════ */
+:root {
+    --sidebar-w: 200px;
+    --navbar-h: 56px;
+    --bg: #f4f7fa;
+    --card-bg: #ffffff;
+    --card-shadow: 0 2px 12px 0 rgba(0, 0, 0, .05);
+    --radius: 10px;
+    --primary: #409EFF;
+    --primary-bg: #ecf5ff;
+    --ai-red: #ff6467;
+    --danger: #f56c6c;
+    --danger-deep: #f67575;
+    --success: #67c23a;
+    --warning: #E6A23C;
+    --text: #303133;
+    --text-sec: #606266;
+    --text-hint: #909399;
+    --text-weak: #C0C4CC;
+    --border: #e4e7ed;
+    --row-div: #f5f7fa;
+    --font: -apple-system, 'Helvetica Neue', Arial, 'PingFang SC', 'Noto Sans SC', sans-serif;
+    --font-mono: 'Menlo', 'Courier New', monospace;
+}
