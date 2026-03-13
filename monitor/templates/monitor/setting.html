@@ -4,602 +4,79 @@
 
 {% block extra_style %}
 <style>
-    .set-container {
-        padding: 0;
-        height: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-    }
-
-    .set-col {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        height: 100%;
-    }
-
-    .set-card {
-        background: #fff;
-        border-radius: 8px;
-        box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
-        display: flex;
-        flex-direction: column;
-    }
-
-    .set-header {
-        height: 50px;
-        display: flex;
-        align-items: center;
-        padding: 0 20px;
-        border-bottom: 1px solid #f0f2f5;
-    }
-
-    .set-title-bar {
-        width: 3px;
-        height: 14px;
-        background: #409eff;
-        border-radius: 2px;
-        margin-right: 8px;
-    }
-
-    .set-title-text {
-        font-size: 13px;
-        color: #303133;
-        font-family: 'PingFang SC', sans-serif;
-        font-weight: 600;
-    }
-
-    .set-body {
-        padding: 20px;
-    }
+    .set-container { padding: 0; height: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .set-col { display: flex; flex-direction: column; gap: 20px; height: 100%; }
+    .set-card { background: #fff; border-radius: 8px; box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05); display: flex; flex-direction: column; }
+    .set-header { height: 50px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #f0f2f5; }
+    .set-title-bar { width: 3px; height: 14px; background: #409eff; border-radius: 2px; margin-right: 8px; }
+    .set-title-text { font-size: 13px; color: #303133; font-family: 'PingFang SC', sans-serif; font-weight: 600; }
+    .set-body { padding: 20px; }
 
     /* ── 实时流控制卡 ── */
-    .stream-status-box {
-        background: #f4f7fa;
-        border-radius: 6px;
-        height: 46px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 18px;
-        margin-bottom: 16px;
-    }
-
-    .stream-status-lbl {
-        color: #606266;
-        font-size: 13px;
-    }
-
-    .stream-status-val {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .status-text {
-        color: rgba(0, 0, 0, 0.35);
-        font-size: 13px;
-        font-weight: 500;
-    }
-
-    .stream-btn {
-        height: 24px;
-        padding: 0 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: none;
-    }
-
-    .stream-btn-active {
-        background: rgba(0, 0, 0, 0.05);
-        color: #67c23a;
-    }
-
-    .stream-desc {
-        color: #909399;
-        font-size: 12px;
-        line-height: 1.7;
-    }
+    .stream-status-box { background: #f4f7fa; border-radius: 6px; height: 46px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; margin-bottom: 16px; }
+    .stream-status-lbl { color: #606266; font-size: 13px; }
+    .stream-status-val { display: flex; align-items: center; gap: 12px; }
+    .status-text { color: rgba(0, 0, 0, 0.35); font-size: 13px; font-weight: 500; }
+    .stream-btn { height: 24px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; border: none; }
+    .stream-btn-active { background: rgba(0, 0, 0, 0.05); color: #67c23a; }
+    .stream-desc { color: #909399; font-size: 12px; line-height: 1.7; }
 
     /* ── Segmented Control ── */
-    .segment-control {
-        display: flex;
-        background: #e4e7ed;
-        border-radius: 6px;
-        padding: 3px;
-        width: 120px;
-    }
-
-    .segment-item {
-        flex: 1;
-        text-align: center;
-        border-radius: 4px;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        padding: 4px 6px;
-        color: #909399;
-        transition: all 0.3s;
-        user-select: none;
-    }
-
-    .segment-item.active {
-        background: #fff;
-        color: #409eff;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    #seg-run.active {
-        background: #409eff !important;
-        color: #fff !important;
-    }
-
-    .segment-control.disabled {
-        opacity: 0.6;
-        pointer-events: none;
-    }
+    .segment-control { display: flex; background: #e4e7ed; border-radius: 6px; padding: 3px; width: 120px; }
+    .segment-item { flex: 1; text-align: center; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; padding: 4px 6px; color: #909399; transition: all 0.3s; user-select: none; }
+    .segment-item.active { background: #fff; color: #409eff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1); }
+    #seg-run.active { background: #409eff !important; color: #fff !important; }
+    .segment-control.disabled { opacity: 0.6; pointer-events: none; }
 
     /* ── 报警配置卡 ── */
-    .fm-group {
-        margin-bottom: 20px;
-    }
-
-    .fm-label {
-        font-size: 12px;
-        color: #606266;
-        margin-bottom: 6px;
-        display: block;
-    }
-
-    .fm-input {
-        width: 100%;
-        height: 32px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        padding: 0 12px;
-        font-size: 13px;
-        color: #303133;
-        outline: none;
-        background: #fff;
-    }
-
-    .fm-input:focus {
-        border-color: #409eff;
-    }
-
-    .btn-save {
-        background: #409eff;
-        color: #fff;
-        border: none;
-        height: 28px;
-        padding: 0 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        cursor: pointer;
-        margin-top: 4px;
-    }
-
-    .btn-save:hover {
-        opacity: 0.85;
-    }
+    .fm-group { margin-bottom: 20px; }
+    .fm-label { font-size: 12px; color: #606266; margin-bottom: 6px; display: block; }
+    .fm-input { width: 100%; height: 32px; border: 1px solid #dcdfe6; border-radius: 4px; padding: 0 12px; font-size: 13px; color: #303133; outline: none; background: #fff; }
+    .fm-input:focus { border-color: #409eff; }
+    .btn-save { background: #409eff; color: #fff; border: none; height: 28px; padding: 0 12px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-top: 4px; }
+    .btn-save:hover { opacity: 0.85; }
 
     /* ── 信息行 ── */
-    .info-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        height: 40px;
-        border-bottom: 1px solid #f5f7fa;
-        font-size: 13px;
-    }
-
-    .info-row:last-child {
-        border-bottom: none;
-    }
-
-    .info-label {
-        color: #909399;
-    }
-
-    .info-val {
-        color: #303133;
-        font-weight: 500;
-    }
+    .info-row { display: flex; justify-content: space-between; align-items: center; height: 40px; border-bottom: 1px solid #f5f7fa; font-size: 13px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #909399; }
+    .info-val { color: #303133; font-weight: 500; }
 
     /* ── 自定义确认弹窗 ── */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(4px);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 2000;
-    }
-
-    .modal-box {
-        background: #fff;
-        width: 360px;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-        text-align: center;
-        animation: modalFadeIn 0.3s ease-out;
-    }
-
-    @keyframes modalFadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .modal-icon {
-        width: 48px;
-        height: 48px;
-        background: #fff1f0;
-        color: #f5222d;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        margin: 0 auto 16px;
-    }
-
-    .modal-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: #303133;
-        margin-bottom: 12px;
-    }
-
-    .modal-text {
-        font-size: 13px;
-        color: #909399;
-        line-height: 1.6;
-        margin-bottom: 24px;
-    }
-
-    .modal-footer {
-        display: flex;
-        gap: 12px;
-    }
-
-    .modal-btn {
-        flex: 1;
-        height: 36px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        border: none;
-        transition: all 0.2s;
-    }
-
-    .btn-cancel {
-        background: #f4f7fa;
-        color: #606266;
-    }
-
-    .btn-cancel:hover {
-        background: #e4e7ed;
-    }
-
-    .btn-confirm-red {
-        background: #f56c6c;
-        color: #fff;
-    }
-
-    .btn-confirm-red:hover {
-        background: #f78989;
-    }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 2000; }
+    .modal-box { background: #fff; width: 360px; border-radius: 12px; padding: 24px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); text-align: center; animation: modalFadeIn 0.3s ease-out; }
+    @keyframes modalFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-icon { width: 48px; height: 48px; background: #fff1f0; color: #f5222d; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 16px; }
+    .modal-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 12px; }
+    .modal-text { font-size: 13px; color: #909399; line-height: 1.6; margin-bottom: 24px; }
+    .modal-footer { display: flex; gap: 12px; }
+    .modal-btn { flex: 1; height: 36px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-cancel { background: #f4f7fa; color: #606266; }
+    .btn-cancel:hover { background: #e4e7ed; }
+    .btn-confirm-red { background: #f56c6c; color: #fff; }
+    .btn-confirm-red:hover { background: #f78989; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="set-container">
-
     <!-- 左列 -->
     <div class="set-col">
-        <!-- 实时数据流控制 -->
-        <div class="set-card">
-            <div class="set-header">
-                <div class="set-title-bar"></div>
-                <div class="set-title-text">数据设置</div>
-            </div>
-            <div class="set-body" style="padding-top: 16px;">
-                <div class="stream-status-box">
-                    <span class="stream-status-lbl">当前数据流状态</span>
-                    <div class="stream-status-val">
-                        <div class="segment-control" id="stream-segment">
-                            <div class="segment-item active" id="seg-pause" onclick="toggleStream(false)">暂停</div>
-                            <div class="segment-item" id="seg-run" onclick="toggleStream(true)">运行</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="stream-status-box" style="margin-bottom: 0;">
-                    <span class="stream-status-lbl">全量重置风险分布</span>
-                    <div class="stream-status-val">
-                        <button class="stream-btn" style="background:#f56c6c; color:#fff;"
-                            onclick="resetGroups()">立即重置</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 报警阈值配置 -->
-        <div class="set-card" style="flex: 1;">
-            <div class="set-header">
-                <div class="set-title-bar"></div>
-                <div class="set-title-text">报警阈值配置</div>
-            </div>
-            <div class="set-body">
-                <div class="fm-group">
-                    <label class="fm-label">AI 磨损报警阈值（P-Worn ≥ 此值时触发 ai_alert）</label>
-                    <input class="fm-input" type="number" id="thresh-ai" value="0.75" step="0.01">
-                </div>
-                <div class="fm-group">
-                    <label class="fm-label">主轴电流高报阈值（A）</label>
-                    <input class="fm-input" type="number" id="thresh-cur" value="50.0" step="0.5">
-                </div>
-                <div class="fm-group">
-                    <label class="fm-label">主轴功率高报阈值（W）</label>
-                    <input class="fm-input" type="number" id="thresh-pwr" value="120.0" step="1">
-                </div>
-                <div class="fm-group" style="margin-bottom: 14px;">
-                    <label class="fm-label">进给速度低报阈值（mm/min）</label>
-                    <input class="fm-input" type="number" id="thresh-fv" value="0.5" step="0.1">
-                </div>
-                <button class="btn-save" onclick="saveThresh()">保存配置</button>
-                <span id="thresh-msg" style="font-size:12px;color:#67c23a;margin-left:10px;"></span>
-            </div>
-        </div>
+        {% include 'monitor/includes/setting/data_settings.html' %}
+        {% include 'monitor/includes/setting/threshold_config.html' %}
     </div>
 
     <!-- 右列 -->
     <div class="set-col">
-        <!-- 系统信息 -->
-        <div class="set-card">
-            <div class="set-header">
-                <div class="set-title-bar"></div>
-                <div class="set-title-text">系统信息</div>
-            </div>
-            <div class="set-body" style="padding-top: 10px;">
-                <div class="info-row"><span class="info-label">项目名称</span><span class="info-val">CNC智能监控系统</span>
-                </div>
-                <div class="info-row"><span class="info-label">版本</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">V2.2.1</span></div>
-                <div class="info-row"><span class="info-label">后端框架</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">Django 4.x</span></div>
-                <div class="info-row"><span class="info-label">数据库</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">MySQL · industrial_warning_db</span></div>
-                <div class="info-row"><span class="info-label">AI 推断引擎</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">Logistic Regression · scikit-learn</span></div>
-                <div class="info-row"><span class="info-label">外部 AI 接入</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">qwen3.5-flash</span></div>
-                <div class="info-row"><span class="info-label">前端图表</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">ECharts 5.5.0</span></div>
-                <div class="info-row"><span class="info-label">UI 框架</span><span class="info-val"
-                        style="font-family:'Helvetica Neue',sans-serif;">Bootstrap 5 · 纯白 SaaS 主题</span></div>
-            </div>
-        </div>
-
-        <!-- 数据库统计 -->
-        <div class="set-card" style="flex: 1;">
-            <div class="set-header">
-                <div class="set-title-bar"></div>
-                <div class="set-title-text">数据库统计</div>
-            </div>
-            <div class="set-body" style="padding-top: 10px;">
-                <div class="info-row"><span class="info-label">设备总数</span><span class="info-val" id="db-devices"
-                        style="font-family:'Helvetica Neue',sans-serif;">25</span></div>
-                <div class="info-row"><span class="info-label">今日传感流水</span><span class="info-val"
-                        id="db-stream">516,807（今日投入件数）</span></div>
-                <div class="info-row"><span class="info-label">历史报警总数</span><span class="info-val" id="db-alerts"
-                        style="font-family:'Helvetica Neue',sans-serif;">101099</span></div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<!-- 重置确认 Modal -->
-<div class="modal-overlay" id="reset-modal">
-    <div class="modal-box">
-        <div class="modal-icon">⚠️</div>
-        <div class="modal-title">确定要重置分布吗？</div>
-        <div class="modal-text">该操作将立即重置全量 25 台设备到初始的梯度风险分布。</div>
-        <div class="modal-footer">
-            <button class="modal-btn btn-cancel" onclick="closeResetModal()">取消</button>
-            <button class="modal-btn btn-confirm-red" id="btn-execute-reset" onclick="confirmReset()">立即重置</button>
-        </div>
+        {% include 'monitor/includes/setting/system_info.html' %}
+        {% include 'monitor/includes/setting/database_stats.html' %}
     </div>
 </div>
 
+<!-- Modal -->
+{% include 'monitor/includes/setting/modal_reset_confirm.html' %}
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    let isStreamRunning = false;
-
-    async function checkStatus() {
-        try {
-            const res = await fetch('/api/stream-status/');
-            const data = await res.json();
-            updateUI(data.is_active);
-            refreshStats();
-        } catch (e) {
-            console.error('Failed to get status', e);
-        }
-    }
-
-    function updateUI(isActive) {
-        isStreamRunning = isActive;
-        const segPause = document.getElementById('seg-pause');
-        const segRun = document.getElementById('seg-run');
-
-        if (isActive) {
-            segRun.classList.add('active');
-            segPause.classList.remove('active');
-        } else {
-            segPause.classList.add('active');
-            segRun.classList.remove('active');
-        }
-    }
-
-    async function toggleStream(newState) {
-        if (isStreamRunning === newState) return;
-
-        const segmentContainer = document.getElementById('stream-segment');
-        segmentContainer.classList.add('disabled'); // prevent duplicate clicks
-
-        const action = newState ? 'start' : 'stop';
-        try {
-            const res = await fetch(`/api/system/toggle_stream/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({ action: action })
-            });
-            const data = await res.json();
-            if (data.status === 'ok') {
-                updateUI(data.is_active);
-            }
-        } catch (e) {
-            console.error('Failed to toggle stream', e);
-            alert('网络或访问错误');
-            // revert
-            updateUI(!newState);
-        } finally {
-            segmentContainer.classList.remove('disabled');
-        }
-    }
-
-    async function resetGroups() {
-        // 展示自定义 Modal
-        document.getElementById('reset-modal').style.display = 'flex';
-    }
-
-    function closeResetModal() {
-        document.getElementById('reset-modal').style.display = 'none';
-    }
-
-    async function confirmReset() {
-        const btn = document.getElementById('btn-execute-reset');
-        btn.disabled = true;
-        btn.innerText = '重置中...';
-
-        try {
-            const res = await fetch('/api/system/reset_groups/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-            const data = await res.json();
-            if (data.status === 'ok') {
-                closeResetModal();
-                showSuccessToast('成功重置风险分布', '已恢复初始的分组梯度分布');
-            } else {
-                alert('× 重置失败: ' + data.message);
-            }
-        } catch (e) {
-            console.error('Reset failed', e);
-            alert('网络错误，请稍后重试');
-        } finally {
-            btn.disabled = false;
-            btn.innerText = '立即重置';
-        }
-    }
-
-    function showSuccessToast(title, message) {
-        let toast = document.getElementById('success-toast');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'success-toast';
-            toast.style.cssText = `
-                position:fixed; bottom:32px; right:32px; z-index:9999;
-                background:#fff; border-radius:8px; padding:14px 18px;
-                box-shadow:0 4px 20px rgba(0,0,0,.12); border-left:4px solid #67c23a;
-                display:flex; align-items:flex-start; gap:10px;
-                font-size:13px; color:#303133; max-width:280px;
-                opacity:0; transition:opacity .3s; pointer-events:none;
-            `;
-            toast.innerHTML = `
-                <div style="color:#67c23a;margin-top:1px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>
-                <div>
-                    <div style="font-weight:600;margin-bottom:3px;" id="toast-title"></div>
-                    <div style="color:#909399;font-size:12px;" id="toast-msg"></div>
-                </div>`;
-            document.body.appendChild(toast);
-        }
-        document.getElementById('toast-title').textContent = title;
-        document.getElementById('toast-msg').textContent = message;
-        toast.style.opacity = '1';
-        setTimeout(() => { toast.style.opacity = '0'; }, 4000);
-    }
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-
-    async function saveThresh() {
-        const payload = {
-            ai: document.getElementById('thresh-ai').value,
-            cur: document.getElementById('thresh-cur').value,
-            pwr: document.getElementById('thresh-pwr').value,
-            fv: document.getElementById('thresh-fv').value
-        };
-
-        const msg = document.getElementById('thresh-msg');
-        msg.innerText = '保存中...';
-
-        // 模拟请求延迟
-        setTimeout(() => {
-            msg.innerText = '✓ 保存成功';
-            setTimeout(() => { msg.innerText = ''; }, 3000);
-        }, 500);
-    }
-
-    // 更新右侧统计演示数据
-    function refreshStats() {
-        // ... (此处留作后续真实接口对接)
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        checkStatus();
-        setInterval(checkStatus, 5000);
-    });
-</script>
+    {% include 'monitor/includes/setting/js_setting_engine.html' %}
 {% endblock %}

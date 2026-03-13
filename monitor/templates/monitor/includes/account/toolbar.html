@@ -1,0 +1,45 @@
+<!-- 账号管理工具栏 -->
+<div class="acc-toolbar">
+    <div class="acc-tools-left">
+        <!-- 搜索框 -->
+        <div class="acc-search-wrap">
+            <span class="acc-search-icon">
+                <svg viewBox="0 0 14 14">
+                    <circle cx="5.8" cy="5.8" r="4.2" />
+                    <line x1="9.1" y1="9.1" x2="13" y2="13" />
+                </svg>
+            </span>
+            <input class="acc-search" id="search-input" placeholder="搜索用户名/姓名/工号…" value="{{ search_q }}"
+                onkeydown="if(event.key==='Enter') AccountApp.filters.applySearch()">
+        </div>
+        <!-- 角色过滤 (Custom Dropdown) -->
+        <div class="custom-select-container" id="role-filter-container">
+            <div class="custom-select-pill" onclick="AccountApp.ui.toggleCustomSelect(event, 'role-filter-container')">
+                <span id="role-pill-label">
+                    {% if role_q == 'Admin' %}系统管理员
+                    {% elif role_q == 'Engineer' %}工程师
+                    {% elif role_q == 'Operator' %}操作员
+                    {% else %}全部角色
+                    {% endif %}
+                </span>
+            </div>
+            <div class="custom-select-dropdown">
+                <div class="custom-select-item {% if not role_q %}active{% endif %}" onclick="AccountApp.filters.selectRole('')">全部角色</div>
+                <div class="custom-select-item {% if role_q == 'Admin' %}active{% endif %}" onclick="AccountApp.filters.selectRole('Admin')">系统管理员</div>
+                <div class="custom-select-item {% if role_q == 'Engineer' %}active{% endif %}" onclick="AccountApp.filters.selectRole('Engineer')">工程师</div>
+                <div class="custom-select-item {% if role_q == 'Operator' %}active{% endif %}" onclick="AccountApp.filters.selectRole('Operator')">操作员</div>
+            </div>
+            <!-- 隐藏的原始 Select 用于逻辑兼容 -->
+            <input type="hidden" id="role-filter" value="{{ role_q|default:'' }}">
+        </div>
+    </div>
+    <button class="btn-add" onclick="AccountApp.ui.openAddModal()">
+        <svg viewBox="0 0 24 24">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <line x1="20" y1="8" x2="20" y2="14" />
+            <line x1="23" y1="11" x2="17" y2="11" />
+        </svg>
+        新增账号
+    </button>
+</div>

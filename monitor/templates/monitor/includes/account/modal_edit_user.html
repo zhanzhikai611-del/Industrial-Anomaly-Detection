@@ -1,0 +1,64 @@
+<!-- 编辑账号 Modal -->
+<div class="acc-modal-overlay" id="edit-modal">
+    <div class="acc-modal">
+        <div class="acc-modal-head">
+            <div class="modal-icon-circle">
+                <svg viewBox="0 0 24 24">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+            </div>
+            <div class="modal-head-text">
+                <div class="modal-head-title">编辑账号</div>
+                <div class="modal-head-sub" id="edit-modal-sub">修改账号信息与权限设置</div>
+            </div>
+            <button class="modal-close" onclick="AccountApp.ui.closeModal('edit-modal')">×</button>
+        </div>
+        <div class="acc-modal-body">
+            <input type="hidden" id="edit-uid">
+            <div id="edit-error" style="display:none;background:#fef0f0;border:1px solid #fde2e2;border-radius:5px;padding:8px 12px;color:#f56c6c;font-size:12px;margin-bottom:14px;"></div>
+            <div class="fm-grid">
+                <div class="fm-group">
+                    <label class="fm-label">真实姓名</label>
+                    <input class="fm-input" id="edit-realname" placeholder="请输入真实姓名">
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">所属角色</label>
+                    <select class="fm-select" id="edit-role">
+                        <option value="Operator">操作员</option>
+                        <option value="Engineer">工程师</option>
+                        <option value="Admin">系统管理员</option>
+                    </select>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">账号状态</label>
+                    <select class="fm-select" id="edit-active">
+                        <option value="true">启用</option>
+                        <option value="false">禁用</option>
+                    </select>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">重置密码 <span style="color:#c0c4cc;font-weight:400;">（留空不修改）</span></label>
+                    <div class="pw-wrap">
+                        <input class="fm-input" type="password" id="edit-pwd" placeholder="输入新密码">
+                        <span class="pw-toggle-btn" onclick="AccountApp.ui.togglePw('edit-pwd', this)">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="acc-modal-foot">
+            <button class="btn-cancel" onclick="AccountApp.ui.closeModal('edit-modal')">取消</button>
+            <button class="btn-confirm" onclick="AccountApp.auth.submitEdit()">
+                <svg viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12" />
+                </svg>
+                保存修改
+            </button>
+        </div>
+    </div>
+</div>

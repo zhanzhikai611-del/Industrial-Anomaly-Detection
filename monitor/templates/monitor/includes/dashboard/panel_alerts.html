@@ -1,0 +1,20 @@
+<div class="db-card db-card-bottom" style="overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div class="db-title" style="margin-bottom:0;"><span class="db-title-bar"></span>实时异常上报</div>
+    </div>
+    <!-- 表头 -->
+    <div
+        style="display:grid;grid-template-columns:38px 1fr auto auto;gap:6px;padding:0 8px 6px;border-bottom:1px solid #f0f2f5;">
+        <span style="font-size:11px;color:#909399;">时间</span>
+        <span style="font-size:11px;color:#909399;">设备 / 报警描述</span>
+        <span style="font-size:11px;color:#909399;text-align:right;">风险</span>
+        <span></span>
+    </div>
+    <div id="alert-list" style="flex:1;overflow-y:auto;"></div>
+    <!-- 底栏: 最新 x 条 · 共 x 条 | 查看全部 -->
+    <div
+        style="display:flex;justify-content:space-between;align-items:center;padding:12px 2px 4px;margin-top:auto;border-top:1px solid #f0f2f5;">
+        <span style="font-size:12px;color:#909399;" id="alert-footer-text">最新 7 条异常 · 共 -- 条</span>
+        <a href="/events/" style="font-size:12px;color:#409EFF;text-decoration:none;">查看全部 →</a>
+    </div>
+</div>

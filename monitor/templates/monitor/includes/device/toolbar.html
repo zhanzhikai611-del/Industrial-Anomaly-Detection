@@ -1,0 +1,32 @@
+<!-- ── 顶部工具栏 ── -->
+<div class="toolbar-bar">
+    <input id="dev-search" class="search-input" placeholder="搜索设备名…" oninput="DeviceApp.engine.filterTable()">
+    <div class="sort-container">
+        <div class="sort-pill" id="sort-pill-text" onclick="DeviceApp.engine.toggleSortMenu(event)">风险降序</div>
+        <div class="sort-dropdown" id="sort-dropdown-menu">
+            <div class="sort-dropdown-item active" data-val="risk_desc" onclick="DeviceApp.engine.selectSort('risk_desc', '风险降序')">风险降序</div>
+            <div class="sort-dropdown-item" data-val="risk_asc" onclick="DeviceApp.engine.selectSort('risk_asc', '风险升序')">风险升序</div>
+            <div class="sort-dropdown-item" data-val="name_asc" onclick="DeviceApp.engine.selectSort('name_asc', '名称排序')">名称排序</div>
+        </div>
+        <input type="hidden" id="dev-sort" value="risk_desc">
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div class="filter-pill" id="fp-all" onclick="DeviceApp.engine.setFilter('all')">
+        <span class="fp-label">所有设备</span>
+        <span class="fp-num" id="fc-all">--</span>
+    </div>
+    <div class="filter-pill" id="fp-high" onclick="DeviceApp.engine.setFilter('high')" style="border-color: #fde2e2;">
+        <span class="fp-label color-high">高风险</span>
+        <span class="fp-num color-high" id="fc-high">--</span>
+    </div>
+    <div class="filter-pill" id="fp-med" onclick="DeviceApp.engine.setFilter('med')" style="border-color: #faecd8;">
+        <span class="fp-label color-med">中风险</span>
+        <span class="fp-num color-med" id="fc-med">--</span>
+    </div>
+    <div class="filter-pill" id="fp-low" onclick="DeviceApp.engine.setFilter('low')" style="border-color: #e1f3d8;">
+        <span class="fp-label color-low">低风险</span>
+        <span class="fp-num color-low" id="fc-low">--</span>
+    </div>
+</div>

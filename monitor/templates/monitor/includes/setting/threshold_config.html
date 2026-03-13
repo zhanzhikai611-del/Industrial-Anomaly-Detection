@@ -1,0 +1,27 @@
+<!-- 报警阈值配置 -->
+<div class="set-card" style="flex: 1;">
+    <div class="set-header">
+        <div class="set-title-bar"></div>
+        <div class="set-title-text">报警阈值配置</div>
+    </div>
+    <div class="set-body">
+        <div class="fm-group">
+            <label class="fm-label">AI 磨损报警阈值（P-Worn ≥ 此值时触发 ai_alert）</label>
+            <input class="fm-input" type="number" id="thresh-ai" value="0.75" step="0.01">
+        </div>
+        <div class="fm-group">
+            <label class="fm-label">主轴电流高报阈值（A）</label>
+            <input class="fm-input" type="number" id="thresh-cur" value="50.0" step="0.5">
+        </div>
+        <div class="fm-group">
+            <label class="fm-label">主轴功率高报阈值（W）</label>
+            <input class="fm-input" type="number" id="thresh-pwr" value="120.0" step="1">
+        </div>
+        <div class="fm-group" style="margin-bottom: 14px;">
+            <label class="fm-label">进给速度低报阈值（mm/min）</label>
+            <input class="fm-input" type="number" id="thresh-fv" value="0.5" step="0.1">
+        </div>
+        <button class="btn-save" onclick="SettingApp.config.saveThresh()">保存配置</button>
+        <span id="thresh-msg" style="font-size:12px;color:#67c23a;margin-left:10px;"></span>
+    </div>
+</div>

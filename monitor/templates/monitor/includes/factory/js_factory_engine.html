@@ -1,0 +1,579 @@
+<script>
+/**
+ * FactoryApp Namespace
+ * Encapsulates Three.js logic, WebSocket stream handling, and 3D UI interactions.
+ */
+window.FactoryApp = {
+    // ══════════════════════════════════════
+    // State & Core Vars
+    // ══════════════════════════════════════
+    state: {
+        scene: null,
+        camera: null,
+        renderer: null,
+        controls: null,
+        machines: new Map(),
+        particles: [],
+        currentDevices: [],
+        raycaster: new THREE.Raycaster(),
+        mouse: new THREE.Vector2(),
+        focusId: null,
+        clock: new THREE.Clock(),
+        ws: null,
+        isInitialized: false
+    },
+
+    // ══════════════════════════════════════
+    // Scene Initiation
+    // ══════════════════════════════════════
+    scene: {
+        init: function() {
+            const container = document.getElementById('canvasArea');
+            if (!container) return;
+
+            const state = FactoryApp.state;
+            state.scene = new THREE.Scene();
+            state.scene.background = new THREE.Color(0xe2e8f0);
+
+            // Isometric Orthographic Camera
+            const aspect = container.clientWidth / container.clientHeight;
+            const d = 1000;
+            state.camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 10000);
+            state.camera.position.set(1200, 1000, 1200);
+            state.camera.zoom = 1.0;
+            state.camera.updateProjectionMatrix();
+
+            state.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });
+            state.renderer.setPixelRatio(window.devicePixelRatio);
+            state.renderer.setSize(container.clientWidth, container.clientHeight);
+            state.renderer.shadowMap.enabled = true;
+            state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            state.renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(state.renderer.domElement);
+
+            state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
+            state.controls.enableDamping = true;
+            state.controls.dampingFactor = 0.05;
+            state.controls.maxPolarAngle = Math.PI / 2.5;
+            state.controls.minZoom = 0.8;
+            state.controls.maxZoom = 4.0;
+
+            const ambi = new THREE.AmbientLight(0xffffff, 0.5);
+            state.scene.add(ambi);
+            const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+            dir.position.set(500, 1000, 300);
+            dir.castShadow = true;
+            dir.shadow.camera.left = -2000; dir.shadow.camera.right = 2000;
+            dir.shadow.camera.top = 2000; dir.shadow.camera.bottom = -2000;
+            dir.shadow.mapSize.set(2048, 2048);
+            state.scene.add(dir);
+
+            FactoryApp.scene.createGround();
+            FactoryApp.scene.createWorkshopStructure();
+            FactoryApp.scene.createMachineGrid();
+            FactoryApp.scene.createDataParticles();
+
+            // Event Listeners
+            window.addEventListener('resize', FactoryApp.engine.onResize);
+            container.addEventListener('mousemove', FactoryApp.engine.onMouseMove);
+            container.addEventListener('click', FactoryApp.engine.onClick);
+
+            FactoryApp.engine.animate();
+            FactoryApp.socket.connect();
+            FactoryApp.ui.addLog("v4.5 Simulation Active.");
+            state.isInitialized = true;
+        },
+
+        createGround: function() {
+            const state = FactoryApp.state;
+            const geo = new THREE.PlaneGeometry(4000, 4000);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 });
+            const ground = new THREE.Mesh(geo, mat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            state.scene.add(ground);
+
+            const grid = new THREE.GridHelper(4000, 40, 0x1e293b, 0xcccccc);
+            grid.material.opacity = 0.3;
+            grid.material.transparent = true;
+            grid.position.y = 1;
+            state.scene.add(grid);
+        },
+
+        createWorkshopStructure: function() {
+            const state = FactoryApp.state;
+            const mat = new THREE.MeshStandardMaterial({ color: 0x475569, transparent: true, opacity: 0.4 });
+            const wallGeo = new THREE.BoxGeometry(3000, 80, 10);
+            const w1 = new THREE.Mesh(wallGeo, mat); w1.position.set(0, 40, -1500); state.scene.add(w1);
+            const w2 = new THREE.Mesh(wallGeo, mat); w2.rotation.y = Math.PI / 2; w2.position.set(-1500, 40, 0); state.scene.add(w2);
+
+            const colMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
+            const colGeo = new THREE.BoxGeometry(30, 400, 30);
+            for (let i = -1400; i <= 1400; i += 700) {
+                const c = new THREE.Mesh(colGeo, colMat); c.position.set(i, 200, -1450); state.scene.add(c);
+            }
+        },
+
+        createMachineGrid: function() {
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const id = r * 5 + c + 1;
+                    const x = (c - 2) * 450;
+                    const z = (r - 2) * 450;
+                    FactoryApp.scene.addMachine(id, x, z);
+                }
+            }
+        },
+
+        addMachine: function(id, x, z) {
+            const state = FactoryApp.state;
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            group.userData = { id, name: `CNC-${id.toString().padStart(2, '0')}` };
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(200, 160, 200),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.05 })
+            );
+            body.position.y = 80;
+            body.castShadow = true;
+            group.add(body);
+
+            const consoleBox = new THREE.Mesh(
+                new THREE.BoxGeometry(40, 100, 60),
+                new THREE.MeshStandardMaterial({ color: 0xf1f5f9 })
+            );
+            consoleBox.position.set(120, 50, 60);
+            group.add(consoleBox);
+
+            const labelPlate = new THREE.Mesh(
+                new THREE.PlaneGeometry(140, 45),
+                new THREE.MeshBasicMaterial({ map: FactoryApp.utils.createSideLabelTex(group.userData.name) })
+            );
+            labelPlate.rotation.y = Math.PI / 2;
+            labelPlate.position.set(100.5, 120, 0);
+            group.add(labelPlate);
+
+            const windowScreen = new THREE.Mesh(
+                new THREE.PlaneGeometry(120, 80),
+                new THREE.MeshStandardMaterial({
+                    color: 0x0f172a,
+                    emissive: 0x444d5d,
+                    emissiveIntensity: 0
+                })
+            );
+            windowScreen.position.set(0, 100, 101);
+            group.add(windowScreen);
+
+            const glowGeo = new THREE.PlaneGeometry(600, 600);
+            const glowMat = new THREE.MeshBasicMaterial({
+                map: FactoryApp.utils.createGlowTex(),
+                color: 0x409eff,
+                transparent: true,
+                opacity: 0,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.rotation.x = -Math.PI / 2;
+            glow.position.y = 5;
+            group.add(glow);
+
+            state.scene.add(group);
+            state.machines.set(id, { group, body, windowScreen, labelPlate, glow, oee: 0.8, status: 'Idle', phase: Math.random() * Math.PI });
+        },
+
+        createDataParticles: function() {
+            const state = FactoryApp.state;
+            const geo = new THREE.BoxGeometry(6, 6, 6);
+            for (let i = 0; i < 30; i++) {
+                const mat = new THREE.MeshBasicMaterial({ color: 0x409eff, transparent: true });
+                const p = new THREE.Mesh(geo, mat);
+                FactoryApp.engine.resetParticle(p);
+                state.scene.add(p);
+                state.particles.push(p);
+            }
+        }
+    },
+
+    // ══════════════════════════════════════
+    // Socket & Data Sync
+    // ══════════════════════════════════════
+    socket: {
+        connect: function() {
+            const loc = window.location;
+            const wsUrl = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.host + '/ws/factory/';
+            const ws = new WebSocket(wsUrl);
+            FactoryApp.state.ws = ws;
+
+            ws.onopen = () => {
+                console.log("[WS] Connected to Factory Stream");
+                FactoryApp.ui.addLog("ENGINE: Connected to Real-time Stream.");
+            };
+
+            ws.onmessage = (e) => {
+                const data = FactoryApp.utils.json_parse_safe(e.data);
+                if (!data) return;
+
+                const state = FactoryApp.state;
+                if (data.type === 'factory_snapshot') {
+                    state.currentDevices = data.devices.sort((a, b) => a.device_id - b.device_id);
+                    FactoryApp.socket.sync3DStates();
+                    FactoryApp.ui.updateStatsDisplay();
+                    if (state.focusId) FactoryApp.ui.updateInspector(state.focusId);
+                } else if (data.type === 'engine_log') {
+                    FactoryApp.ui.addLog(data.message);
+                } else if (data.type === 'device_mode_data') {
+                    if (state.focusId && data.device_id == state.focusId) {
+                        FactoryApp.ui.renderDeviceDetails(data);
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                console.warn("[WS] Disconnected. Retrying in 3s...");
+                setTimeout(FactoryApp.socket.connect, 3000);
+            };
+        },
+
+        sync3DStates: function() {
+            const state = FactoryApp.state;
+            state.currentDevices.forEach((dev, idx) => {
+                const meshId = idx + 1;
+                const m = state.machines.get(meshId);
+                if (m) {
+                    m.group.userData.id = dev.device_id; 
+                    m.status = dev.current_status;
+                    m.oee = dev.oee || 0;
+                    if (dev.device_name && m.group.userData.name !== dev.device_name) {
+                        m.group.userData.name = dev.device_name;
+                        m.labelPlate.material.map = FactoryApp.utils.createSideLabelTex(dev.device_name);
+                    }
+                }
+            });
+        }
+    },
+
+    // ══════════════════════════════════════
+    // Engine & Animation
+    // ══════════════════════════════════════
+    engine: {
+        animate: function() {
+            requestAnimationFrame(FactoryApp.engine.animate);
+            TWEEN.update();
+            const state = FactoryApp.state;
+            state.controls.update();
+
+            const delta = state.clock.getDelta();
+
+            state.machines.forEach((m) => {
+                let freq = 0.5;
+                let color = new THREE.Color(0x409eff);
+
+                if (m.status === 'Running') {
+                    if (m.oee > 0.75) freq = 1.2;
+                    else if (m.oee >= 0.45) freq = 0.7;
+                    else freq = 0.3;
+                    color.set(0x409eff);
+                } else if (m.status === 'Idle' || m.status === 'Standby') {
+                    freq = 0.6;
+                    color.set(0xffa940);
+                } else if (m.status === 'Down' || m.status === 'Stop') {
+                    freq = 1.0;
+                    color.set(0xff4d4f);
+                }
+
+                if (m.status !== 'Offline') {
+                    m.phase += delta * freq * Math.PI;
+                    const pulse = (Math.sin(m.phase) + 1) / 2;
+
+                    m.glow.material.color.copy(color);
+                    const baseOpacity = (m.status === 'Running') ? 0.4 : 0.7;
+                    m.glow.material.opacity = pulse * baseOpacity;
+
+                    if (m.status === 'Running') {
+                        m.windowScreen.material.emissive.set(0x444d5d);
+                        m.windowScreen.material.emissiveIntensity = pulse * 1.5;
+                    } else {
+                        m.windowScreen.material.emissiveIntensity = 0;
+                    }
+                } else {
+                    m.glow.material.opacity = 0;
+                    m.windowScreen.material.emissiveIntensity = 0;
+                }
+            });
+
+            state.particles.forEach(p => {
+                p.position.add(p.userData.vel);
+                p.userData.life--;
+                p.material.opacity = p.userData.life / 200;
+                if (p.userData.life < 0) FactoryApp.engine.resetParticle(p);
+            });
+
+            state.renderer.render(state.scene, state.camera);
+        },
+
+        resetParticle: function(p) {
+            p.position.set((Math.random() - 0.5) * 2000, 2, (Math.random() - 0.5) * 2000);
+            p.userData.vel = new THREE.Vector3((Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
+            p.userData.life = 100 + Math.random() * 200;
+        },
+
+        onResize: function() {
+            const container = document.getElementById('canvasArea');
+            if (!container) return;
+            const state = FactoryApp.state;
+            const aspect = container.clientWidth / container.clientHeight;
+            const d = 1000;
+            state.camera.left = -d * aspect; state.camera.right = d * aspect;
+            state.camera.top = d; state.camera.bottom = -d;
+            state.camera.updateProjectionMatrix();
+            state.renderer.setSize(container.clientWidth, container.clientHeight);
+        },
+
+        onMouseMove: function(e) {
+            const container = document.getElementById('canvasArea');
+            const state = FactoryApp.state;
+            const rect = container.getBoundingClientRect();
+            state.mouse.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+            state.mouse.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+            state.raycaster.setFromCamera(state.mouse, state.camera);
+            const intersects = state.raycaster.intersectObjects(state.scene.children, true);
+            const tip = document.getElementById('tooltip');
+            let hoverId = null;
+
+            if (intersects.length > 0) {
+                let obj = intersects[0].object;
+                while (obj.parent && !obj.userData.id) obj = obj.parent;
+                if (obj.userData.id) {
+                    hoverId = obj.userData.id;
+                    tip.style.display = 'block';
+                    tip.style.left = (e.clientX - rect.left + 15) + 'px';
+                    tip.style.top = (e.clientY - rect.top + 15) + 'px';
+                    tip.innerText = obj.userData.name;
+                    container.style.cursor = 'pointer';
+                }
+            }
+            if (!hoverId) {
+                tip.style.display = 'none';
+                container.style.cursor = 'default';
+            }
+        },
+
+        onClick: function() {
+            const state = FactoryApp.state;
+            state.raycaster.setFromCamera(state.mouse, state.camera);
+            const intersects = state.raycaster.intersectObjects(state.scene.children, true);
+            if (intersects.length > 0) {
+                let obj = intersects[0].object;
+                while (obj.parent && !obj.userData.id) obj = obj.parent;
+                if (obj.userData.id) {
+                    FactoryApp.ui.focusMachine(obj.userData.id);
+                    return;
+                }
+            }
+            FactoryApp.ui.unfocus();
+        }
+    },
+
+    // ══════════════════════════════════════
+    // UI Interactions
+    // ══════════════════════════════════════
+    ui: {
+        toggleUserMenu: function() {
+            const menu = document.getElementById('user-dropdown');
+            if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        },
+
+        addLog: function(msg) {
+            const logList = document.getElementById('logList');
+            if (!logList) return;
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            if (msg.includes('OPTIMIZED') || msg.includes('SUCCESS') || msg.includes('ENGINE:')) {
+                entry.style.color = 'var(--primary)';
+                entry.style.fontWeight = '700';
+            }
+            
+            const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+            entry.innerHTML = `<span style="color:#94a3b8; font-weight:400;">[${time}]</span> ${msg}`;
+            logList.appendChild(entry);
+            
+            if (logList.children.length > 50) logList.firstChild.remove();
+
+            const railBody = logList.parentElement;
+            railBody.scrollTop = railBody.scrollHeight;
+        },
+
+        updateStatsDisplay: function() {
+            const state = FactoryApp.state;
+            const r = state.currentDevices.filter(d => d.current_status === 'Running').length;
+            const s = state.currentDevices.filter(d => d.current_status === 'Down').length;
+            document.getElementById('st-run').innerText = r;
+            document.getElementById('st-std').innerText = state.currentDevices.length - r - s;
+            document.getElementById('st-stop').innerText = s;
+        },
+
+        focusMachine: function(id) {
+            const state = FactoryApp.state;
+            state.focusId = id;
+            let m = null;
+            for (let val of state.machines.values()) {
+                if (val.group.userData.id == id) {
+                    m = val;
+                    break;
+                }
+            }
+            if (!m) return;
+            
+            const targetPos = m.group.position;
+            const camTarget = targetPos.clone().add(new THREE.Vector3(600, 500, 600));
+
+            TWEEN.removeAll();
+
+            new TWEEN.Tween(state.camera.position)
+                .to({ x: camTarget.x, y: camTarget.y, z: camTarget.z }, 1000)
+                .easing(TWEEN.Easing.Quintic.Out)
+                .start();
+
+            new TWEEN.Tween(state.controls.target)
+                .to({ x: targetPos.x, y: targetPos.y, z: targetPos.z }, 1000)
+                .easing(TWEEN.Easing.Quintic.Out)
+                .start();
+
+            new TWEEN.Tween(state.camera)
+                .to({ zoom: 2.5 }, 1000)
+                .easing(TWEEN.Easing.Quintic.Out)
+                .onUpdate(() => state.camera.updateProjectionMatrix())
+                .start();
+
+            document.getElementById('railLabel').innerText = "Device Mode: " + id;
+            document.getElementById('logList').style.display = 'none';
+            document.getElementById('inspectEl').style.display = 'block';
+            
+            FactoryApp.ui.updateInspector(id);
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({
+                    'action': 'fetch_device_history',
+                    'device_id': id
+                }));
+            }
+        },
+
+        unfocus: function() {
+            const state = FactoryApp.state;
+            state.focusId = null;
+            TWEEN.removeAll();
+
+            new TWEEN.Tween(state.camera.position)
+                .to({ x: 1200, y: 1000, z: 1200 }, 1000)
+                .easing(TWEEN.Easing.Quintic.Out)
+                .start();
+
+            new TWEEN.Tween(state.controls.target)
+                .to({ x: 0, y: 0, z: 0 }, 1000)
+                .easing(TWEEN.Easing.Quintic.Out)
+                .start();
+
+            new TWEEN.Tween(state.camera)
+                .to({ zoom: 1.0 }, 1000)
+                .easing(TWEEN.Easing.Quintic.Out)
+                .onUpdate(() => state.camera.updateProjectionMatrix())
+                .start();
+
+            document.getElementById('railLabel').innerText = "Engine Log";
+            document.getElementById('logList').style.display = 'block';
+            document.getElementById('inspectEl').style.display = 'none';
+        },
+
+        updateInspector: function(id) {
+            const state = FactoryApp.state;
+            const dev = state.currentDevices.find(d => d.device_id == id);
+            if (!dev) return;
+            
+            document.getElementById('ins-name').innerText = dev.device_name;
+            let statusZh = dev.current_status;
+            if (statusZh === 'Running') statusZh = '运行中';
+            else if (statusZh === 'Idle') statusZh = '待机中';
+            else if (statusZh === 'Down') statusZh = '故障停机';
+
+            const statEl = document.getElementById('ins-stat');
+            statEl.innerText = statusZh;
+            statEl.style.color = dev.current_status === 'Running' ? '#67c23a' :
+                (dev.current_status === 'Idle' ? '#E6A23C' : '#f56c6c');
+                
+            document.getElementById('ins-oee').innerText = (dev.oee * 100).toFixed(1) + '%';
+            document.getElementById('ins-cur').innerText = (dev.spindle_current || 0).toFixed(2) + ' A';
+            document.getElementById('ins-pow').innerText = (dev.spindle_power || 0).toFixed(2) + ' W';
+        },
+
+        renderDeviceDetails: function(data) {
+            document.getElementById('ins-advice').innerText = data.advice || '--';
+            const histEl = document.getElementById('ins-history');
+            if (!histEl) return;
+            histEl.innerHTML = '';
+            (data.history || []).forEach(h => {
+                const row = document.createElement('div');
+                row.style.borderBottom = '1px solid #f1f5f9';
+                row.style.padding = '4px 0';
+                row.innerHTML = `<span style="color:#94a3b8">[${h.time}]</span> Cur: ${h.cur}A | Pow: ${h.pow}W`;
+                histEl.appendChild(row);
+            });
+        }
+    },
+
+    // ══════════════════════════════════════
+    // Utilities & Textures
+    // ══════════════════════════════════════
+    utils: {
+        json_parse_safe: function(str) {
+            try { return JSON.parse(str); } catch (e) { return null; }
+        },
+
+        createGlowTex: function() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const context = canvas.getContext('2d');
+            const grad = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+            grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            context.fillStyle = grad;
+            context.fillRect(0, 0, 128, 128);
+            return new THREE.CanvasTexture(canvas);
+        },
+
+        createSideLabelTex: function(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 512, 128);
+            ctx.font = 'bold 56px "Menlo", "Courier New", monospace';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64, 480);
+            return new THREE.CanvasTexture(canvas);
+        }
+    }
+};
+
+// Global click handler to close menu
+document.addEventListener('click', function (e) {
+    const btn = document.getElementById('user-avatar-btn');
+    const menu = document.getElementById('user-dropdown');
+    if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+        menu.style.display = 'none';
+    }
+});
+
+// Bootstrapper
+document.addEventListener('DOMContentLoaded', () => {
+    FactoryApp.scene.init();
+});
+</script>

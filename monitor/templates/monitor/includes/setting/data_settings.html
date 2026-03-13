@@ -1,0 +1,25 @@
+<!-- 数据设置卡片 -->
+<div class="set-card">
+    <div class="set-header">
+        <div class="set-title-bar"></div>
+        <div class="set-title-text">数据设置</div>
+    </div>
+    <div class="set-body" style="padding-top: 16px;">
+        <div class="stream-status-box">
+            <span class="stream-status-lbl">当前数据流状态</span>
+            <div class="stream-status-val">
+                <div class="segment-control" id="stream-segment">
+                    <div class="segment-item active" id="seg-pause" onclick="SettingApp.stream.toggle(false)">暂停</div>
+                    <div class="segment-item" id="seg-run" onclick="SettingApp.stream.toggle(true)">运行</div>
+                </div>
+            </div>
+        </div>
+        <div class="stream-status-box" style="margin-bottom: 0;">
+            <span class="stream-status-lbl">全量重置风险分布</span>
+            <div class="stream-status-val">
+                <button class="stream-btn" style="background:#f56c6c; color:#fff;"
+                    onclick="SettingApp.ui.openResetModal()">立即重置</button>
+            </div>
+        </div>
+    </div>
+</div>

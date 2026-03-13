@@ -1,0 +1,73 @@
+<!-- 新增账号 Modal -->
+<div class="acc-modal-overlay" id="add-modal">
+    <div class="acc-modal">
+        <div class="acc-modal-head">
+            <div class="modal-icon-circle">
+                <svg viewBox="0 0 24 24">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                </svg>
+            </div>
+            <div class="modal-head-text">
+                <div class="modal-head-title">新增账号</div>
+                <div class="modal-head-sub">创建新的系统账号并分配角色</div>
+            </div>
+            <button class="modal-close" onclick="AccountApp.ui.closeModal('add-modal')">×</button>
+        </div>
+        <div class="acc-modal-body">
+            <div id="add-error" style="display:none;background:#fef0f0;border:1px solid #fde2e2;border-radius:5px;padding:8px 12px;color:#f56c6c;font-size:12px;margin-bottom:14px;"></div>
+            <div class="fm-grid">
+                <div class="fm-group">
+                    <label class="fm-label">用户名<span class="fm-req">*</span></label>
+                    <input class="fm-input" id="add-username" placeholder="e.g. jeremy_09">
+                    <div class="fm-error" id="err-username"></div>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">真实姓名<span class="fm-req">*</span></label>
+                    <input class="fm-input" id="add-realname" placeholder="e.g. 张伟">
+                    <div class="fm-error" id="err-realname"></div>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">工号<span class="fm-req">*</span></label>
+                    <input class="fm-input" id="add-jobnum" placeholder="# 6位数字" maxlength="6">
+                    <div class="fm-error" id="err-jobnum"></div>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">所属角色<span class="fm-req">*</span></label>
+                    <select class="fm-select" id="add-role">
+                        <option value="Operator" selected>操作员</option>
+                        <option value="Engineer">工程师</option>
+                        <option value="Admin">系统管理员</option>
+                    </select>
+                </div>
+                <div class="fm-group fm-group-full">
+                    <label class="fm-label">初始密码<span class="fm-req">*</span></label>
+                    <div class="pw-wrap">
+                        <input class="fm-input" type="password" id="add-pwd" placeholder="至少6位">
+                        <span class="pw-toggle-btn" onclick="AccountApp.ui.togglePw('add-pwd', this)">
+                            <svg viewBox="0 0 24 24" id="pw-eye-add">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="fm-error" id="err-pwd"></div>
+                </div>
+            </div>
+        </div>
+        <div class="acc-modal-foot">
+            <button class="btn-cancel" onclick="AccountApp.ui.closeModal('add-modal')">取消</button>
+            <button class="btn-confirm" onclick="AccountApp.auth.submitAdd()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                </svg>
+                确认创建
+            </button>
+        </div>
+    </div>
+</div>

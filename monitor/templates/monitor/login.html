@@ -191,86 +191,14 @@
 <body>
     <div class="login-card">
 
-        <!-- 品牌标识 -->
-        <div class="login-brand">
-            <div class="login-logo">
-                <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                        d="M11.5 8.71L16 11.31L20.5 8.71M11.5 24.29V19.1L7 16.5M25 16.5L20.5 19.1V24.29M7.27 11.46L16 16.51L24.73 11.46M16 26.58V16.5M25 20.5V12.5C24.9996 12.1493 24.9071 11.8048 24.7315 11.5012C24.556 11.1975 24.3037 10.9454 24 10.77L17 6.77C16.696 6.59446 16.3511 6.50205 16 6.50205C15.6489 6.50205 15.304 6.59446 15 6.77L8 10.77C7.69626 10.9454 7.44398 11.1975 7.26846 11.5012C7.09294 11.8048 7.00036 12.1493 7 12.5V20.5C7.00036 20.8507 7.09294 21.1952 7.26846 21.4988C7.44398 21.8025 7.69626 22.0546 8 22.23L15 26.23C15.304 26.4055 15.6489 26.498 16 26.498C16.3511 26.498 16.696 26.4055 17 26.23L24 22.23C24.3037 22.0546 24.556 21.8025 24.7315 21.4988C24.9071 21.1952 24.9996 20.8507 25 20.5Z"
-                        stroke="#303133" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                </svg>
-            </div>
-            <span class="login-title">CNC Cloud</span>
-        </div>
-        <p class="login-subtitle">CNC智能预警系统</p>
+        {% include 'monitor/includes/login/brand.html' %}
 
-        <!-- 登录表单 -->
-        <form method="post" autocomplete="off">
-            {% csrf_token %}
-
-            {% if error %}
-            <div class="error-msg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                {{ error }}
-            </div>
-            {% endif %}
-
-            <div class="fm-group">
-                <label class="fm-label" for="id_username">用户名 / 工号</label>
-                <div class="fm-wrap">
-                    <input class="fm-input {% if error %}error{% endif %}" type="text" id="id_username" name="username"
-                        placeholder="请输入用户名或工号" autofocus>
-                </div>
-            </div>
-
-            <div class="fm-group">
-                <label class="fm-label" for="id_password">密码</label>
-                <div class="fm-wrap">
-                    <input class="fm-input {% if error %}error{% endif %}" type="password" id="id_password"
-                        name="password" placeholder="请输入密码">
-                    <span class="pw-toggle" id="pw-toggle" onclick="togglePassword()" title="显示/隐藏密码">
-                        <!-- Eye icon (visible state) -->
-                        <svg id="icon-eye" viewBox="0 0 24 24">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                        </svg>
-                        <!-- Eye-off icon (hidden by default) -->
-                        <svg id="icon-eye-off" viewBox="0 0 24 24" style="display:none;">
-                            <path
-                                d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                        </svg>
-                    </span>
-                </div>
-            </div>
-
-            <button type="submit" class="login-btn">登 录</button>
-        </form>
+        {% include 'monitor/includes/login/form.html' %}
 
         <div class="login-footer">V2.2.1 · CNC智能预警系统 · Industrial Warning System</div>
     </div>
 
-    <script>
-        function togglePassword() {
-            const input = document.getElementById('id_password');
-            const eyeOn = document.getElementById('icon-eye');
-            const eyeOff = document.getElementById('icon-eye-off');
-            if (input.type === 'password') {
-                input.type = 'text';
-                eyeOn.style.display = 'none';
-                eyeOff.style.display = '';
-            } else {
-                input.type = 'password';
-                eyeOn.style.display = '';
-                eyeOff.style.display = 'none';
-            }
-        }
-    </script>
+    {% include 'monitor/includes/login/logic.html' %}
 </body>
 
 </html>

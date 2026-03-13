@@ -1,0 +1,38 @@
+<!-- ══════ AI 诊断弹窗 ══════ -->
+<div class="modal-overlay" id="ai-modal">
+    <div class="ai-modal-box">
+        <div class="ai-modal-header">
+            <span class="ai-modal-title" id="ai-modal-title">AI 智能诊断</span>
+            <button class="modal-close" onclick="DeviceApp.modals.closeModal('ai-modal')">×</button>
+        </div>
+        <div class="ai-modal-body">
+            <div style="flex:1;min-width:0;">
+                <div class="card-title" style="margin-bottom:10px;">
+                    <span class="card-title-bar"></span>特征联动双轴图
+                </div>
+                <div id="modal-chart" style="height:280px;"></div>
+            </div>
+            <div style="width:220px;flex-shrink:0;">
+                <div class="card-title" style="margin-bottom:10px;">
+                    <span class="card-title-bar"></span>当前实时关键特征快照
+                </div>
+                <div class="sk-card">
+                    <div class="sk-lbl">主轴反馈电流</div>
+                    <div><span class="sk-big" id="sk-current">--</span><span class="sk-unit">A</span></div>
+                </div>
+                <div class="sk-card">
+                    <div class="sk-lbl">主轴输出功率</div>
+                    <div><span class="sk-big" id="sk-power">--</span><span class="sk-unit">W</span></div>
+                </div>
+                <div class="sk-card">
+                    <div class="sk-lbl">AI 磨损置信度</div>
+                    <div><span class="sk-big" id="sk-ai" style="color:var(--danger);">--</span><span class="sk-unit">%</span></div>
+                </div>
+                <div class="sk-card">
+                    <div class="sk-lbl">实时效率</div>
+                    <div><span class="sk-big" id="sk-oee" style="color:var(--primary);">--</span><span class="sk-unit">%</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

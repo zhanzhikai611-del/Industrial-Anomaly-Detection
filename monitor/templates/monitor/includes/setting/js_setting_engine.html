@@ -1,0 +1,194 @@
+<script>
+/**
+ * SettingApp Namespace
+ * Encapsulates system settings, stream control, and configuration logic.
+ */
+window.SettingApp = {
+    state: {
+        isStreamRunning: false,
+        isProcessing: false
+    },
+
+    utils: {
+        getCookie: function(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    },
+
+    ui: {
+        init: function() {
+            SettingApp.stream.checkStatus();
+            setInterval(SettingApp.stream.checkStatus, 5000);
+        },
+
+        updateStreamUI: function(isActive) {
+            SettingApp.state.isStreamRunning = isActive;
+            const segPause = document.getElementById('seg-pause');
+            const segRun = document.getElementById('seg-run');
+            if (!segPause || !segRun) return;
+
+            if (isActive) {
+                segRun.classList.add('active');
+                segPause.classList.remove('active');
+            } else {
+                segPause.classList.add('active');
+                segRun.classList.remove('active');
+            }
+        },
+
+        openResetModal: function() {
+            const el = document.getElementById('reset-modal');
+            if (el) el.style.display = 'flex';
+        },
+
+        closeResetModal: function() {
+            const el = document.getElementById('reset-modal');
+            if (el) el.style.display = 'none';
+        },
+
+        showSuccessToast: function(title, message) {
+            let toast = document.getElementById('success-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'success-toast';
+                toast.style.cssText = `
+                    position:fixed; bottom:32px; right:32px; z-index:9999;
+                    background:#fff; border-radius:8px; padding:14px 18px;
+                    box-shadow:0 4px 20px rgba(0,0,0,.12); border-left:4px solid #67c23a;
+                    display:flex; align-items:flex-start; gap:10px;
+                    font-size:13px; color:#303133; max-width:280px;
+                    opacity:0; transition:opacity .3s; pointer-events:none;
+                `;
+                toast.innerHTML = `
+                    <div style="color:#67c23a;margin-top:1px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-weight:600;margin-bottom:3px;" id="toast-title"></div>
+                        <div style="color:#909399;font-size:12px;" id="toast-msg"></div>
+                    </div>`;
+                document.body.appendChild(toast);
+            }
+            document.getElementById('toast-title').textContent = title;
+            document.getElementById('toast-msg').textContent = message;
+            toast.style.opacity = '1';
+            setTimeout(() => { toast.style.opacity = '0'; }, 4000);
+        }
+    },
+
+    stream: {
+        checkStatus: async function() {
+            try {
+                const res = await fetch('/api/stream-status/');
+                const data = await res.json();
+                SettingApp.ui.updateStreamUI(data.is_active);
+                SettingApp.stream.refreshStats();
+            } catch (e) {
+                console.error('Failed to get status', e);
+            }
+        },
+
+        toggle: async function(newState) {
+            if (SettingApp.state.isStreamRunning === newState) return;
+
+            const segmentContainer = document.getElementById('stream-segment');
+            if (segmentContainer) segmentContainer.classList.add('disabled');
+
+            const action = newState ? 'start' : 'stop';
+            try {
+                const res = await fetch(`/api/system/toggle_stream/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': SettingApp.utils.getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ action: action })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    SettingApp.ui.updateStreamUI(data.is_active);
+                }
+            } catch (e) {
+                console.error('Failed to toggle stream', e);
+                alert('网络或访问错误');
+                SettingApp.ui.updateStreamUI(!newState);
+            } finally {
+                if (segmentContainer) segmentContainer.classList.remove('disabled');
+            }
+        },
+
+        confirmReset: async function() {
+            const btn = document.getElementById('btn-execute-reset');
+            if (!btn || SettingApp.state.isProcessing) return;
+
+            SettingApp.state.isProcessing = true;
+            btn.disabled = true;
+            btn.innerText = '重置中...';
+
+            try {
+                const res = await fetch('/api/system/reset_groups/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': SettingApp.utils.getCookie('csrftoken')
+                    }
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    SettingApp.ui.closeResetModal();
+                    SettingApp.ui.showSuccessToast('成功重置风险分布', '已恢复初始的分组梯度分布');
+                } else {
+                    alert('× 重置失败: ' + data.message);
+                }
+            } catch (e) {
+                console.error('Reset failed', e);
+                alert('网络错误，请稍后重试');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '立即重置';
+                SettingApp.state.isProcessing = false;
+            }
+        },
+
+        refreshStats: function() {
+            // Future implementation for real-time stats update
+        }
+    },
+
+    config: {
+        saveThresh: async function() {
+            const payload = {
+                ai: document.getElementById('thresh-ai').value,
+                cur: document.getElementById('thresh-cur').value,
+                pwr: document.getElementById('thresh-pwr').value,
+                fv: document.getElementById('thresh-fv').value
+            };
+
+            const msg = document.getElementById('thresh-msg');
+            if (msg) msg.innerText = '保存中...';
+
+            // Mock saving delay
+            setTimeout(() => {
+                if (msg) {
+                    msg.innerText = '✓ 保存成功';
+                    setTimeout(() => { msg.innerText = ''; }, 3000);
+                }
+            }, 500);
+        }
+    }
+};
+
+// Initialize on DOM load
+document.addEventListener('DOMContentLoaded', SettingApp.ui.init);
+</script>

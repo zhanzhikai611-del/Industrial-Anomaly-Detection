@@ -1,0 +1,16 @@
+<!-- 表格标题与工具栏 -->
+<div class="ev-header">
+    <div class="ev-title-wrap">
+        <div class="ev-title-bar"></div>
+        <div class="ev-title-text">系统异常事件上报</div>
+    </div>
+    <div class="ev-tools">
+        <input class="ev-search" id="ev-search" placeholder="搜索设备名…" oninput="EventApp.filters.applyFilter()">
+        <select class="ev-select" id="type-filter" onchange="EventApp.filters.applyFilter()">
+            <option value="">全部类型</option>
+            <option value="HIGH_CURRENT">主轴过电流</option>
+            <option value="HIGH_POWER">主轴过载</option>
+            <option value="LOW_VELOCITY">进给速度异常</option>
+        </select>
+    </div>
+</div>

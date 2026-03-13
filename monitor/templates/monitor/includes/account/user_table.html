@@ -1,0 +1,142 @@
+<!-- 用户列表核心表格 -->
+<div class="acc-card">
+    <div class="acc-table-wrap">
+        <table class="acc-table" id="user-table">
+            <thead>
+                <tr>
+                    <th style="width:18%;">用户名</th>
+                    <th style="width:14%;">真实姓名</th>
+                    <th style="width:12%;">工号</th>
+                    <th style="width:14%;">所属角色</th>
+                    <th style="width:18%;">创建时间</th>
+                    <th style="width:12%;">账号状态</th>
+                    <th style="width:12%; text-align:left;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in page_obj %}
+                <tr data-uid="{{ user.id }}">
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">{{ user.username|slice:":1"|upper }}</div>
+                            <span style="font-weight:500;">{{ user.username }}</span>
+                        </div>
+                    </td>
+                    <td>{{ user.profile.real_name|default:"—" }}</td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        {{ user.profile.job_number|default:"—" }}
+                    </td>
+                    <td>
+                        {% with role=user.profile.role|default:"Operator" %}
+                        {% if role == 'Admin' %}
+                        <span class="role-tag role-admin">系统管理员</span>
+                        {% elif role == 'Engineer' %}
+                        <span class="role-tag role-engineer">工程师</span>
+                        {% else %}
+                        <span class="role-tag role-operator">操作员</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        {{ user.date_joined|date:"Y-m-d H:i" }}
+                    </td>
+                    <td>
+                        {% if user.is_active %}
+                        <span class="status-pill status-on">启用</span>
+                        {% else %}
+                        <span class="status-pill status-off">禁用</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="acc-actions">
+                            <button class="acc-icon-btn edit-btn" title="编辑" data-uid="{{ user.id }}"
+                                data-username="{{ user.username|escapejs }}"
+                                data-realname="{{ user.profile.real_name|default:""|escapejs }}"
+                                data-role="{{ user.profile.role|default:"Operator"|escapejs }}"
+                                data-active="{{ user.is_active|yesno:"true,false" }}">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                            </button>
+                            <button class="acc-icon-btn del-btn" title="删除" data-uid="{{ user.id }}"
+                                data-username="{{ user.username|escapejs }}">
+                                <svg viewBox="0 0 24 24">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                    <path d="M9 6V4h6v2" />
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" style="text-align:center;padding:48px;color:#909399;">
+                        <div style="font-size:32px;margin-bottom:10px;">👥</div>
+                        <div>暂无账号数据</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 分页 Footer -->
+    <div class="acc-footer">
+        <span class="acc-footer-info">
+            {% if page_obj.paginator.count > 0 %}
+            第 {{ page_obj.start_index }}–{{ page_obj.end_index }} 条，共 {{ total }} 条
+            {% else %}
+            暂无数据
+            {% endif %}
+        </span>
+        <ul class="pagination">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link"
+                    href="?page={{ page_obj.previous_page_number }}&q={{ search_q }}&role={{ role_q }}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link"><svg width="12" height="12" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg></span></li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+            {% if num == page_obj.number %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ search_q }}&role={{ role_q }}">{{ num }}</a></li>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link"
+                    href="?page={{ page_obj.next_page_number }}&q={{ search_q }}&role={{ role_q }}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link"><svg width="12" height="12"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg></span></li>
+            {% endif %}
+        </ul>
+    </div>
+</div>

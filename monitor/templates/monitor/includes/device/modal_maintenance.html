@@ -1,0 +1,19 @@
+<!-- ══════ 维修工单弹窗 ══════ -->
+<div class="modal-overlay" id="repair-modal">
+    <div class="repair-modal-box">
+        <div class="ai-modal-header">
+            <span class="ai-modal-title">下发维修工单</span>
+            <button class="modal-close" onclick="DeviceApp.modals.closeModal('repair-modal')">×</button>
+        </div>
+        <div style="padding:20px;">
+            <div style="font-size:13px;color:var(--text-sec);margin-bottom:6px;">维修说明</div>
+            <textarea class="repair-textarea" id="repair-desc"
+                placeholder="请输入维修说明或处理方案…">设备 AI 预警超过阈值，请对主轴进行检查，清理切削残余并更换磨损刀具，完成后触发「实时效率」重置。</textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+                <button class="btn btn-default btn-sm" style="margin-right:8px;"
+                    onclick="DeviceApp.modals.closeModal('repair-modal')">取消</button>
+                <button class="btn btn-primary btn-sm" id="repair-confirm-btn" onclick="DeviceApp.modals.submitRepair()">确认下发</button>
+            </div>
+        </div>
+    </div>
+</div>

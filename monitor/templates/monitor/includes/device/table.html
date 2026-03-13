@@ -1,0 +1,23 @@
+<!-- ── 设备列表主表格 ── -->
+<div class="card" style="padding:20px;">
+    <table class="tbl table-sm text-nowrap" id="dev-table" style="width: 100%;">
+        <thead>
+            <tr>
+                <th class="w-15">设备</th>
+                <th class="w-20">设备型号</th>
+                <th class="w-20">当前工序</th>
+                <th class="w-15">实时风险</th>
+                <th class="w-15">实时效率</th>
+                <th class="w-10">状态</th>
+                <th class="w-5">处理</th>
+            </tr>
+        </thead>
+        <tbody id="dev-tbody">
+            <tr>
+                <td colspan="7" style="text-align:center;color:var(--text-weak);padding:36px 0;">加载中…</td>
+            </tr>
+        </tbody>
+    </table>
+    <div id="dev-empty" style="display:none;text-align:center;padding:40px 0;color:var(--text-hint);">暂无匹配设备</div>
+    <div class="pagination" id="pagination"></div>
+</div>

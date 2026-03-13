@@ -1,0 +1,25 @@
+<div class="db-card" style="padding:14px 16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="db-title" style="margin-bottom:0;"><span class="db-title-bar"></span>设备拓扑矩阵</div>
+        <div class="hc-leg">
+            <span class="hc-leg-item"><span class="ldot"
+                    style="background:#52C41A;box-shadow:0 0 4px #52C41A;"></span>正常 <span
+                    id="hc-n">--</span></span>
+            <span class="hc-leg-item"><span class="ldot"
+                    style="background:#FADB14;box-shadow:0 0 4px #FADB14;"></span>预警 <span
+                    id="hc-w">--</span></span>
+            <span class="hc-leg-item"><span class="ldot"
+                    style="background:#F5222D;box-shadow:0 0 4px #F5222D;"></span>高危 <span
+                    id="hc-d">--</span></span>
+            <span class="hc-leg-item"
+                style="margin-left:6px;padding-left:8px;border-left:1px solid #e4e7ed;"><span class="ldot"
+                    style="background:#E6A23C;"></span>待机 <span id="hc-idle">--</span></span>
+            <span class="hc-leg-item"><span class="ldot" style="background:#F5222D;opacity:0.5;"></span>停机 <span
+                    id="hc-down">--</span></span>
+        </div>
+    </div>
+    <div id="hc-wrap" style="width:100%;height:370px;position:relative;">
+        <svg id="hc-svg" xmlns="http://www.w3.org/2000/svg"
+            style="width:100%;height:100%;display:block;overflow:visible;"></svg>
+    </div>
+</div>

@@ -5,593 +5,69 @@
 {% block extra_style %}
 <style>
     /* ── 右侧大表格卡片 ── */
-    .ev-right-col {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        background: #fff;
-        border-radius: 8px;
-        box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
-        padding: 0;
-        overflow: hidden;
-    }
-
-    .ev-card {
-        background: #fff;
-        border-radius: 8px;
-        box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05);
-        padding: 20px;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-    }
+    .ev-right-col { flex: 1; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05); padding: 0; overflow: hidden; }
+    .ev-card { background: #fff; border-radius: 8px; box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
 
     /* ── 卡片标题 ── */
-    .ev-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 20px;
-        border-bottom: 1px solid #e4e7ed;
-        flex-shrink: 0;
-    }
+    .ev-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #e4e7ed; flex-shrink: 0; }
+    .ev-title-wrap { display: flex; align-items: center; gap: 8px; }
+    .ev-title-bar { width: 3px; height: 14px; background: #409EFF; border-radius: 2px; }
+    .ev-title-text { font-size: 14px; color: #303133; font-weight: 600; }
 
-    .ev-title-wrap {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+    .ev-tools { display: flex; gap: 10px; }
+    .ev-search { width: 180px; height: 28px; border: 1px solid #dcdfe6; border-radius: 4px; padding: 0 10px; font-size: 12px; color: #303133; outline: none; }
+    .ev-search::placeholder { color: #c0c4cc; }
+    .ev-search:focus { border-color: #409eff; }
+    .ev-select { width: 110px; height: 28px; border: 1px solid #dcdfe6; border-radius: 4px; padding: 0 10px; font-size: 12px; color: #606266; outline: none; cursor: pointer; background: #fff; }
+    .ev-select:focus { border-color: #409eff; }
 
-    .ev-title-bar {
-        width: 3px;
-        height: 14px;
-        background: #409EFF;
-        border-radius: 2px;
-    }
+    /* ── 表格区域 ── */
+    .ev-table-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .ev-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .ev-table th { background: #fafafa; border-bottom: 1px solid #e4e7ed; color: #909399; font-size: 13px; font-weight: 500; padding: 8px 16px; text-align: left; white-space: nowrap; }
+    .ev-table td { padding: 8px 16px; border-bottom: 1px solid #f5f7fa; color: #303133; font-size: 14px; vertical-align: middle; }
+    .ev-table tbody tr:last-child td { border-bottom: none; }
 
-    .ev-title-text {
-        font-size: 14px;
-        color: #303133;
-        font-weight: 600;
-    }
+    .time-cell { font-family: 'Menlo', monospace; font-size: 13px; }
+    .time-time { color: #909399; font-size: 11px; margin-top: 3px; }
+    .device-cell { font-weight: 500; font-size: 14px; }
 
-    .ev-tools {
-        display: flex;
-        gap: 10px;
-    }
+    /* ── 报警类型标签 ── */
+    .tag-current { display: inline-flex; background: #FEE2E2; color: #DC2626; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .tag-power { display: inline-flex; background: #FFEDD5; color: #EA580C; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .tag-velocity { display: inline-flex; background: #E0F2FE; color: #0284C7; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .tag-default { display: inline-flex; background: #f0f2f5; color: #909399; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 
-    .ev-search {
-        width: 180px;
-        height: 28px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        padding: 0 10px;
-        font-size: 12px;
-        color: #303133;
-        outline: none;
-    }
+    .val-cell { font-family: 'Menlo', monospace; font-size: 13px; }
+    .val-unit { color: #909399; font-size: 10px; margin-left: 2px; }
+    .text-nowrap { white-space: nowrap; }
 
-    .ev-search::placeholder {
-        color: #c0c4cc;
-    }
-
-    .ev-search:focus {
-        border-color: #409eff;
-    }
-
-    .ev-select {
-        width: 110px;
-        height: 28px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        padding: 0 10px;
-        font-size: 12px;
-        color: #606266;
-        outline: none;
-        cursor: pointer;
-        background: #fff;
-    }
-
-    .ev-select:focus {
-        border-color: #409eff;
-    }
-
-    /* ── 表格区域：flex 列布局，使 footer 能 margin-top: auto 贴底 ── */
-    .ev-table-wrap {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    /* 表格本身：紧凑化 + 14px 字号 */
-    .ev-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-    }
-
-    .ev-table th {
-        background: #fafafa;
-        border-bottom: 1px solid #e4e7ed;
-        color: #909399;
-        font-size: 13px;
-        font-weight: 500;
-        padding: 8px 16px;
-        text-align: left;
-        white-space: nowrap;
-    }
-
-    .ev-table td {
-        padding: 8px 16px;
-        border-bottom: 1px solid #f5f7fa;
-        color: #303133;
-        font-size: 14px;
-        vertical-align: middle;
-    }
-
-    .ev-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    .time-cell {
-        font-family: 'Menlo', monospace;
-        font-size: 13px;
-    }
-
-    .time-time {
-        color: #909399;
-        font-size: 11px;
-        margin-top: 3px;
-    }
-
-    .device-cell {
-        font-weight: 500;
-        font-size: 14px;
-    }
-
-    /* ── 报警类型标签重构 (Task 1) ── */
-    .tag-current {
-        display: inline-flex;
-        background: #FEE2E2;
-        color: #DC2626;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .tag-power {
-        display: inline-flex;
-        background: #FFEDD5;
-        color: #EA580C;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .tag-velocity {
-        display: inline-flex;
-        background: #E0F2FE;
-        color: #0284C7;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .tag-default {
-        display: inline-flex;
-        background: #f0f2f5;
-        color: #909399;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .val-cell {
-        font-family: 'Menlo', monospace;
-        font-size: 13px;
-    }
-
-    .val-unit {
-        color: #909399;
-        font-size: 10px;
-        margin-left: 2px;
-    }
-
-    .text-nowrap {
-        white-space: nowrap;
-    }
-
-    /* ── 分页器 Footer：极简灰色边框，无蓝色高亮背景 ── */
-    .ev-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 20px;
-        border-top: 1px solid #f0f2f5;
-        margin-top: auto;
-        flex-shrink: 0;
-    }
-
-    .ev-footer-info {
-        font-size: 12px;
-        color: #909399;
-    }
-
-    .pagination {
-        display: flex;
-        padding: 0;
-        margin: 0;
-        list-style: none;
-        gap: 3px;
-    }
-
-    .page-item .page-link {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        height: 28px;
-        padding: 0 6px;
-        font-size: 12px;
-        color: #606266;
-        background-color: #fff;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        text-decoration: none;
-        transition: border-color 0.15s, color 0.15s;
-    }
-
-    /* 当前页：灰底 + 加粗，无蓝色 */
-    .page-item.active .page-link {
-        color: #303133;
-        background-color: #f4f4f5;
-        border-color: #dcdfe6;
-        font-weight: 600;
-        cursor: default;
-    }
-
-    .page-item.disabled .page-link {
-        color: #c0c4cc;
-        pointer-events: none;
-        background-color: #fafafa;
-        border-color: #ebeef5;
-    }
-
-    .page-item:not(.disabled):not(.active) .page-link:hover {
-        color: #409eff;
-        border-color: #c6e2ff;
-        background-color: #ecf5ff;
-    }
+    /* ── 分页器 Footer ── */
+    .ev-footer { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-top: 1px solid #f0f2f5; margin-top: auto; flex-shrink: 0; }
+    .ev-footer-info { font-size: 12px; color: #909399; }
+    .pagination { display: flex; padding: 0; margin: 0; list-style: none; gap: 3px; }
+    .page-item .page-link { display: flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; font-size: 12px; color: #606266; background-color: #fff; border: 1px solid #dcdfe6; border-radius: 4px; text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+    .page-item.active .page-link { color: #303133; background-color: #f4f4f5; border-color: #dcdfe6; font-weight: 600; cursor: default; }
+    .page-item.disabled .page-link { color: #c0c4cc; pointer-events: none; background-color: #fafafa; border-color: #ebeef5; }
+    .page-item:not(.disabled):not(.active) .page-link:hover { color: #409eff; border-color: #c6e2ff; background-color: #ecf5ff; }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- 外层 row：stretch 等高 + min-height 填满视口 -->
 <div style="display: flex; align-items: stretch; gap: 24px; min-height: calc(100vh - 104px);">
+    <!-- 左侧图表面板 -->
+    {% include 'monitor/includes/event/charts_panel.html' %}
 
-    <!-- ── 左侧两张图表卡片（总高度 = 225 + 16 gap + 309 = 550px）── -->
-    <div style="width: 421px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;">
-
-        <!-- 统计水平条形图：280px -->
-        <div class="ev-card" style="height: 280px;">
-            <div class="ev-title-wrap" style="margin-bottom: 16px; flex-shrink: 0;">
-                <div class="ev-title-bar"></div>
-                <div class="ev-title-text">系统异常事件统计</div>
-            </div>
-            <div id="statsChart" style="flex: 1; width: 100%; min-height: 180px;"></div>
-        </div>
-
-        <!-- 趋势面积图：flex:1 自动填满剩余高度 -->
-        <div class="ev-card" style="flex: 1;">
-            <div class="ev-title-wrap" style="margin-bottom: 16px; flex-shrink: 0;">
-                <div class="ev-title-bar"></div>
-                <div class="ev-title-text">报警频率趋势图</div>
-            </div>
-            <div id="trendChart" style="flex: 1; width: 100%; min-height: 215px;"></div>
-        </div>
-    </div>
-
-    <!-- ── 右侧表格卡片（高度由 flex-stretch 与左侧等高）── -->
+    <!-- 右侧列表卡片 -->
     <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
         <div class="ev-right-col" style="flex: 1;">
-
-            <!-- 卡片标题栏 -->
-            <div class="ev-header">
-                <div class="ev-title-wrap">
-                    <div class="ev-title-bar"></div>
-                    <div class="ev-title-text">系统异常事件上报</div>
-                </div>
-                <div class="ev-tools">
-                    <input class="ev-search" id="ev-search" placeholder="搜索设备名…" oninput="applyFilter()">
-                    <select class="ev-select" id="type-filter" onchange="applyFilter()">
-                        <option value="">全部类型</option>
-                        <option value="HIGH_CURRENT">主轴过电流</option>
-                        <option value="HIGH_POWER">主轴过载</option>
-                        <option value="LOW_VELOCITY">进给速度异常</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- 表格 + 分页器 -->
-            <div class="ev-table-wrap">
-                <table class="ev-table" id="ev-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 20%; text-align: center;">触发时间</th>
-                            <th style="width: 25%;">设备</th>
-                            <th style="width: 25%;">报警类型</th>
-                            <th style="width: 15%;" class="text-nowrap">主轴电流</th>
-                            <th style="width: 15%;" class="text-nowrap">主轴功率</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ev-tbody">
-                        {% for event in page_obj %}
-                        <tr>
-                            <td style="text-align: center;">
-                                <div class="time-cell">{{ event.alert_time|date:"Y-m-d" }}</div>
-                                <div class="time-time">{{ event.alert_time|date:"H:i:s" }}</div>
-                            </td>
-                            <td class="device-cell"
-                                style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                <span title="{{ event.record.device.device_name }}">
-                                    {{ event.record.device.device_name }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if event.alert_type == 'HIGH_CURRENT' %}
-                                <span class="tag-current">主轴过电流</span>
-                                {% elif event.alert_type == 'HIGH_POWER' %}
-                                <span class="tag-power">主轴过载</span>
-                                {% elif event.alert_type == 'LOW_VELOCITY' %}
-                                <span class="tag-velocity">进给速度骤降</span>
-                                {% else %}
-                                <span class="tag-default">{{ event.get_alert_type_display }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-nowrap">
-                                <span class="val-cell">{{ event.record.spindle_current|floatformat:2 }}</span>
-                                <span class="val-unit">A</span>
-                            </td>
-                            <td class="text-nowrap">
-                                <span class="val-cell">{{ event.record.spindle_power|floatformat:1 }}</span>
-                                <span class="val-unit">kW</span>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" style="text-align:center; padding: 40px; color:#909399;">暂无数据</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-
-                <!-- 分页 Footer：紧贴表格底部，margin-top:auto 推至下方 -->
-                <div class="ev-footer">
-                    <span class="ev-footer-info">
-                        {% if page_obj.paginator.count > 0 %}
-                        第 {{ page_obj.start_index }}–{{ page_obj.end_index }} 条，共 {{ page_obj.paginator.count }} 条
-                        {% else %}
-                        暂无数据
-                        {% endif %}
-                    </span>
-                    <ul class="pagination">
-                        <!-- 上一页 -->
-                        {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                            </a>
-                        </li>
-                        {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                            </span>
-                        </li>
-                        {% endif %}
-
-                        <!-- 页码（当前页 ±2） -->
-                        {% for num in page_obj.paginator.page_range %}
-                        {% if num == page_obj.number %}
-                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %} <li
-                            class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
-                            {% endif %}
-                            {% endfor %}
-
-                            <!-- 下一页 -->
-                            {% if page_obj.has_next %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="9 18 15 12 9 6"></polyline>
-                                    </svg>
-                                </a>
-                            </li>
-                            {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="9 18 15 12 9 6"></polyline>
-                                    </svg>
-                                </span>
-                            </li>
-                            {% endif %}
-                    </ul>
-                </div>
-            </div><!-- /ev-table-wrap -->
-        </div><!-- /ev-right-col -->
-    </div><!-- /right col wrapper -->
-
+            {% include 'monitor/includes/event/table_header.html' %}
+            {% include 'monitor/includes/event/table_content.html' %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // 数据准备，使用 |safe 过滤器防止转义
-        const statsData = JSON.parse('{{ stats_data_json|safe }}');
-        const trendLabels = JSON.parse('{{ trend_labels_json|safe }}');
-        const trendValues = JSON.parse('{{ trend_values_json|safe }}');
-
-        // 1. 统计图表初始化与紧接着的设定
-        const statsChart = echarts.init(document.getElementById('statsChart'));
-        statsChart.setOption({
-            grid: { left: '2%', right: '2%', top: '5%', bottom: '5%', containLabel: false },
-            xAxis: { type: 'value', show: false, splitLine: { show: false } },
-            yAxis: [
-                {
-                    type: 'category',
-                    data: ['进给速度异常报警', '主轴过载物理报警', '主轴过电流物理报警'],
-                    axisLine: { show: false }, axisTick: { show: false },
-                    axisLabel: {
-                        inside: true,
-                        color: '#606266',
-                        fontSize: 13,
-                        align: 'left',
-                        verticalAlign: 'bottom',
-                        padding: [0, 0, 12, 0]
-                    }
-                },
-                {
-                    type: 'category',
-                    data: statsData,
-                    position: 'right',
-                    axisLine: { show: false }, axisTick: { show: false },
-                    axisLabel: {
-                        inside: true,
-                        color: '#606266',
-                        fontSize: 14,
-                        align: 'right',
-                        verticalAlign: 'bottom',
-                        padding: [0, 0, 12, 0],
-                        fontFamily: 'monospace'
-                    }
-                }
-            ],
-            series: [{
-                type: 'bar',
-                data: statsData,
-                barWidth: 12,
-                showBackground: true,
-                backgroundStyle: { color: '#f3f6fa', borderRadius: 5 },
-                itemStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        { offset: 0, color: '#409EFF' },
-                        { offset: 1, color: '#a0cfff' }
-                    ]),
-                    borderRadius: 5
-                }
-            }]
-        });
-
-        // 2. 趋势图表初始化与紧接着的设定
-        const trendChart = echarts.init(document.getElementById('trendChart'));
-        trendChart.setOption({
-            grid: { left: '3%', right: '8%', top: '15%', bottom: '10%', containLabel: true },
-            tooltip: {
-                trigger: 'axis',
-                formatter: '峰值 {c} @ {b}',
-                backgroundColor: '#fff',
-                borderColor: '#e4e7ed',
-                textStyle: { color: '#f56c6c', fontSize: 11, fontFamily: 'monospace' }
-            },
-            xAxis: {
-                type: 'category',
-                boundaryGap: false,
-                data: trendLabels,
-                axisLine: { show: false },
-                axisTick: { show: false },
-                axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace', interval: 5 }
-            },
-            yAxis: {
-                type: 'value',
-                min: 0,
-                splitLine: { show: false },
-                axisLabel: { color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' }
-            },
-            series: [{
-                type: 'line',
-                smooth: true,
-                showSymbol: false,
-                lineStyle: { width: 2, color: '#409EFF' },
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(64,158,255,0.3)' },
-                        { offset: 1, color: 'rgba(64,158,255,0)' }
-                    ])
-                },
-                markPoint: {
-                    symbol: 'circle', symbolSize: 8,
-                    itemStyle: { color: '#F5222D' },
-                    data: [{ type: 'max', name: '峰值', label: { formatter: p => '峰值 ' + p.value, color: '#F5222D', fontSize: 10, offset: [0, -12] } }]
-                },
-                data: trendValues
-            }]
-        });
-
-        // 事件监听：自适应大小窗口变化
-        window.addEventListener('resize', () => {
-            if (statsChart) statsChart.resize();
-            if (trendChart) trendChart.resize();
-        });
-    });
-
-    // Handle Resize Observer for chart containers
-    document.addEventListener('DOMContentLoaded', () => {
-        const resizeObserver = new ResizeObserver(() => {
-            if (window.echarts) {
-                const statsChart = echarts.getInstanceByDom(document.getElementById('statsChart'));
-                if (statsChart) statsChart.resize();
-
-                const trendChart = echarts.getInstanceByDom(document.getElementById('trendChart'));
-                if (trendChart) trendChart.resize();
-            }
-        });
-
-        const statsDiv = document.getElementById('statsChart');
-        if (statsDiv) resizeObserver.observe(statsDiv);
-
-        const trendDiv = document.getElementById('trendChart');
-        if (trendDiv) resizeObserver.observe(trendDiv);
-    });
-
-    function applyFilter() {
-        const typeQ = document.getElementById('type-filter').value;
-        const searchQ = document.getElementById('ev-search').value.toLowerCase().trim();
-        const trs = document.querySelectorAll('#ev-tbody tr');
-
-        trs.forEach(tr => {
-            if (tr.children.length === 1) return; // 'No data' row
-            const deviceName = tr.querySelector('.device-cell')?.textContent.toLowerCase() || '';
-            let rawTypeStr = tr.children[2]?.textContent || '';
-            rawTypeStr = rawTypeStr.trim();
-
-            let isEvMatch = true;
-            if (typeQ === 'HIGH_CURRENT' && !rawTypeStr.includes('过电流')) isEvMatch = false;
-            if (typeQ === 'HIGH_POWER' && !rawTypeStr.includes('过载')) isEvMatch = false;
-            if (typeQ === 'LOW_VELOCITY' && !rawTypeStr.includes('速度')) isEvMatch = false;
-
-            if (searchQ && !deviceName.includes(searchQ)) isEvMatch = false;
-            tr.style.display = isEvMatch ? '' : 'none';
-        });
-    }
-</script>
+    {% include 'monitor/includes/event/js_event_engine.html' %}
 {% endblock %}
