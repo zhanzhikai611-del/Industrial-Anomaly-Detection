@@ -56,10 +56,16 @@
     <script>
         document.body.addEventListener('htmx:afterSettle', function(evt) {
             // 1. 核心桥接：让 Alpine.js 重新扫描并初始化新进入 DOM 的组件
-            if (window.Alpine && evt.detail.target) {
-                console.log('[SPA] Alpine discovery for target:', evt.detail.target.id);
-                // 给 Alpine 一丁点微秒时间来确认 DOM 挂载
-                setTimeout(() => Alpine.initTree(evt.detail.target), 0);
+            if (window.Alpine) {
+                if (evt.detail.target) {
+                    console.log('[SPA] Alpine discovery for target:', evt.detail.target.id);
+                    setTimeout(() => Alpine.initTree(evt.detail.target), 0);
+                }
+                // 处理全局的 OOB 替换弹窗面板
+                const modalsArea = document.getElementById('global-modals-area');
+                if (modalsArea) {
+                    setTimeout(() => Alpine.initTree(modalsArea), 0);
+                }
             }
 
             // 2. 检查是否是主内容区刷新进行状态同步
