@@ -12,11 +12,11 @@
     <link rel="stylesheet" href="{% static 'monitor/css/components.css' %}">
     
     <!-- Global Page Styles (Pre-loaded for SPA Experience) -->
-    <link rel="stylesheet" href="{% static 'monitor/css/dashboard.css' %}">
-    <link rel="stylesheet" href="{% static 'monitor/css/device.css' %}">
-    <link rel="stylesheet" href="{% static 'monitor/css/event.css' %}">
-    <link rel="stylesheet" href="{% static 'monitor/css/account.css' %}">
-    <link rel="stylesheet" href="{% static 'monitor/css/setting.css' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/dashboard.css' %}?v={% now 'U' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/device.css' %}?v={% now 'U' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/event.css' %}?v={% now 'U' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/account.css' %}?v={% now 'U' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/setting.css' %}?v={% now 'U' %}">
 
     <!-- Core UI & Rendering Deps -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
