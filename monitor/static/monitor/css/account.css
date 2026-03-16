@@ -73,7 +73,17 @@
 .page-item:not(.disabled):not(.active) .page-link:hover { color: var(--primary); border-color: #c6e2ff; background: #ecf5ff; }
 
 /* ── Modal ── */
-.acc-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000000; background: rgba(0, 0, 0, .5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; }
+[x-cloak] { display: none !important; }
+.acc-modal-overlay { 
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+    z-index: 10000000; 
+    display: none; /* 默认安全隐藏，防止假死 */
+    background: rgba(0, 0, 0, .5); 
+    backdrop-filter: blur(4px); 
+    align-items: center; justify-content: center; 
+    padding: 0; margin: 0; 
+}
+.acc-modal-overlay.active { display: flex; } /* 仅由 Alpine 控制显现 */
 .acc-modal { background: #fff; border-radius: 10px; box-shadow: 0 8px 40px rgba(0, 0, 0, .14); width: 500px; max-width: 96vw; overflow: hidden; }
 
 .acc-modal-head { display: flex; align-items: center; gap: 14px; padding: 20px 24px 16px; border-bottom: 1px solid #f0f2f5; }
@@ -104,13 +114,13 @@
 .pw-toggle-btn:hover { color: var(--primary); }
 .pw-toggle-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-.acc-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px 20px; }
-.acc-modal-foot .btn-cancel { height: 34px; padding: 0 18px; background: #fff; border: 1px solid #dcdfe6; border-radius: 5px; font-size: 13px; color: #606266; cursor: pointer; transition: all .15s; width: auto; white-space: nowrap; }
+.acc-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 24px 20px; }
+.acc-modal-foot .btn-cancel { margin: 0; box-sizing: border-box; height: 34px; padding: 0 18px; background: #fff; border: 1px solid #dcdfe6; border-radius: 5px; font-size: 13px; color: #606266; cursor: pointer; transition: all .15s; width: auto; white-space: nowrap; display: flex; align-items: center; justify-content: center; }
 .acc-modal-foot .btn-cancel:hover { border-color: var(--primary); color: var(--primary); background: #fff; }
-.acc-modal-foot .btn-confirm { height: 34px; padding: 0 18px; background: var(--primary); border: none; border-radius: 5px; font-size: 13px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s; width: auto; white-space: nowrap; }
+.acc-modal-foot .btn-confirm { margin: 0; box-sizing: border-box; height: 34px; padding: 0 18px; background: var(--primary); border: none; border-radius: 5px; font-size: 13px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s; width: auto; white-space: nowrap; }
 .acc-modal-foot .btn-confirm:hover { background: var(--primary-dark, #337ecc); }
 .acc-modal-foot .btn-confirm svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.acc-modal-foot .btn-confirm-danger { height: 34px; padding: 0 18px; background: #f56c6c; border: none; border-radius: 5px; font-size: 13px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity .15s, background .15s; width: auto; white-space: nowrap; }
+.acc-modal-foot .btn-confirm-danger { margin: 0; box-sizing: border-box; height: 34px; padding: 0 18px; background: #f56c6c; border: none; border-radius: 5px; font-size: 13px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity .15s, background .15s; width: auto; white-space: nowrap; }
 .acc-modal-foot .btn-confirm-danger:hover { opacity: 0.85; background: #f56c6c; }
 .acc-modal-foot .btn-confirm-danger svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 

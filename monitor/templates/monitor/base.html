@@ -21,18 +21,23 @@
     <!-- Core UI & Rendering Deps -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="{% static 'monitor/js/core.js' %}"></script>
+    <script src="{% static 'monitor/js/core.js' %}?v={% now 'U' %}"></script>
     
     <!-- Page Engines (Pre-loaded for SPA Response) -->
-    <script src="{% static 'monitor/js/engines/dashboard.js' %}"></script>
-    <script src="{% static 'monitor/js/engines/device.js' %}"></script>
-    <script src="{% static 'monitor/js/engines/event.js' %}"></script>
-    <script src="{% static 'monitor/js/engines/account.js' %}"></script>
-    <script src="{% static 'monitor/js/engines/setting.js' %}"></script>
+    <script src="{% static 'monitor/js/engines/dashboard.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'monitor/js/engines/device.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'monitor/js/engines/event.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'monitor/js/engines/account.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'monitor/js/engines/setting.js' %}?v={% now 'U' %}"></script>
 
     <!-- Modern Fundamentalism Stack (V3.0) -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        /* [SPA] 全局防闪烁：Alpine 准备就绪前强制隐藏标记了 x-cloak 的元素 */
+        [x-cloak] { display: none !important; }
+    </style>
 
     {% block extra_style %}{% endblock %}
 </head>
@@ -61,10 +66,23 @@
                     console.log('[SPA] Alpine discovery for target:', evt.detail.target.id);
                     setTimeout(() => Alpine.initTree(evt.detail.target), 0);
                 }
-                // 处理全局的 OOB 替换弹窗面板
+                
+                // 1.2 处理可能存在的 OOB 替换弹窗面板
                 const modalsArea = document.getElementById('global-modals-area');
                 if (modalsArea) {
-                    setTimeout(() => Alpine.initTree(modalsArea), 0);
+                    // 增加延迟并强制重置树
+                    setTimeout(() => {
+                        // 逻辑：如果已经有挂载的 x-data 但内容更新了，Alpine 有时需要重新评估
+                        Alpine.initTree(modalsArea);
+                        
+                        // 特殊处理：如果蒙版依然存在 x-cloak，尝试对每一个 Modal 独立初始化
+                        modalsArea.querySelectorAll('[x-cloak]').forEach(el => {
+                            if (el.getAttribute('x-cloak') !== null) {
+                                Alpine.initTree(el);
+                            }
+                        });
+                        console.log('[SPA] Alpine Deep discovery for OOB done');
+                    }, 80);
                 }
             }
 

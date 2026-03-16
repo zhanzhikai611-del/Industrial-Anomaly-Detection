@@ -4,19 +4,6 @@
 {% block nav_account %}active{% endblock %}
 
 {% block extra_style %}
-<link rel="stylesheet" href="{% static 'monitor/css/account.css' %}?v={% now 'U' %}">
-<style>
-    /* 强制布局保底 (针对账号管理页) */
-    .acc-modal-overlay {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        width: 100vw; height: 100vh;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(4px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 10000000;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -37,10 +24,12 @@
 </div>
 
 <script>
-    // V3.0.3 SPA Auto-Init
-    if (window.AccountApp) {
+    // V3.0.4 SPA Auto-Init (With Safety Check)
+    if (window.AccountApp && window.AccountApp.ui && typeof window.AccountApp.ui.init === 'function') {
         console.log('[AccountApp] Init triggered');
         AccountApp.ui.init();
+    } else {
+        console.warn('[AccountApp] Engine not ready, skipping init');
     }
 </script>
 {% endblock %}

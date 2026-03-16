@@ -1,7 +1,8 @@
 <!-- 编辑账号 Modal -->
 <div class="acc-modal-overlay" 
-     id="edit-modal"
+     id="edit-modal" 
      x-show="showEditModal"
+     :class="{ 'active': showEditModal }"
      x-transition.opacity.duration.200ms
      x-cloak
      @click.self="showEditModal = false"

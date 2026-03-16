@@ -2,6 +2,7 @@
 <div class="acc-modal-overlay" 
      id="add-modal" 
      x-show="showAddModal" 
+     :class="{ 'active': showAddModal }"
      x-transition.opacity.duration.200ms
      x-cloak
      @click.self="showAddModal = false"

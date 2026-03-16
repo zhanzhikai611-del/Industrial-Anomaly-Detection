@@ -194,6 +194,15 @@ window.EventApp = {
                 
                 EventApp.charts.init();
                 console.log('[EventApp] Charts Initialized');
+
+                // SPA ECharts layout fix
+                const forceResize = () => {
+                    if (EventApp.state.statsChart) EventApp.state.statsChart.resize();
+                    if (EventApp.state.trendChart) EventApp.state.trendChart.resize();
+                };
+                requestAnimationFrame(forceResize);
+                setTimeout(forceResize, 150);
+                setTimeout(forceResize, 600);
             }, 300);
         }
     }

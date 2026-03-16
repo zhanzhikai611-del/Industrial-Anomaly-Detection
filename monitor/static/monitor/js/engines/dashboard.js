@@ -610,6 +610,21 @@ window.DashboardApp = {
                 
                 initDashboardCharts();
                 if (window.renderHoneycomb) window.renderHoneycomb(Array(25).fill(null));
+
+                // SPA ECharts layout fix
+                const forceResize = () => {
+                    [window.cHourly, window.cTrend, window.cLine].forEach(c => c && c.resize());
+                };
+                requestAnimationFrame(forceResize);
+                setTimeout(forceResize, 150);
+                setTimeout(forceResize, 600);
+                
+                if (window.ResizeObserver) {
+                    ['chart-hourly', 'chart-trend', 'chart-line'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) new ResizeObserver(forceResize).observe(el);
+                    });
+                }
                 
                 // Data Flow
                 fetchTrend();

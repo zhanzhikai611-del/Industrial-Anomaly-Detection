@@ -2,6 +2,7 @@
 <div class="acc-modal-overlay" 
      id="del-modal"
      x-show="showDelModal"
+     :class="{ 'active': showDelModal }"
      x-transition.opacity.duration.200ms
      x-cloak
      @click.self="showDelModal = false"
