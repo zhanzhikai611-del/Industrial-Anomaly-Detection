@@ -1,6 +1,12 @@
 <!-- 删除确认 Modal -->
-<div class="acc-modal-overlay" id="del-modal">
-    <div class="acc-modal" style="width:400px; border-top: 4px solid #f56c6c;">
+<div class="acc-modal-overlay" 
+     id="del-modal"
+     x-show="showDelModal"
+     x-transition.opacity.duration.200ms
+     x-cloak
+     @click.self="showDelModal = false"
+     @keydown.escape.window="showDelModal = false">
+    <div class="acc-modal" style="width:400px; border-top: 4px solid #f56c6c;" x-show="showDelModal" x-transition.scale.95.duration.200ms>
         <div class="acc-modal-head" style="border-bottom:none; padding-bottom:12px;">
             <div class="modal-icon-circle" style="background:#fef0f0;">
                 <svg viewBox="0 0 24 24" style="stroke:#f56c6c; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;">
@@ -13,7 +19,7 @@
                 <div class="modal-head-title" style="color:#f56c6c;">安全确认</div>
                 <div class="modal-head-sub">此操作将永久移除该账号</div>
             </div>
-            <button class="modal-close" onclick="AccountApp.ui.closeModal('del-modal')">×</button>
+            <button class="modal-close" @click="showDelModal = false">×</button>
         </div>
         <div class="acc-modal-body" style="padding-top:0;">
             <input type="hidden" id="del-uid">
@@ -23,8 +29,8 @@
             </div>
         </div>
         <div class="acc-modal-foot" style="background:#fcfcfc; border-top:1px solid #f0f2f5; padding-top:16px;">
-            <button class="btn-cancel" onclick="AccountApp.ui.closeModal('del-modal')">取消操作</button>
-            <button class="btn-confirm" onclick="AccountApp.auth.executeDelete()" id="btn-del-confirm" style="background:#f56c6c;">
+            <button class="btn-cancel" @click="showDelModal = false">取消操作</button>
+            <button class="btn-confirm-danger" onclick="AccountApp.auth.executeDelete()" id="btn-del-confirm">
                 <svg viewBox="0 0 24 24" style="fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;">
                     <polyline points="3 6 5 6 21 6" />
                     <path d="M19 6l-1 14H6L5 6" />

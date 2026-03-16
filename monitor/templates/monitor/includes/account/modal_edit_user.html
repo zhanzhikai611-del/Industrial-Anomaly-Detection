@@ -1,6 +1,12 @@
 <!-- 编辑账号 Modal -->
-<div class="acc-modal-overlay" id="edit-modal">
-    <div class="acc-modal">
+<div class="acc-modal-overlay" 
+     id="edit-modal"
+     x-show="showEditModal"
+     x-transition.opacity.duration.200ms
+     x-cloak
+     @click.self="showEditModal = false"
+     @keydown.escape.window="showEditModal = false">
+    <div class="acc-modal" x-show="showEditModal" x-transition.scale.95.duration.200ms>
         <div class="acc-modal-head">
             <div class="modal-icon-circle">
                 <svg viewBox="0 0 24 24">
@@ -12,7 +18,7 @@
                 <div class="modal-head-title">编辑账号</div>
                 <div class="modal-head-sub" id="edit-modal-sub">修改账号信息与权限设置</div>
             </div>
-            <button class="modal-close" onclick="AccountApp.ui.closeModal('edit-modal')">×</button>
+            <button class="modal-close" @click="showEditModal = false">×</button>
         </div>
         <div class="acc-modal-body">
             <input type="hidden" id="edit-uid">
@@ -52,7 +58,7 @@
             </div>
         </div>
         <div class="acc-modal-foot">
-            <button class="btn-cancel" onclick="AccountApp.ui.closeModal('edit-modal')">取消</button>
+            <button class="btn-cancel" @click="showEditModal = false">取消</button>
             <button class="btn-confirm" onclick="AccountApp.auth.submitEdit()">
                 <svg viewBox="0 0 24 24">
                     <polyline points="20 6 9 17 4 12" />

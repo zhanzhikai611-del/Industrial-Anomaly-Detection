@@ -6,7 +6,9 @@
 window.SettingApp = {
     state: {
         isStreamRunning: false,
-        isProcessing: false
+        isProcessing: false,
+        isInitialized: false,
+        pollInterval: null
     },
 
     utils: {
@@ -28,68 +30,51 @@ window.SettingApp = {
 
     ui: {
         init: function() {
+            if (SettingApp.state.isInitialized) {
+                console.log('[SettingApp] Refreshing...');
+                SettingApp.stream.checkStatus();
+                return;
+            }
+
             SettingApp.stream.checkStatus();
             // Regular status polling
-            setInterval(SettingApp.stream.checkStatus, 5000);
+            if (SettingApp.state.pollInterval) clearInterval(SettingApp.state.pollInterval);
+            SettingApp.state.pollInterval = setInterval(SettingApp.stream.checkStatus, 5000);
+            
+            SettingApp.state.isInitialized = true;
         },
 
         updateStreamUI: function(isActive) {
             SettingApp.state.isStreamRunning = isActive;
-            const segPause = document.getElementById('seg-pause');
-            const segRun = document.getElementById('seg-run');
-            if (!segPause || !segRun) return;
-
-            if (isActive) {
-                segRun.classList.add('active');
-                segPause.classList.remove('active');
-            } else {
-                segPause.classList.add('active');
-                segRun.classList.remove('active');
-            }
+            // Sync with Alpine
+            window.dispatchEvent(new CustomEvent('stream-status-updated', { detail: { isActive } }));
         },
 
         openResetModal: function() {
-            const el = document.getElementById('reset-modal');
-            if (el) el.style.display = 'flex';
+            // Handled by Alpine now
         },
 
         closeResetModal: function() {
-            const el = document.getElementById('reset-modal');
-            if (el) el.style.display = 'none';
+            // 确保事件派发到 window 层级，由底部的 Alpine 监听器捕获
+            window.dispatchEvent(new CustomEvent('close-reset-modal'));
         },
 
         showSuccessToast: function(title, message) {
-            let toast = document.getElementById('success-toast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'success-toast';
-                toast.style.cssText = `
-                    position:fixed; bottom:32px; right:32px; z-index:9999;
-                    background:#fff; border-radius:8px; padding:14px 18px;
-                    box-shadow:0 4px 20px rgba(0,0,0,.12); border-left:4px solid #67c23a;
-                    display:flex; align-items:flex-start; gap:10px;
-                    font-size:13px; color:#303133; max-width:280px;
-                    opacity:0; transition:opacity .3s; pointer-events:none;
-                `;
-                toast.innerHTML = `
-                    <div style="color:#67c23a;margin-top:1px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <div>
-                        <div style="font-weight:600;margin-bottom:3px;" id="toast-title"></div>
-                        <div style="color:#909399;font-size:12px;" id="toast-msg"></div>
-                    </div>`;
-                document.body.appendChild(toast);
-            }
-            document.getElementById('toast-title').textContent = title;
-            document.getElementById('toast-msg').textContent = message;
-            toast.style.opacity = '1';
-            setTimeout(() => { toast.style.opacity = '0'; }, 4000);
+            window.dispatchEvent(new CustomEvent('show-success-toast', { 
+                detail: { title, msg: message } 
+            }));
         }
     },
 
     stream: {
         checkStatus: async function() {
+            // Guard: Check if we are still on the settings page
+            const checkEl = document.getElementById('base-metrics');
+            if (!checkEl) {
+                if (SettingApp.state.pollInterval) clearInterval(SettingApp.state.pollInterval);
+                return;
+            }
+
             try {
                 const res = await fetch('/api/stream-status/');
                 const data = await res.json();
@@ -101,8 +86,7 @@ window.SettingApp = {
         },
 
         toggle: async function(newState) {
-            if (SettingApp.state.isStreamRunning === newState) return;
-
+            // Remove the early return check to ensure force-syncing from UI works
             const segmentContainer = document.getElementById('stream-segment');
             if (segmentContainer) segmentContainer.classList.add('disabled');
 

@@ -1,4 +1,4 @@
-{% extends 'monitor/base.html' %}
+{% extends base_template %}
 {% load static %}
 {% block title %}Dashboard{% endblock %}
 {% block nav_dashboard %}active{% endblock %}
@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="db-layout mb-4">
+<div class="db-layout mb-4" x-data x-init="if (window.DashboardApp) { window.DashboardApp.ui.init(); }">
     <!-- ① 左柱 -->
     <div class="db-col">
         {% include 'monitor/includes/dashboard/panel_oee.html' %}
@@ -29,8 +29,5 @@
 </div>
 
 {% include 'monitor/includes/dashboard/ai_modals.html' %}
-{% endblock %}
 
-{% block extra_js %}
-<script src="{% static 'monitor/js/engines/dashboard.js' %}"></script>
 {% endblock %}

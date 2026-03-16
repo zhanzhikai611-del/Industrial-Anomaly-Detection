@@ -132,7 +132,8 @@ def event_view(request):
 @role_required(['Admin'])
 def setting_view(request):
     """Setting 系统设置页（仅 Admin 可访问）"""
-    return render(request, 'monitor/setting.html')
+    config = SystemConfig.get()
+    return render(request, 'monitor/setting.html', {'config': config})
 
 @login_required
 def factory_view(request):

@@ -384,7 +384,7 @@ class SystemConfig(models.Model):
       False → 守护进程挂起，不写入任何数据
     """
     is_realtime_active = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name='实时数据流开关',
         help_text='True=开启实时模拟写入 | False=暂停（不删除历史数据）',
     )

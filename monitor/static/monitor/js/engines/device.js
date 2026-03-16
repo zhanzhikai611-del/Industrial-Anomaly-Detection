@@ -12,29 +12,37 @@ window.DeviceApp = {
         repairDevId: null,
         modalChartInst: null,
         modalPollTimer: null,
-        _urlDeviceChecked: false
+        _urlDeviceChecked: false,
+        isInitialized: false,
+        oneTimeInited: false,
+        pollInterval: null
     },
 
     engine: {
         init: async function() {
-            // Ensure $ helper exists
-            window.$ = window.$ || (id => document.getElementById(id));
+            console.log('[DeviceApp] Initializing engine components...');
             
+            // 1. One-time Global Init
+            if (!DeviceApp.state.oneTimeInited) {
+                window.addEventListener('resize', () => { 
+                    if (DeviceApp.state.modalChartInst) DeviceApp.state.modalChartInst.resize(); 
+                });
+                document.addEventListener('click', () => {
+                    document.querySelectorAll('.status-dropdown.show, .sort-dropdown.show').forEach(m => m.classList.remove('show'));
+                });
+                DeviceApp.state.oneTimeInited = true;
+            }
+
+            // 2. DOM Helpers & Initial Load
+            window.$ = window.$ || (id => document.getElementById(id));
             DeviceApp.engine.setFilter('all');
             await DeviceApp.engine.fetchDevices();
             
-            // Background polling
-            setInterval(DeviceApp.engine.fetchDevices, 5000);
-            
-            // Global events
-            window.addEventListener('resize', () => { 
-                if (DeviceApp.state.modalChartInst) DeviceApp.state.modalChartInst.resize(); 
-            });
+            // 3. Background polling
+            if (DeviceApp.state.pollInterval) clearInterval(DeviceApp.state.pollInterval);
+            DeviceApp.state.pollInterval = setInterval(DeviceApp.engine.fetchDevices, 5000);
 
-            // Global click listener for dropdowns
-            document.addEventListener('click', () => {
-                document.querySelectorAll('.status-dropdown.show, .sort-dropdown.show').forEach(m => m.classList.remove('show'));
-            });
+            DeviceApp.state.isInitialized = true;
         },
 
         fetchDevices: async function() {

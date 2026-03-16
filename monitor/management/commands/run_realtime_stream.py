@@ -279,11 +279,13 @@ class Command(BaseCommand):
         try:
             while True:
                 tick += 1
+                # 强制重新从数据库拉取最新配置，避免单例对象缓存导致无法接收页面开关指令
                 cfg = SystemConfig.get()
+                cfg.refresh_from_db()
 
                 if not cfg.is_realtime_active:
                     if tick % 5 == 0:
-                        self.stdout.write(f'[{tick:>6}] ⏸  Streaming paused...')
+                        self.stdout.write(f'[{tick:>6}] ⏸  Streaming paused (Waiting for signal)...')
                     time.sleep(STREAM_INTERVAL)
                     continue
 

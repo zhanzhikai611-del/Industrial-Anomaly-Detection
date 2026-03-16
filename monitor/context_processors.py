@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 monitor/context_processors.py
-全局 RBAC 上下文处理器：向所有模板注入角色信息，
-使侧边栏导航和功能按钮能够按角色动态显隐。
+全局上下文处理器：向所有模板注入角色信息及 HTMX 渲染基座。
 """
-
 
 def rbac_context(request):
     """
@@ -38,3 +36,11 @@ def rbac_context(request):
         'show_admin_nav': role == 'Admin',
         'is_operator': role == 'Operator',
     }
+
+def htmx_context(request):
+    """
+    提供全局 context 变量，用于实现 HTMX 局部/全局渲染切换。
+    """
+    if getattr(request, 'is_htmx', False):
+        return {'base_template': 'monitor/partial.html'}
+    return {'base_template': 'monitor/base.html'}

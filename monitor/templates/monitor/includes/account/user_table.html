@@ -49,18 +49,15 @@
                     </td>
                     <td>
                         <div class="acc-actions">
-                            <button class="acc-icon-btn edit-btn" title="编辑" data-uid="{{ user.id }}"
-                                data-username="{{ user.username|escapejs }}"
-                                data-realname="{{ user.profile.real_name|default:""|escapejs }}"
-                                data-role="{{ user.profile.role|default:"Operator"|escapejs }}"
-                                data-active="{{ user.is_active|yesno:"true,false" }}">
+                            <button class="acc-icon-btn edit-btn" title="编辑" 
+                                @click="openEdit('{{ user.id }}', '{{ user.username|escapejs }}', '{{ user.profile.real_name|default:""|escapejs }}', '{{ user.profile.role|default:"Operator"|escapejs }}', {{ user.is_active|yesno:"true,false" }})">
                                 <svg viewBox="0 0 24 24">
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                                 </svg>
                             </button>
-                            <button class="acc-icon-btn del-btn" title="删除" data-uid="{{ user.id }}"
-                                data-username="{{ user.username|escapejs }}">
+                            <button class="acc-icon-btn del-btn" title="删除" 
+                                @click="confirmDel('{{ user.id }}', '{{ user.username|escapejs }}')">
                                 <svg viewBox="0 0 24 24">
                                     <polyline points="3 6 5 6 21 6" />
                                     <path d="M19 6l-1 14H6L5 6" />

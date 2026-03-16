@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'monitor.middleware.HtmxMiddleware',
 ]
 
 ROOT_URLCONF = 'IndustrialWarningSystem.urls'
@@ -67,6 +68,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'monitor.context_processors.rbac_context',
+                'monitor.context_processors.htmx_context',
             ],
         },
     },

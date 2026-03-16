@@ -14,7 +14,7 @@
         </div>
         <!-- 角色过滤 (Custom Dropdown) -->
         <div class="custom-select-container" id="role-filter-container">
-            <div class="custom-select-pill" onclick="AccountApp.ui.toggleCustomSelect(event, 'role-filter-container')">
+            <div class="custom-select-pill" @click="showRoleFilter = !showRoleFilter">
                 <span id="role-pill-label">
                     {% if role_q == 'Admin' %}系统管理员
                     {% elif role_q == 'Engineer' %}工程师
@@ -23,7 +23,7 @@
                     {% endif %}
                 </span>
             </div>
-            <div class="custom-select-dropdown">
+            <div class="custom-select-dropdown" x-show="showRoleFilter" @click.outside="showRoleFilter = false" x-cloak>
                 <div class="custom-select-item {% if not role_q %}active{% endif %}" onclick="AccountApp.filters.selectRole('')">全部角色</div>
                 <div class="custom-select-item {% if role_q == 'Admin' %}active{% endif %}" onclick="AccountApp.filters.selectRole('Admin')">系统管理员</div>
                 <div class="custom-select-item {% if role_q == 'Engineer' %}active{% endif %}" onclick="AccountApp.filters.selectRole('Engineer')">工程师</div>
@@ -33,7 +33,7 @@
             <input type="hidden" id="role-filter" value="{{ role_q|default:'' }}">
         </div>
     </div>
-    <button class="btn-add" onclick="AccountApp.ui.openAddModal()">
+    <button class="btn-add" @click="openAdd()">
         <svg viewBox="0 0 24 24">
             <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
             <circle cx="8.5" cy="7" r="4" />

@@ -1,27 +1,100 @@
-{% extends 'monitor/base.html' %}
+{% extends base_template %}
 {% load static %}
 {% block title %}账号管理{% endblock %}
 {% block nav_account %}active{% endblock %}
 
 {% block extra_style %}
-<link rel="stylesheet" href="{% static 'monitor/css/account.css' %}">
+<link rel="stylesheet" href="{% static 'monitor/css/account.css' %}?v={% now 'U' %}">
+<style>
+    /* 强制布局保底 (针对账号管理页) */
+    .acc-modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 10000000;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="acc-wrap">
-    {% include 'monitor/includes/account/toolbar.html' %}
-    {% include 'monitor/includes/account/user_table.html' %}
+<div class="acc-wrap-global" x-data="{ 
+    showRoleFilter: false,
+    openAdd() { window.dispatchEvent(new CustomEvent('open-add-dialog')); },
+    openEdit(uid, username, realname, role, active) { 
+        window.dispatchEvent(new CustomEvent('open-edit-dialog', { detail: { uid, username, realname, role, active } })); 
+    },
+    confirmDel(uid, username) { 
+        window.dispatchEvent(new CustomEvent('open-del-dialog', { detail: { uid, username } })); 
+    }
+}">
+    <div class="acc-wrap">
+        {% include 'monitor/includes/account/toolbar.html' %}
+        {% include 'monitor/includes/account/user_table.html' %}
+    </div>
 </div>
 
-<!-- Modals -->
-{% include 'monitor/includes/account/modal_add_user.html' %}
-{% include 'monitor/includes/account/modal_edit_user.html' %}
-{% include 'monitor/includes/account/modal_delete_confirm.html' %}
-
-<!-- 全局 Toast -->
-<div id="acc-toast"></div>
+<script>
+    // V3.0.3 SPA Auto-Init
+    if (window.AccountApp) {
+        console.log('[AccountApp] Init triggered');
+        AccountApp.ui.init();
+    }
+</script>
 {% endblock %}
 
-{% block extra_js %}
-<script src="{% static 'monitor/js/engines/account.js' %}"></script>
+{% block extra_body %}
+<!-- 账号管理全局组件：使用 OOB 确保模态框挂载到 body 下 (V3.0.3) -->
+<div id="global-modals-area" hx-swap-oob="true">
+    <div x-data="{ 
+        showAddModal: false, 
+        showEditModal: false, 
+        showDelModal: false,
+        toast: { show: false, msg: '', isError: false },
+
+        openAdd() { 
+            AccountApp.ui.openAddModal();
+            this.showAddModal = true; 
+        },
+        openEdit(uid, username, realname, role, active) {
+            AccountApp.ui.setEditData(uid, username, realname, role, active);
+            this.showEditModal = true;
+        },
+        confirmDel(uid, username) {
+            AccountApp.ui.setDelData(uid, username);
+            this.showDelModal = true;
+        },
+        displayToast(msg, isError = false) {
+            this.toast.msg = msg;
+            this.toast.isError = isError;
+            this.toast.show = true;
+            setTimeout(() => this.toast.show = false, 2800);
+        }
+    }"
+    @open-add-dialog.window="openAdd()"
+    @open-edit-dialog.window="openEdit($event.detail.uid, $event.detail.username, $event.detail.realname, $event.detail.role, $event.detail.active)"
+    @open-del-dialog.window="confirmDel($event.detail.uid, $event.detail.username)"
+    @show-toast.window="displayToast($event.detail.msg, $event.detail.isError)"
+    @close-add-modal.window="showAddModal = false"
+    @close-edit-modal.window="showEditModal = false"
+    @close-del-modal.window="showDelModal = false">
+
+        <!-- Modals: 移除 x-if 以保证 JS 逻辑能找到 DOM 元素 -->
+        {% include 'monitor/includes/account/modal_add_user.html' %}
+        {% include 'monitor/includes/account/modal_edit_user.html' %}
+        {% include 'monitor/includes/account/modal_delete_confirm.html' %}
+
+        <!-- 全局 Toast -->
+        <div id="acc-toast" 
+             x-show="toast.show" 
+             x-transition.opacity
+             x-text="toast.msg"
+             x-cloak
+             :style="{ background: toast.isError ? '#f56c6c' : '#303133' }"
+             class="toast-alpine">
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -11,30 +11,95 @@
     <link rel="stylesheet" href="{% static 'monitor/css/layout.css' %}">
     <link rel="stylesheet" href="{% static 'monitor/css/components.css' %}">
     
+    <!-- Global Page Styles (Pre-loaded for SPA Experience) -->
+    <link rel="stylesheet" href="{% static 'monitor/css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/device.css' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/event.css' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/account.css' %}">
+    <link rel="stylesheet" href="{% static 'monitor/css/setting.css' %}">
+
     <!-- Core UI & Rendering Deps -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="{% static 'monitor/js/core.js' %}"></script>
+    
+    <!-- Page Engines (Pre-loaded for SPA Response) -->
+    <script src="{% static 'monitor/js/engines/dashboard.js' %}"></script>
+    <script src="{% static 'monitor/js/engines/device.js' %}"></script>
+    <script src="{% static 'monitor/js/engines/event.js' %}"></script>
+    <script src="{% static 'monitor/js/engines/account.js' %}"></script>
+    <script src="{% static 'monitor/js/engines/setting.js' %}"></script>
+
+    <!-- Modern Fundamentalism Stack (V3.0) -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     {% block extra_style %}{% endblock %}
 </head>
 
-<body>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
     {% include 'monitor/includes/sidebar.html' %}
 
     {% include 'monitor/includes/header.html' %}
 
     <!-- ══════ 主内容 ══════ -->
-    <main class="main">
+    <main class="main" id="main-content" hx-history-elt>
         <div class="content">
             {% block content %}{% endblock %}
         </div>
     </main>
 
     {% include 'monitor/includes/ai_agent_logic.html' %}
+
+    <!-- HTMX 局部刷新后的 JS 引擎再初始化逻辑 (V3.0.2) -->
+    <script>
+        document.body.addEventListener('htmx:afterSettle', function(evt) {
+            // 1. 核心桥接：让 Alpine.js 重新扫描并初始化新进入 DOM 的组件
+            if (window.Alpine && evt.detail.target) {
+                console.log('[SPA] Alpine discovery for target:', evt.detail.target.id);
+                // 给 Alpine 一丁点微秒时间来确认 DOM 挂载
+                setTimeout(() => Alpine.initTree(evt.detail.target), 0);
+            }
+
+            // 2. 检查是否是主内容区刷新进行状态同步
+            if (evt.detail.target.id === 'main-content') {
+                const path = window.location.pathname;
+                console.log('[HTMX] Nav Settle:', path);
+                
+                // 3. 同步更新导航链接的 active 状态
+                document.querySelectorAll('.nav-link, .nav-center-tab').forEach(el => {
+                    const href = el.getAttribute('href');
+                    if (!href) return;
+                    
+                    let isActive = false;
+                    if (el.classList.contains('nav-center-tab')) {
+                        if (href === '/dashboard/') {
+                            const visionPages = ['/dashboard/', '/devices/', '/events/', '/accounts/', '/setting/'];
+                            isActive = visionPages.some(p => path.startsWith(p));
+                        } else {
+                            isActive = (path === href || (href !== '/' && path.startsWith(href)));
+                        }
+                    } else {
+                        if (href === '/dashboard/') {
+                            isActive = (path === '/dashboard/');
+                        } else {
+                            isActive = (path === href || (href !== '/' && path.startsWith(href)));
+                        }
+                    }
+                    if (isActive) el.classList.add('active');
+                    else el.classList.remove('active');
+                });
+            }
+        });
+    </script>
+
     {% block extra_js %}{% endblock %}
 
+    <!-- 页面专用全局组件挂载点 (V2.2.4+) -->
+    <div id="global-modals-area">
+        {% block extra_body %}{% endblock %}
+    </div>
 </body>
 
 </html>

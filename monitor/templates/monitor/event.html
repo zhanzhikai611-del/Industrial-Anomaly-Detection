@@ -1,4 +1,4 @@
-{% extends 'monitor/base.html' %}
+{% extends base_template %}
 {% load static %}
 {% block title %}事件中心{% endblock %}
 {% block nav_event %}active{% endblock %}
@@ -8,7 +8,16 @@
 {% endblock %}
 
 {% block content %}
-<div style="display: flex; align-items: stretch; gap: 24px; min-height: calc(100vh - 104px);">
+<div style="display: flex; align-items: stretch; gap: 24px; min-height: calc(100vh - 104px);"
+     x-data="{}"
+     x-init="
+        if (window.EventApp) {
+            window.EventApp.state.data.stats = JSON.parse('{{ stats_data_json|escapejs }}');
+            window.EventApp.state.data.trendLabels = JSON.parse('{{ trend_labels_json|escapejs }}');
+            window.EventApp.state.data.trendValues = JSON.parse('{{ trend_values_json|escapejs }}');
+            window.EventApp.ui.init();
+        }
+     ">
     <!-- 左侧图表面板 -->
     {% include 'monitor/includes/event/charts_panel.html' %}
 
@@ -20,16 +29,5 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
-<script src="{% static 'monitor/js/engines/event.js' %}"></script>
-<script>
-    // Bootstrap event data from Django template to External Engine
-    if (window.EventApp) {
-        EventApp.state.data.stats = JSON.parse('{{ stats_data_json|safe }}');
-        EventApp.state.data.trendLabels = JSON.parse('{{ trend_labels_json|safe }}');
-        EventApp.state.data.trendValues = JSON.parse('{{ trend_values_json|safe }}');
-    }
-</script>
 {% endblock %}

@@ -1,0 +1,516 @@
+<title hx-swap-oob="true">CNC Cloud | 账号管理</title>
+<div class="content">
+    
+<div class="acc-wrap-global" x-data="{ 
+    showRoleFilter: false,
+    openAdd() { window.dispatchEvent(new CustomEvent('open-add-dialog')); },
+    openEdit(uid, username, realname, role, active) { 
+        window.dispatchEvent(new CustomEvent('open-edit-dialog', { detail: { uid, username, realname, role, active } })); 
+    },
+    confirmDel(uid, username) { 
+        window.dispatchEvent(new CustomEvent('open-del-dialog', { detail: { uid, username } })); 
+    }
+}">
+    <div class="acc-wrap">
+        <!-- 账号管理工具栏 -->
+<div class="acc-toolbar">
+    <div class="acc-tools-left">
+        <!-- 搜索框 -->
+        <div class="acc-search-wrap">
+            <span class="acc-search-icon">
+                <svg viewBox="0 0 14 14">
+                    <circle cx="5.8" cy="5.8" r="4.2" />
+                    <line x1="9.1" y1="9.1" x2="13" y2="13" />
+                </svg>
+            </span>
+            <input class="acc-search" id="search-input" placeholder="搜索用户名/姓名/工号…" value=""
+                onkeydown="if(event.key==='Enter') AccountApp.filters.applySearch()">
+        </div>
+        <!-- 角色过滤 (Custom Dropdown) -->
+        <div class="custom-select-container" id="role-filter-container">
+            <div class="custom-select-pill" @click="showRoleFilter = !showRoleFilter">
+                <span id="role-pill-label">
+                    全部角色
+                    
+                </span>
+            </div>
+            <div class="custom-select-dropdown" x-show="showRoleFilter" @click.outside="showRoleFilter = false" x-cloak>
+                <div class="custom-select-item active" onclick="AccountApp.filters.selectRole('')">全部角色</div>
+                <div class="custom-select-item " onclick="AccountApp.filters.selectRole('Admin')">系统管理员</div>
+                <div class="custom-select-item " onclick="AccountApp.filters.selectRole('Engineer')">工程师</div>
+                <div class="custom-select-item " onclick="AccountApp.filters.selectRole('Operator')">操作员</div>
+            </div>
+            <!-- 隐藏的原始 Select 用于逻辑兼容 -->
+            <input type="hidden" id="role-filter" value="">
+        </div>
+    </div>
+    <button class="btn-add" @click="openAdd()">
+        <svg viewBox="0 0 24 24">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <line x1="20" y1="8" x2="20" y2="14" />
+            <line x1="23" y1="11" x2="17" y2="11" />
+        </svg>
+        新增账号
+    </button>
+</div>
+
+        <!-- 用户列表核心表格 -->
+<div class="acc-card">
+    <div class="acc-table-wrap">
+        <table class="acc-table" id="user-table">
+            <thead>
+                <tr>
+                    <th style="width:18%;">用户名</th>
+                    <th style="width:14%;">真实姓名</th>
+                    <th style="width:12%;">工号</th>
+                    <th style="width:14%;">所属角色</th>
+                    <th style="width:18%;">创建时间</th>
+                    <th style="width:12%;">账号状态</th>
+                    <th style="width:12%; text-align:left;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr data-uid="3">
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">O</div>
+                            <span style="font-weight:500;">operator</span>
+                        </div>
+                    </td>
+                    <td>test02</td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        000002
+                    </td>
+                    <td>
+                        
+                        
+                        <span class="role-tag role-operator">操作员</span>
+                        
+                        
+                    </td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        2026-02-28 00:39
+                    </td>
+                    <td>
+                        
+                        <span class="status-pill status-on">启用</span>
+                        
+                    </td>
+                    <td>
+                        <div class="acc-actions">
+                            <button class="acc-icon-btn edit-btn" title="编辑" 
+                                @click="openEdit('3', 'operator', 'test02', 'Operator', true)">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                            </button>
+                            <button class="acc-icon-btn del-btn" title="删除" 
+                                @click="confirmDel('3', 'operator')">
+                                <svg viewBox="0 0 24 24">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                    <path d="M9 6V4h6v2" />
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                
+                <tr data-uid="2">
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">Q</div>
+                            <span style="font-weight:500;">qa_engineer</span>
+                        </div>
+                    </td>
+                    <td>test01</td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        000001
+                    </td>
+                    <td>
+                        
+                        
+                        <span class="role-tag role-engineer">工程师</span>
+                        
+                        
+                    </td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        2026-02-28 00:37
+                    </td>
+                    <td>
+                        
+                        <span class="status-pill status-on">启用</span>
+                        
+                    </td>
+                    <td>
+                        <div class="acc-actions">
+                            <button class="acc-icon-btn edit-btn" title="编辑" 
+                                @click="openEdit('2', 'qa_engineer', 'test01', 'Engineer', true)">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                            </button>
+                            <button class="acc-icon-btn del-btn" title="删除" 
+                                @click="confirmDel('2', 'qa_engineer')">
+                                <svg viewBox="0 0 24 24">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                    <path d="M9 6V4h6v2" />
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                
+                <tr data-uid="1">
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">A</div>
+                            <span style="font-weight:500;">admin</span>
+                        </div>
+                    </td>
+                    <td>—</td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        —
+                    </td>
+                    <td>
+                        
+                        
+                        <span class="role-tag role-admin">系统管理员</span>
+                        
+                        
+                    </td>
+                    <td style="font-family:'Menlo',monospace;font-size:12px;color:#606266;">
+                        2026-02-24 21:11
+                    </td>
+                    <td>
+                        
+                        <span class="status-pill status-on">启用</span>
+                        
+                    </td>
+                    <td>
+                        <div class="acc-actions">
+                            <button class="acc-icon-btn edit-btn" title="编辑" 
+                                @click="openEdit('1', 'admin', '', 'Admin', true)">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                            </button>
+                            <button class="acc-icon-btn del-btn" title="删除" 
+                                @click="confirmDel('1', 'admin')">
+                                <svg viewBox="0 0 24 24">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                    <path d="M9 6V4h6v2" />
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 分页 Footer -->
+    <div class="acc-footer">
+        <span class="acc-footer-info">
+            
+            第 1–3 条，共 3 条
+            
+        </span>
+        <ul class="pagination">
+            
+            <li class="page-item disabled"><span class="page-link"><svg width="12" height="12" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg></span></li>
+            
+
+            
+            
+            <li class="page-item active"><span class="page-link">1</span></li>
+            
+            
+
+            
+            <li class="page-item disabled"><span class="page-link"><svg width="12" height="12"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg></span></li>
+            
+        </ul>
+    </div>
+</div>
+
+    </div>
+</div>
+
+<script>
+    // V3.0.3 SPA Auto-Init
+    if (window.AccountApp) {
+        console.log('[AccountApp] Init triggered');
+        AccountApp.ui.init();
+    }
+</script>
+
+</div>
+
+<!-- 账号管理全局组件：使用 OOB 确保模态框挂载到 body 下 (V3.0.3) -->
+<div id="global-modals-area" hx-swap-oob="true">
+    <div x-data="{ 
+        showAddModal: false, 
+        showEditModal: false, 
+        showDelModal: false,
+        toast: { show: false, msg: '', isError: false },
+
+        openAdd() { 
+            AccountApp.ui.openAddModal();
+            this.showAddModal = true; 
+        },
+        openEdit(uid, username, realname, role, active) {
+            AccountApp.ui.setEditData(uid, username, realname, role, active);
+            this.showEditModal = true;
+        },
+        confirmDel(uid, username) {
+            AccountApp.ui.setDelData(uid, username);
+            this.showDelModal = true;
+        },
+        displayToast(msg, isError = false) {
+            this.toast.msg = msg;
+            this.toast.isError = isError;
+            this.toast.show = true;
+            setTimeout(() => this.toast.show = false, 2800);
+        }
+    }"
+    @open-add-dialog.window="openAdd()"
+    @open-edit-dialog.window="openEdit($event.detail.uid, $event.detail.username, $event.detail.realname, $event.detail.role, $event.detail.active)"
+    @open-del-dialog.window="confirmDel($event.detail.uid, $event.detail.username)"
+    @show-toast.window="displayToast($event.detail.msg, $event.detail.isError)"
+    @close-add-modal.window="showAddModal = false"
+    @close-edit-modal.window="showEditModal = false"
+    @close-del-modal.window="showDelModal = false">
+
+        <!-- Modals: 移除 x-if 以保证 JS 逻辑能找到 DOM 元素 -->
+        <!-- 新增账号 Modal -->
+<div class="acc-modal-overlay" 
+     id="add-modal" 
+     x-show="showAddModal" 
+     x-transition.opacity.duration.200ms
+     x-cloak
+     @click.self="showAddModal = false"
+     @keydown.escape.window="showAddModal = false">
+    <div class="acc-modal" x-show="showAddModal" x-transition.scale.95.duration.200ms>
+        <div class="acc-modal-head">
+            <div class="modal-icon-circle">
+                <svg viewBox="0 0 24 24">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                </svg>
+            </div>
+            <div class="modal-head-text">
+                <div class="modal-head-title">新增账号</div>
+                <div class="modal-head-sub">创建新的系统账号并分配角色</div>
+            </div>
+            <button class="modal-close" @click="showAddModal = false">×</button>
+        </div>
+        <div class="acc-modal-body">
+            <div id="add-error" style="display:none;background:#fef0f0;border:1px solid #fde2e2;border-radius:5px;padding:8px 12px;color:#f56c6c;font-size:12px;margin-bottom:14px;"></div>
+            <div class="fm-grid">
+                <div class="fm-group">
+                    <label class="fm-label">用户名<span class="fm-req">*</span></label>
+                    <input class="fm-input" id="add-username" placeholder="e.g. jeremy_09">
+                    <div class="fm-error" id="err-username"></div>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">真实姓名<span class="fm-req">*</span></label>
+                    <input class="fm-input" id="add-realname" placeholder="e.g. 张伟">
+                    <div class="fm-error" id="err-realname"></div>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">工号<span class="fm-req">*</span></label>
+                    <input class="fm-input" id="add-jobnum" placeholder="# 6位数字" maxlength="6">
+                    <div class="fm-error" id="err-jobnum"></div>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">所属角色<span class="fm-req">*</span></label>
+                    <select class="fm-select" id="add-role">
+                        <option value="Operator" selected>操作员</option>
+                        <option value="Engineer">工程师</option>
+                        <option value="Admin">系统管理员</option>
+                    </select>
+                </div>
+                <div class="fm-group fm-group-full">
+                    <label class="fm-label">初始密码<span class="fm-req">*</span></label>
+                    <div class="pw-wrap">
+                        <input class="fm-input" type="password" id="add-pwd" placeholder="至少6位">
+                        <span class="pw-toggle-btn" onclick="AccountApp.ui.togglePw('add-pwd', this)">
+                            <svg viewBox="0 0 24 24" id="pw-eye-add">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="fm-error" id="err-pwd"></div>
+                </div>
+            </div>
+        </div>
+        <div class="acc-modal-foot">
+            <button class="btn-cancel" @click="showAddModal = false">取消</button>
+            <button class="btn-confirm" onclick="AccountApp.auth.submitAdd()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                </svg>
+                确认创建
+            </button>
+        </div>
+    </div>
+</div>
+
+        <!-- 编辑账号 Modal -->
+<div class="acc-modal-overlay" 
+     id="edit-modal"
+     x-show="showEditModal"
+     x-transition.opacity.duration.200ms
+     x-cloak
+     @click.self="showEditModal = false"
+     @keydown.escape.window="showEditModal = false">
+    <div class="acc-modal" x-show="showEditModal" x-transition.scale.95.duration.200ms>
+        <div class="acc-modal-head">
+            <div class="modal-icon-circle">
+                <svg viewBox="0 0 24 24">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+            </div>
+            <div class="modal-head-text">
+                <div class="modal-head-title">编辑账号</div>
+                <div class="modal-head-sub" id="edit-modal-sub">修改账号信息与权限设置</div>
+            </div>
+            <button class="modal-close" @click="showEditModal = false">×</button>
+        </div>
+        <div class="acc-modal-body">
+            <input type="hidden" id="edit-uid">
+            <div id="edit-error" style="display:none;background:#fef0f0;border:1px solid #fde2e2;border-radius:5px;padding:8px 12px;color:#f56c6c;font-size:12px;margin-bottom:14px;"></div>
+            <div class="fm-grid">
+                <div class="fm-group">
+                    <label class="fm-label">真实姓名</label>
+                    <input class="fm-input" id="edit-realname" placeholder="请输入真实姓名">
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">所属角色</label>
+                    <select class="fm-select" id="edit-role">
+                        <option value="Operator">操作员</option>
+                        <option value="Engineer">工程师</option>
+                        <option value="Admin">系统管理员</option>
+                    </select>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">账号状态</label>
+                    <select class="fm-select" id="edit-active">
+                        <option value="true">启用</option>
+                        <option value="false">禁用</option>
+                    </select>
+                </div>
+                <div class="fm-group">
+                    <label class="fm-label">重置密码 <span style="color:#c0c4cc;font-weight:400;">（留空不修改）</span></label>
+                    <div class="pw-wrap">
+                        <input class="fm-input" type="password" id="edit-pwd" placeholder="输入新密码">
+                        <span class="pw-toggle-btn" onclick="AccountApp.ui.togglePw('edit-pwd', this)">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="acc-modal-foot">
+            <button class="btn-cancel" @click="showEditModal = false">取消</button>
+            <button class="btn-confirm" onclick="AccountApp.auth.submitEdit()">
+                <svg viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12" />
+                </svg>
+                保存修改
+            </button>
+        </div>
+    </div>
+</div>
+
+        <!-- 删除确认 Modal -->
+<div class="acc-modal-overlay" 
+     id="del-modal"
+     x-show="showDelModal"
+     x-transition.opacity.duration.200ms
+     x-cloak
+     @click.self="showDelModal = false"
+     @keydown.escape.window="showDelModal = false">
+    <div class="acc-modal" style="width:400px; border-top: 4px solid #f56c6c;" x-show="showDelModal" x-transition.scale.95.duration.200ms>
+        <div class="acc-modal-head" style="border-bottom:none; padding-bottom:12px;">
+            <div class="modal-icon-circle" style="background:#fef0f0;">
+                <svg viewBox="0 0 24 24" style="stroke:#f56c6c; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+            </div>
+            <div class="modal-head-text">
+                <div class="modal-head-title" style="color:#f56c6c;">安全确认</div>
+                <div class="modal-head-sub">此操作将永久移除该账号</div>
+            </div>
+            <button class="modal-close" @click="showDelModal = false">×</button>
+        </div>
+        <div class="acc-modal-body" style="padding-top:0;">
+            <input type="hidden" id="del-uid">
+            <p id="del-msg" style="font-size:13px; color:#303133; line-height:1.6;"></p>
+            <div style="background:#fdf6ec; border-left:3px solid #e6a23c; padding:10px 14px; border-radius:4px; margin-top:16px;">
+                <p style="font-size:12px; color:#bc8228; margin:0; font-weight:500;">⚠ 注意：删除后该用户的操作日志仍将保留，但无法再登录系统。</p>
+            </div>
+        </div>
+        <div class="acc-modal-foot" style="background:#fcfcfc; border-top:1px solid #f0f2f5; padding-top:16px;">
+            <button class="btn-cancel" @click="showDelModal = false">取消操作</button>
+            <button class="btn-confirm" onclick="AccountApp.auth.executeDelete()" id="btn-del-confirm" style="background:#f56c6c;">
+                <svg viewBox="0 0 24 24" style="fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                </svg>
+                确认删除
+            </button>
+        </div>
+    </div>
+</div>
+
+
+        <!-- 全局 Toast -->
+        <div id="acc-toast" 
+             x-show="toast.show" 
+             x-transition.opacity
+             x-text="toast.msg"
+             x-cloak
+             :style="{ background: toast.isError ? '#f56c6c' : '#303133' }"
+             class="toast-alpine">
+        </div>
+    </div>
+</div>
+
+
+

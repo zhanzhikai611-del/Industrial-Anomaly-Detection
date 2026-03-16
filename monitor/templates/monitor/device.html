@@ -1,4 +1,4 @@
-{% extends 'monitor/base.html' %}
+{% extends base_template %}
 {% load static %}
 {% block title %}设备监控{% endblock %}
 {% block nav_device %}active{% endblock %}
@@ -8,12 +8,11 @@
 {% endblock %}
 
 {% block content %}
+<div x-data x-init="if (window.DeviceApp) window.DeviceApp.engine.init();">
     {% include 'monitor/includes/device/toolbar.html' %}
     {% include 'monitor/includes/device/table.html' %}
     {% include 'monitor/includes/device/modal_ai_diagnosis.html' %}
     {% include 'monitor/includes/device/modal_maintenance.html' %}
-{% endblock %}
+</div>
 
-{% block extra_js %}
-<script src="{% static 'monitor/js/engines/device.js' %}"></script>
 {% endblock %}

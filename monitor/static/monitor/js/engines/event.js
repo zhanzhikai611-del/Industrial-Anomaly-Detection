@@ -8,6 +8,7 @@ window.EventApp = {
         statsChart: null,
         trendChart: null,
         resizeObserver: null,
+        oneTimeInited: false,
         // Chart data to be initialized from template
         data: {
             stats: [],
@@ -19,10 +20,12 @@ window.EventApp = {
     charts: {
         init: function() {
             const { stats, trendLabels, trendValues } = EventApp.state.data;
+            console.log('[EventApp] Charts Init Start. Data:', { statsLen: stats.length, trendLen: trendValues.length });
 
             // 1. Stats Chart (Horizontal Bar)
             const statsEl = document.getElementById('statsChart');
-            if (statsEl && stats.length > 0) {
+            if (statsEl) {
+                console.log('[EventApp] Initializing Stats Chart');
                 EventApp.state.statsChart = echarts.init(statsEl);
                 EventApp.state.statsChart.setOption({
                     grid: { left: '2%', right: '2%', top: '5%', bottom: '5%', containLabel: false },
@@ -76,13 +79,13 @@ window.EventApp = {
 
             // 2. Trend Chart (Area Line)
             const trendEl = document.getElementById('trendChart');
-            if (trendEl && trendLabels.length > 0) {
+            if (trendEl) {
+                console.log('[EventApp] Initializing Trend Chart');
                 EventApp.state.trendChart = echarts.init(trendEl);
                 EventApp.state.trendChart.setOption({
                     grid: { left: '3%', right: '8%', top: '15%', bottom: '10%', containLabel: true },
                     tooltip: {
                         trigger: 'axis',
-                        formatter: '峰值 {c} @ {b}',
                         backgroundColor: '#fff',
                         borderColor: '#e4e7ed',
                         textStyle: { color: '#f56c6c', fontSize: 11, fontFamily: 'monospace' }
@@ -153,31 +156,51 @@ window.EventApp = {
     },
 
     utils: {
-        initResize: function() {
-            window.addEventListener('resize', () => {
-                if (EventApp.state.statsChart) EventApp.state.statsChart.resize();
-                if (EventApp.state.trendChart) EventApp.state.trendChart.resize();
-            });
+        // Observers managed in ui.init
+    },
 
-            if (window.ResizeObserver) {
-                EventApp.state.resizeObserver = new ResizeObserver(() => {
+    ui: {
+        init: function() {
+            console.log('[EventApp] Engine Triggered');
+            
+            // 1. One-time Global Init
+            if (!EventApp.state.oneTimeInited) {
+                window.addEventListener('resize', () => {
                     if (EventApp.state.statsChart) EventApp.state.statsChart.resize();
                     if (EventApp.state.trendChart) EventApp.state.trendChart.resize();
                 });
-
-                const statsDiv = document.getElementById('statsChart');
-                if (statsDiv) EventApp.state.resizeObserver.observe(statsDiv);
-
-                const trendDiv = document.getElementById('trendChart');
-                if (trendDiv) EventApp.state.resizeObserver.observe(trendDiv);
+                if (window.ResizeObserver) {
+                    EventApp.state.resizeObserver = new ResizeObserver(() => {
+                        if (EventApp.state.statsChart) EventApp.state.statsChart.resize();
+                        if (EventApp.state.trendChart) EventApp.state.trendChart.resize();
+                    });
+                }
+                EventApp.state.oneTimeInited = true;
             }
+
+            // 2. Delayed DOM Init
+            setTimeout(() => {
+                const statsEl = document.getElementById('statsChart');
+                const trendEl = document.getElementById('trendChart');
+                if (!statsEl || !trendEl) return;
+
+                if (EventApp.state.resizeObserver) {
+                    EventApp.state.resizeObserver.observe(statsEl);
+                    EventApp.state.resizeObserver.observe(trendEl);
+                }
+
+                if (EventApp.state.statsChart) EventApp.state.statsChart.dispose();
+                if (EventApp.state.trendChart) EventApp.state.trendChart.dispose();
+                
+                EventApp.charts.init();
+                console.log('[EventApp] Charts Initialized');
+            }, 300);
         }
     }
 };
 
-// Application entry point
 document.addEventListener('DOMContentLoaded', () => {
-    // Note: EventApp.state.data must be populated before calling this
-    EventApp.charts.init();
-    EventApp.utils.initResize();
+    if (window.location.pathname.includes('/events/')) {
+        EventApp.ui.init();
+    }
 });

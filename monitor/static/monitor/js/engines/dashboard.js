@@ -12,98 +12,112 @@ let isCopilotRunning = false;
 
 // ── 1. ECharts Initialization ──
 function initDashboardCharts() {
+    console.log('[Dashboard] Init Charts...');
+    
     // Hourly Production
-    window.cHourly = echarts.init($('chart-hourly'));
-    cHourly.setOption({
-        grid: { left: 4, right: 4, top: 12, bottom: 20, containLabel: false },
-        xAxis: {
-            type: 'category', data: [],
-            axisLine: { show: false }, axisTick: { show: false },
-            axisLabel: { fontSize: 10, color: '#909399' }
-        },
-        yAxis: { type: 'value', show: false },
-        series: [{
-            type: 'bar',
-            data: [],
-            itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#409EFF' }, { offset: 1, color: '#a8c8ff' }] }, borderRadius: [2, 2, 0, 0] },
-            barMaxWidth: 18
-        }]
-    });
+    const hourlyEl = $('chart-hourly');
+    if (hourlyEl) {
+        console.log('[Dashboard] Found chart-hourly');
+        window.cHourly = echarts.init(hourlyEl);
+        cHourly.setOption({
+            grid: { left: 4, right: 4, top: 12, bottom: 20, containLabel: false },
+            xAxis: {
+                type: 'category', data: [],
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { fontSize: 10, color: '#909399' }
+            },
+            yAxis: { type: 'value', show: false },
+            series: [{
+                type: 'bar',
+                data: [],
+                itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#409EFF' }, { offset: 1, color: '#a8c8ff' }] }, borderRadius: [2, 2, 0, 0] },
+                barMaxWidth: 18
+            }]
+        });
+    }
 
     // 24h Alert Trend
-    window.cTrend = echarts.init($('chart-trend'));
-    cTrend.setOption({
-        tooltip: { trigger: 'axis', formatter: params => params[0].name + '<br/>频次：' + params[0].value },
-        grid: { left: '3%', right: '12%', top: '20%', bottom: '15%', containLabel: true },
-        xAxis: {
-            type: 'category', boundaryGap: false, data: [],
-            axisLabel: { fontSize: 10, color: '#6b7280', interval: 5, fontFamily: 'Roboto Mono,monospace' },
-            axisLine: { show: false }, axisTick: { show: false }
-        },
-        yAxis: {
-            type: 'value', min: 0,
-            axisLabel: { fontSize: 10, color: '#6b7280' },
-            splitLine: { lineStyle: { color: '#f0f2f5' } },
-            axisLine: { show: false }, axisTick: { show: false }
-        },
-        series: [{
-            type: 'line', smooth: true, symbol: 'none',
-            lineStyle: { color: '#409EFF', width: 2 },
-            areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(64,158,255,.35)' }, { offset: 1, color: 'rgba(64,158,255,0)' }] } },
-            markPoint: {
-                symbol: 'circle', symbolSize: 8,
-                itemStyle: { color: '#F5222D' },
-                data: [{ type: 'max', name: '峰值', label: { formatter: p => '峰值 ' + p.value, color: '#F5222D', fontSize: 10, offset: [0, -12] } }]
+    const trendEl = $('chart-trend');
+    if (trendEl) {
+        console.log('[Dashboard] Found chart-trend');
+        window.cTrend = echarts.init(trendEl);
+        cTrend.setOption({
+            tooltip: { trigger: 'axis', formatter: params => params[0].name + '<br/>频次：' + params[0].value },
+            grid: { left: '3%', right: '12%', top: '20%', bottom: '15%', containLabel: true },
+            xAxis: {
+                type: 'category', boundaryGap: false, data: [],
+                axisLabel: { fontSize: 10, color: '#6b7280', interval: 5, fontFamily: 'Roboto Mono,monospace' },
+                axisLine: { show: false }, axisTick: { show: false }
             },
-            data: []
-        }]
-    });
+            yAxis: {
+                type: 'value', min: 0,
+                axisLabel: { fontSize: 10, color: '#6b7280' },
+                splitLine: { lineStyle: { color: '#f0f2f5' } },
+                axisLine: { show: false }, axisTick: { show: false }
+            },
+            series: [{
+                type: 'line', smooth: true, symbol: 'none',
+                lineStyle: { color: '#409EFF', width: 2 },
+                areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(64,158,255,.35)' }, { offset: 1, color: 'rgba(64,158,255,0)' }] } },
+                markPoint: {
+                    symbol: 'circle', symbolSize: 8,
+                    itemStyle: { color: '#F5222D' },
+                    data: [{ type: 'max', name: '峰值', label: { formatter: p => '峰值 ' + p.value, color: '#F5222D', fontSize: 10, offset: [0, -12] } }]
+                },
+                data: []
+            }]
+        });
+    }
 
     // Stream Dual Axis Line
-    window.cLine = echarts.init($('chart-line'));
-    cLine.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { color: '#303133', fontSize: 12 } },
-        legend: {
-            bottom: 0, left: 0, icon: 'roundRect', textStyle: { color: '#4a5565', fontSize: 11 }, itemWidth: 24, itemHeight: 2,
-            data: [{ name: '电流', itemStyle: { color: '#2b7fff' } }, { name: 'AI预警', itemStyle: { color: '#ff6467' } }]
-        },
-        grid: { left: '6%', right: '8%', bottom: '18%', containLabel: true },
-        xAxis: {
-            type: 'category', boundaryGap: false, data: [], axisLine: { show: false }, axisTick: { show: false },
-            axisLabel: { color: '#6b7280', fontSize: 10, fontFamily: 'Roboto Mono,monospace' }, splitLine: { show: false }
-        },
-        yAxis: [
-            {
-                type: 'value', name: '电流(A)', position: 'left', axisLine: { show: false }, axisTick: { show: false },
-                splitLine: { lineStyle: { color: '#f0f2f5' } }, axisLabel: { color: '#4a5565', fontSize: 10 }, nameTextStyle: { color: '#4a5565', fontSize: 10 }
+    const lineEl = $('chart-line');
+    if (lineEl) {
+        window.cLine = echarts.init(lineEl);
+        cLine.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { color: '#303133', fontSize: 12 } },
+            legend: {
+                bottom: 0, left: 0, icon: 'roundRect', textStyle: { color: '#4a5565', fontSize: 11 }, itemWidth: 24, itemHeight: 2,
+                data: [{ name: '电流', itemStyle: { color: '#2b7fff' } }, { name: 'AI预警', itemStyle: { color: '#ff6467' } }]
             },
-            {
-                type: 'value', name: 'AI预警(%)', position: 'right', nameGap: 15, offset: 10, min: 0, max: 100, interval: 20,
-                axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
-                axisLabel: { color: '#ff6467', fontSize: 10 }, nameTextStyle: { color: '#ff6467', fontSize: 10 }
-            }
-        ],
-        series: [
-            {
-                name: '电流', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0,
-                lineStyle: { color: '#2b7fff', width: 1.5 }, data: []
+            grid: { left: '6%', right: '8%', bottom: '18%', containLabel: true },
+            xAxis: {
+                type: 'category', boundaryGap: false, data: [], axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: '#6b7280', fontSize: 10, fontFamily: 'Roboto Mono,monospace' }, splitLine: { show: false }
             },
-            {
-                name: 'AI预警', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1,
-                lineStyle: { color: '#ff6467', width: 1.5 }, itemStyle: { color: '#ff6467' },
-                markLine: { symbol: ['none', 'none'], data: [{ yAxis: 75, lineStyle: { color: '#f56c6c', type: 'dashed', width: 1, opacity: .35 }, label: { show: false } }] },
-                data: []
-            }
-        ]
-    });
-
-    window.addEventListener('resize', () => {
-        [cHourly, cTrend, cLine].forEach(c => c && c.resize());
-    });
+            yAxis: [
+                {
+                    type: 'value', name: '电流(A)', position: 'left', axisLine: { show: false }, axisTick: { show: false },
+                    splitLine: { lineStyle: { color: '#f0f2f5' } }, axisLabel: { color: '#4a5565', fontSize: 10 }, nameTextStyle: { color: '#4a5565', fontSize: 10 }
+                },
+                {
+                    type: 'value', name: 'AI预警(%)', position: 'right', nameGap: 15, offset: 10, min: 0, max: 100, interval: 20,
+                    axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
+                    axisLabel: { color: '#ff6467', fontSize: 10 }, nameTextStyle: { color: '#ff6467', fontSize: 10 }
+                }
+            ],
+            series: [
+                {
+                    name: '电流', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0,
+                    lineStyle: { color: '#2b7fff', width: 1.5 }, data: []
+                },
+                {
+                    name: 'AI预警', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1,
+                    lineStyle: { color: '#ff6467', width: 1.5 }, itemStyle: { color: '#ff6467' },
+                    markLine: { symbol: ['none', 'none'], data: [{ yAxis: 75, lineStyle: { color: '#f56c6c', type: 'dashed', width: 1, opacity: .35 }, label: { show: false } }] },
+                    data: []
+                }
+            ]
+        });
+    }
 }
 
 // ── 2. Data Polling Logic ──
 async function fetchStats() {
+    const el = document.getElementById('oee-pct');
+    if (!el) {
+        if (DashboardApp.state.pollInterval) clearInterval(DashboardApp.state.pollInterval);
+        return;
+    }
     try {
         const d = await fetch('/api/stats/').then(r => r.json());
         if (d.status !== 'ok') return;
@@ -208,6 +222,13 @@ async function fetchStream() {
 }
 
 window.pollAll = async function() {
+    // 强制生命周期管理：如果仪表盘核心元素不存在，说明已切换页面，直接杀掉整个轮询
+    const checkEl = document.getElementById('oee-pct');
+    if (!checkEl) {
+        if (DashboardApp.state.pollInterval) clearInterval(DashboardApp.state.pollInterval);
+        return;
+    }
+
     try {
         const st = await fetch('/api/stream-status/').then(r => r.json());
         const badge = $('stream-status-badge');
@@ -556,29 +577,66 @@ function appendAiMessage(msg, context) {
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
 }
 
-// ── 5. Initialize Page ──
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Setup Charts
-    initDashboardCharts();
-    
-    // 2. Initial Setup for Honeycomb
-    if (window.renderHoneycomb) window.renderHoneycomb(Array(25).fill(null));
-    
-    // 3. First Poll
-    fetchTrend();
-    window.pollAll();
-    
-    // 4. Start Interval
-    setInterval(window.pollAll, 3000);
-    
-    // 5. Global Events
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (isCopilotRunning) stopCopilot();
-            closeAskMode();
+// ── 5. Standardized Dashboard Engine (V3.0.1) ──
+window.DashboardApp = {
+    state: {
+        isInitialized: false,
+        oneTimeInited: false,
+        pollInterval: null
+    },
+
+    ui: {
+        init: function() {
+            console.log('[Dashboard] Engine Triggered');
+            
+            // 1. One-time Global Init
+            if (!DashboardApp.state.oneTimeInited) {
+                document.addEventListener('keydown', DashboardApp.ui.handleGlobalKeys);
+                window.addEventListener('resize', () => {
+                    [window.cHourly, window.cTrend, window.cLine].forEach(c => c && c.resize());
+                });
+                DashboardApp.state.oneTimeInited = true;
+            }
+
+            // 2. Delayed DOM Init (Ensure layout is ready for ECharts)
+            setTimeout(() => {
+                const checkEl = document.getElementById('chart-hourly');
+                if (!checkEl) return; 
+
+                // Process DOM-dependent components
+                if (window.cHourly) window.cHourly.dispose();
+                if (window.cTrend) window.cTrend.dispose();
+                if (window.cLine) window.cLine.dispose();
+                
+                initDashboardCharts();
+                if (window.renderHoneycomb) window.renderHoneycomb(Array(25).fill(null));
+                
+                // Data Flow
+                fetchTrend();
+                window.pollAll();
+                
+                // Polling Lifecycle
+                if (DashboardApp.state.pollInterval) clearInterval(DashboardApp.state.pollInterval);
+                DashboardApp.state.pollInterval = setInterval(window.pollAll, 3000);
+                
+                initAgentSocket();
+                DashboardApp.state.isInitialized = true;
+                console.log('[Dashboard] Charts & Polling Active');
+            }, 300);
+        },
+
+        handleGlobalKeys: function(e) {
+            if (e.key === 'Escape') {
+                if (isCopilotRunning) stopCopilot();
+                closeAskMode();
+            }
         }
-    });
-    
-    // 6. Init WebSocket
-    initAgentSocket();
+    }
+};
+
+// Initial entry for full page load
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname.includes('/dashboard/')) {
+        DashboardApp.ui.init();
+    }
 });

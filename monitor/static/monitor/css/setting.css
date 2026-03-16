@@ -3,6 +3,7 @@
    ══════════════════════════════════════ */
 
 .set-container { padding: 0; height: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+[x-cloak] { display: none !important; }
 .set-col { display: flex; flex-direction: column; gap: 20px; height: 100%; }
 .set-card { background: #fff; border-radius: 8px; box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.05); display: flex; flex-direction: column; }
 .set-header { height: 50px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #f0f2f5; }
@@ -41,9 +42,43 @@
 .info-val { color: #303133; font-weight: 500; }
 
 /* ── Modal overlay ── */
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 2000; }
-.modal-box { background: #fff; width: 360px; border-radius: 12px; padding: 24px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); text-align: center; animation: modalFadeIn 0.3s ease-out; }
-@keyframes modalFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.set-modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    width: 100vw; 
+    height: 100vh; 
+    background: rgba(0, 0, 0, 0.75); 
+    backdrop-filter: blur(6px); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    z-index: 10000000; 
+}
+
+.modal-box { 
+    background: #fff; 
+    width: 380px; 
+    max-width: 95vw;
+    border-radius: 14px; 
+    padding: 30px; 
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3); 
+    text-align: center;
+    position: relative;
+    animation: modalPopUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalPopUp {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes modalPop {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
 .modal-icon { width: 48px; height: 48px; background: #fff1f0; color: var(--danger); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 16px; }
 .modal-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 12px; }
 .modal-text { font-size: 13px; color: #909399; line-height: 1.6; margin-bottom: 24px; }
@@ -53,3 +88,15 @@
 .btn-cancel:hover { background: #e4e7ed; }
 .btn-confirm-red { background: var(--danger); color: #fff; }
 .btn-confirm-red:hover { opacity: 0.85; }
+/* ── Alpine Toast ── */
+.toast-alpine-success {
+    position: fixed; bottom: 32px; right: 32px; z-index: 9999;
+    background: #fff; border-radius: 8px; padding: 14px 18px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.12); border-left: 4px solid #67c23a;
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: #303133; max-width: 280px;
+    pointer-events: none;
+}
+.toast-icon-green { color: #67c23a; margin-top: 1px; }
+.toast-title { font-weight: 600; margin-bottom: 3px; }
+.toast-msg { color: #909399; font-size: 12px; }

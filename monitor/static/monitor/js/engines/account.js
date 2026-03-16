@@ -10,53 +10,34 @@ window.AccountApp = {
 
     ui: {
         init: function() {
-            // Ensure helper $ exists if needed, though this file uses standard DOM
+            // Legacy init - DOM logic moved to Alpine.js
             window.$ = window.$ || (id => document.getElementById(id));
-
-            // Global click listener for routing events to dynamically or statically rendered elements
-            document.addEventListener('click', e => {
-                const editBtn = e.target.closest('.edit-btn');
-                const delBtn = e.target.closest('.del-btn');
-
-                if (editBtn) {
-                    const d = editBtn.dataset;
-                    AccountApp.ui.openEditModal(d.uid, d.username, d.realname, d.role, d.active === 'true');
-                } else if (delBtn) {
-                    const d = delBtn.dataset;
-                    AccountApp.ui.confirmDelete(d.uid, d.username);
-                } else if (e.target.classList.contains('acc-modal-overlay')) {
-                    AccountApp.ui.closeModal(e.target.id);
-                }
-                
-                // Close custom selects if clicking outside
-                if (!e.target.closest('.custom-select-container')) {
-                    AccountApp.ui.closeAllSelects();
-                }
-            });
         },
 
         showToast: function(msg, isError = false) {
-            const t = document.getElementById('acc-toast');
-            if (!t) return;
-            t.textContent = msg;
-            t.style.background = isError ? '#f56c6c' : '#303133';
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2800);
+            // Dispatch event to Alpine
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg, isError } }));
         },
 
         openModal: function(id) { 
+            // Legacy fallback, mostly handled by Alpine now
             const el = document.getElementById(id);
             if (el) el.classList.add('show'); 
         },
 
         closeModal: function(id) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.classList.remove('show');
+            // Updated to sync with Alpine state
+            if (id === 'add-modal') window.dispatchEvent(new CustomEvent('close-add-modal'));
+            if (id === 'edit-modal') window.dispatchEvent(new CustomEvent('close-edit-modal'));
+            if (id === 'del-modal') window.dispatchEvent(new CustomEvent('close-del-modal'));
+            
             // Clear errors
-            el.querySelectorAll('.fm-error').forEach(e => { e.style.display = 'none'; e.textContent = ''; });
-            const errBox = document.getElementById(id.replace('-modal', '-error'));
-            if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+            const el = document.getElementById(id);
+            if (el) {
+                el.querySelectorAll('.fm-error').forEach(e => { e.style.display = 'none'; e.textContent = ''; });
+                const errBox = document.getElementById(id.replace('-modal', '-error'));
+                if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+            }
         },
 
         toggleCustomSelect: function(event, containerId) {
@@ -85,31 +66,42 @@ window.AccountApp = {
         },
 
         openAddModal: function() {
-            document.getElementById('add-username').value = '';
-            document.getElementById('add-realname').value = '';
-            document.getElementById('add-jobnum').value = '';
-            document.getElementById('add-pwd').value = '';
-            document.getElementById('add-role').value = 'Operator';
-            AccountApp.ui.openModal('add-modal');
-            setTimeout(() => document.getElementById('add-username').focus(), 100);
+            setTimeout(() => {
+                const un = document.getElementById('add-username');
+                const rn = document.getElementById('add-realname');
+                const jn = document.getElementById('add-jobnum');
+                const pw = document.getElementById('add-pwd');
+                const rl = document.getElementById('add-role');
+                if(un) un.value = '';
+                if(rn) rn.value = '';
+                if(jn) jn.value = '';
+                if(pw) pw.value = '';
+                if(rl) rl.value = 'Operator';
+                if(un) setTimeout(() => un.focus(), 100);
+            }, 50);
         },
 
-        openEditModal: function(uid, username, realname, role, isActive) {
-            document.getElementById('edit-uid').value = uid;
-            document.getElementById('edit-realname').value = realname;
-            document.getElementById('edit-role').value = role;
-            document.getElementById('edit-active').value = String(isActive);
-            document.getElementById('edit-pwd').value = '';
-            const sub = document.getElementById('edit-modal-sub');
-            if (sub) sub.textContent = `编辑账号：${username}`;
-            AccountApp.ui.openModal('edit-modal');
+        setEditData: function(uid, username, realname, role, isActive) {
+            setTimeout(() => {
+                const eUid = document.getElementById('edit-uid');
+                const eRn = document.getElementById('edit-realname');
+                const eRl = document.getElementById('edit-role');
+                const eAc = document.getElementById('edit-active');
+                const ePw = document.getElementById('edit-pwd');
+                const sub = document.getElementById('edit-modal-sub');
+                if(eUid) eUid.value = uid;
+                if(eRn) eRn.value = realname;
+                if(eRl) eRl.value = role;
+                if(eAc) eAc.value = String(isActive);
+                if(ePw) ePw.value = '';
+                if(sub) sub.textContent = `编辑账号：${username}`;
+            }, 50);
         },
 
-        confirmDelete: function(uid, username) {
+        setDelData: function(uid, username) {
             document.getElementById('del-uid').value = uid;
             const msg = document.getElementById('del-msg');
             if (msg) msg.innerHTML = `您确定要永久删除账号「<strong>${username}</strong>」吗？这将使其立即失去访问权限。`;
-            AccountApp.ui.openModal('del-modal');
         }
     },
 
