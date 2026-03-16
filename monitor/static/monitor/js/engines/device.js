@@ -36,7 +36,22 @@ window.DeviceApp = {
             // 2. DOM Helpers & Initial Load
             window.$ = window.$ || (id => document.getElementById(id));
             DeviceApp.engine.setFilter('all');
-            await DeviceApp.engine.fetchDevices();
+            
+            // 核心：处理来自仪表盘的跳转搜索 (V3.2.7)
+            const urlParams = new URLSearchParams(window.location.search);
+            const q = urlParams.get('q');
+            const searchInput = $('dev-search');
+            
+            if (q && searchInput) {
+                searchInput.value = q;
+                // 延迟 100ms 触发，确保 DOM 已经 settle 且侧边栏已高亮
+                setTimeout(() => {
+                    if (window.htmx) htmx.trigger(searchInput, 'search');
+                }, 100);
+            } else {
+                // 如果没有搜索参数，则执行常规首屏抓取
+                await DeviceApp.engine.fetchDevices();
+            }
             
             // 3. Background polling
             if (DeviceApp.state.pollInterval) clearInterval(DeviceApp.state.pollInterval);
@@ -52,18 +67,6 @@ window.DeviceApp = {
                 if (d.status !== 'ok') return;
                 DeviceApp.state.allDevices = d.data;
 
-                // Handle URL parameters for initial load (deeplinking)
-                if (!DeviceApp.state._urlDeviceChecked) {
-                    DeviceApp.state._urlDeviceChecked = true;
-                    const queryDevId = new URLSearchParams(window.location.search).get('device');
-                    if (queryDevId) {
-                        const matchedDev = DeviceApp.state.allDevices.find(x => String(x.device_id) === String(queryDevId));
-                        const searchInput = $('dev-search');
-                        if (matchedDev && searchInput) {
-                            searchInput.value = matchedDev.device_name;
-                        }
-                    }
-                }
 
                 DeviceApp.engine.updateFilterCounts();
                 DeviceApp.engine.sortAndRender();
@@ -135,86 +138,11 @@ window.DeviceApp = {
         },
 
         renderTable: function(list) {
-            const tbody = $('dev-tbody');
-            if (!tbody) return;
-
-            const totalPages = Math.ceil(list.length / DeviceApp.state.pageSize);
-            const listPage = list.slice((DeviceApp.state.currentPage - 1) * DeviceApp.state.pageSize, DeviceApp.state.currentPage * DeviceApp.state.pageSize);
-
-            if (!listPage.length) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px 0;color:var(--text-hint);">暂无匹配设备</td></tr>';
-                const pag = $('pagination');
-                if (pag) pag.innerHTML = '';
-                return;
-            }
-
-            tbody.innerHTML = listPage.map(dev => {
-                const score = dev.anomaly_score ?? 0;
-                const isRunning = dev.current_status === 'Running';
-                const riskPct = isRunning ? (score * 100).toFixed(0) + '%' : '--';
-                const riskCls = isRunning ? (score > 0.75 ? 'color-high' : score > 0.45 ? 'color-med' : 'color-low') : 'color-normal';
-
-                const oeeRaw = dev.oee;
-                const oeePct = oeeRaw != null ? (oeeRaw * 100).toFixed(0) + '%' : '--';
-                const oeeCls = oeeRaw != null && oeeRaw < 0.45 ? 'color-high' : (oeeRaw != null && oeeRaw < 0.75 ? 'color-med' : 'color-low');
-
-                const statusCls = dev.current_status === 'Running' ? 'running' : (dev.current_status === 'Idle' ? 'idle' : 'down');
-                const statusLabel = dev.current_status === 'Running' ? 'Running' : (dev.current_status === 'Idle' ? 'Standby' : 'Stopped');
-
-                const statusOptions = [
-                    { val: 'Running', lab: 'Running', dot: 'running' },
-                    { val: 'Idle', lab: 'Standby', dot: 'idle' },
-                    { val: 'Down', lab: 'Stopped', dot: 'down' }
-                ].map(opt => `
-                    <div class="status-item ${opt.val === dev.current_status ? 'active' : ''}" 
-                         onclick="event.stopPropagation(); DeviceApp.engine.selectStatus(${dev.device_id}, '${opt.val}')">
-                        <span class="status-dot dot-${opt.dot}"></span>
-                        ${opt.lab}
-                    </div>
-                `).join('');
-
-                return `
-                <tr style="cursor:pointer;" onclick="DeviceApp.modals.openAIModal(${dev.device_id})">
-                    <td style="font-weight:600;color:var(--text);">${dev.device_name}</td>
-                    <td style="color:var(--text-hint);">${dev.device_type || '--'}</td>
-                    <td style="color:var(--text-sec);font-size:12px;">${dev.machining_process || '--'}</td>
-                    <td class="${riskCls}" style="font-weight:700;">${riskPct}</td>
-                    <td class="${oeeCls}" style="font-weight:700;">${oeePct}</td>
-                    <td>
-                        <div class="status-container">
-                            <div class="status-pill ${statusCls}" onclick="DeviceApp.engine.toggleStatusMenu(event, ${dev.device_id})">
-                                ${statusLabel}
-                            </div>
-                            <div class="status-dropdown" id="status-menu-${dev.device_id}">
-                                ${statusOptions}
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <button class="action-icon-btn"
-                            ${dev.current_status !== 'Down' ? 'disabled' : ''}
-                            onclick="event.stopPropagation(); DeviceApp.modals.openRepairModal(${dev.device_id},'${dev.device_name}')"
-                            title="下发维修工单（仅停机状态可操作）">
-                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                            </svg>
-                        </button>
-                    </td>
-                </tr>`;
-            }).join('');
-
-            // Rendering Pagination
-            let pagHtml = '';
-            for (let i = 1; i <= totalPages; i++) {
-                pagHtml += `<button class="page-btn${i === DeviceApp.state.currentPage ? ' active' : ''}" onclick="DeviceApp.engine.gotoPage(${i})">${i}</button>`;
-            }
-            const pagEl = $('pagination');
-            if (pagEl) pagEl.innerHTML = pagHtml;
+            // 已废弃：后端 template_rows.html 替代了此处的 JS 拼接
         },
 
         gotoPage: function(p) {
-            DeviceApp.state.currentPage = p;
-            DeviceApp.engine.sortAndRender();
+            // V3.0 暂不使用前端假分页
         },
 
         toggleStatusMenu: function(event, devId) {
@@ -277,9 +205,14 @@ window.DeviceApp = {
             if (!dev) return;
             if ($('ai-modal-title')) $('ai-modal-title').textContent = `AI 智能诊断  ·  ${dev.device_name}`;
             if ($('ai-modal')) $('ai-modal').classList.add('show');
-
-            if (!DeviceApp.state.modalChartInst) {
-                DeviceApp.state.modalChartInst = echarts.init($('modal-chart'));
+            
+            // SPA 防消失修复：由于 DOM 已被 HTMX 替换，必须清理旧实例并重新绑定当前节点
+            const chartDom = $('modal-chart');
+            if (chartDom) {
+                if (DeviceApp.state.modalChartInst) {
+                    DeviceApp.state.modalChartInst.dispose();
+                }
+                DeviceApp.state.modalChartInst = echarts.init(chartDom);
             }
             DeviceApp.state.modalChartInst.setOption({
                 tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: '#fff', borderColor: '#e4e7ed', textStyle: { fontSize: 12 } },
@@ -338,13 +271,12 @@ window.DeviceApp = {
                     const cur = d.spindle_current[n - 1];
                     const pwr = d.spindle_power ? d.spindle_power[n - 1] : '--';
                     const ai = d.anomaly_score[n - 1];
+                    const oee = d.oee ? d.oee[n - 1] : '--';
+
                     if ($('sk-current')) $('sk-current').textContent = cur != null ? cur.toFixed(3) : '--';
                     if ($('sk-power')) $('sk-power').textContent = pwr != null ? (typeof pwr === 'number' ? pwr.toFixed(1) : pwr) : '--';
                     if ($('sk-ai')) $('sk-ai').textContent = ai != null ? ai.toFixed(1) : '--';
-
-                    const dev = DeviceApp.state.allDevices.find(x => x.device_id === devId);
-                    const oee = dev?.oee != null ? (dev.oee * 100).toFixed(1) : '--';
-                    if ($('sk-oee')) $('sk-oee').textContent = oee;
+                    if ($('sk-oee')) $('sk-oee').textContent = oee != null ? (typeof oee === 'number' ? oee.toFixed(1) : oee) : '--';
                 }
             } catch (e) {
                 console.warn('[DeviceApp.pollModalStream]', e);

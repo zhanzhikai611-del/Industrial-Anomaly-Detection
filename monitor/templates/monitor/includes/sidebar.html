@@ -1,7 +1,7 @@
 <!-- ══════ 侧边栏 ══════ -->
 <aside class="sidebar">
     <a href="/dashboard/" class="sidebar-brand" 
-       hx-get="/dashboard/" hx-target="#main-content" hx-push-url="true">
+       hx-get="/dashboard/" hx-target="#main-content" hx-push-url="true" hx-sync="this:replace">
         <div class="logo-box">
             <svg viewBox="0 0 32 32">
                 <path d="M11.5 8.71L16 11.31L20.5 8.71M11.5 24.29V19.1L7 16.5M25 16.5L20.5 19.1V24.29M7.27 11.46L16 16.51L24.73 11.46M16 26.58V16.5M25 20.5V12.5C24.9996 12.1493 24.9071 11.8048 24.7315 11.5012C24.556 11.1975 24.3037 10.9454 24 10.77L17 6.77C16.696 6.59446 16.3511 6.50205 16 6.50205C15.6489 6.50205 15.304 6.59446 15 6.77L8 10.77C7.69626 10.9454 7.44398 11.1975 7.26846 11.5012C7.09294 11.8048 7.00036 12.1493 7 12.5V20.5C7.00036 20.8507 7.09294 21.1952 7.26846 21.4988C7.44398 21.8025 7.69626 22.0546 8 22.23L15 26.23C15.304 26.4055 15.6489 26.498 16 26.498C16.3511 26.498 16.696 26.4055 17 26.23L24 22.23C24.3037 22.0546 24.556 21.8025 24.7315 21.4988C24.9071 21.1952 24.9996 20.8507 25 20.5Z" />
@@ -12,7 +12,7 @@
 
     <nav class="sidebar-nav">
         <!-- 仪表盘 -->
-        <a href="/dashboard/" hx-get="/dashboard/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" class="nav-link {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'factory' %}active{% endif %}">
+        <a href="/dashboard/" hx-get="/dashboard/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'factory' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -23,7 +23,7 @@
         </a>
 
         <!-- 设备监控 -->
-        <a href="/devices/" hx-get="/devices/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" class="nav-link {% if request.resolver_match.url_name == 'device' %}active{% endif %}">
+        <a href="/devices/" hx-get="/devices/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'device' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <rect x="4" y="4" width="16" height="16" rx="2" />
                 <rect x="9" y="9" width="6" height="6" />
@@ -40,7 +40,7 @@
         </a>
 
         <!-- 事件中心 -->
-        <a href="/events/" hx-get="/events/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" class="nav-link {% if request.resolver_match.url_name == 'event' %}active{% endif %}">
+        <a href="/events/" hx-get="/events/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'event' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
@@ -51,7 +51,7 @@
 
         {% if show_admin_nav %}
         <!-- 账号管理 -->
-        <a href="/accounts/" hx-get="/accounts/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" class="nav-link {% if request.resolver_match.url_name == 'account' %}active{% endif %}">
+        <a href="/accounts/" hx-get="/accounts/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'account' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
@@ -60,7 +60,7 @@
         </a>
 
         <!-- 系统设置 -->
-        <a href="/setting/" hx-get="/setting/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" class="nav-link {% if request.resolver_match.url_name == 'setting' %}active{% endif %}">
+        <a href="/setting/" hx-get="/setting/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'setting' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />

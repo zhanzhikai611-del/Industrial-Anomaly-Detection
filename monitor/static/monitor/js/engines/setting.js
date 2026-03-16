@@ -46,8 +46,8 @@ window.SettingApp = {
 
         updateStreamUI: function(isActive) {
             SettingApp.state.isStreamRunning = isActive;
-            // Sync with Alpine
-            window.dispatchEvent(new CustomEvent('stream-status-updated', { detail: { isActive } }));
+            const el = document.querySelector('.set-wrap-global');
+            if (el) el.dispatchEvent(new CustomEvent('stream-status-updated', { detail: { isActive }, bubbles: true }));
         },
 
         openResetModal: function() {
@@ -55,13 +55,14 @@ window.SettingApp = {
         },
 
         closeResetModal: function() {
-            // 确保事件派发到 window 层级，由底部的 Alpine 监听器捕获
-            window.dispatchEvent(new CustomEvent('close-reset-modal'));
+            const el = document.querySelector('.set-wrap-global');
+            if (el) el.dispatchEvent(new CustomEvent('close-reset-modal', { bubbles: true }));
         },
 
         showSuccessToast: function(title, message) {
-            window.dispatchEvent(new CustomEvent('show-success-toast', { 
-                detail: { title, msg: message } 
+            const el = document.querySelector('.set-wrap-global');
+            if (el) el.dispatchEvent(new CustomEvent('show-success-toast', { 
+                detail: { title, msg: message }, bubbles: true
             }));
         }
     },

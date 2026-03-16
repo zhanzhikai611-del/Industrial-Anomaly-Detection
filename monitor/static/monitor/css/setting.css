@@ -52,11 +52,12 @@
     height: 100vh; 
     background: rgba(0, 0, 0, 0.75); 
     backdrop-filter: blur(6px); 
-    display: flex; 
+    display: none; 
     align-items: center; 
     justify-content: center; 
     z-index: 10000000; 
 }
+.set-modal-overlay.active { display: flex !important; }
 
 .modal-box { 
     background: #fff; 
@@ -93,10 +94,11 @@
     position: fixed; bottom: 32px; right: 32px; z-index: 9999;
     background: #fff; border-radius: 8px; padding: 14px 18px;
     box-shadow: 0 4px 20px rgba(0,0,0,.12); border-left: 4px solid #67c23a;
-    display: flex; align-items: flex-start; gap: 10px;
+    display: none; align-items: flex-start; gap: 10px;
     font-size: 13px; color: #303133; max-width: 280px;
     pointer-events: none;
 }
+.toast-alpine-success.active { display: flex !important; }
 .toast-icon-green { color: #67c23a; margin-top: 1px; }
 .toast-title { font-weight: 600; margin-bottom: 3px; }
 .toast-msg { color: #909399; font-size: 12px; }

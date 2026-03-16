@@ -81,8 +81,150 @@ def dashboard_view(request):
 
 @login_required
 def device_view(request):
-    """Device 设备页"""
-    return render(request, 'monitor/device.html')
+    """
+    Device 设备页 - 支持 HTMX 局部刷新 (V3.0.4)
+    """
+    search_q = request.GET.get('q', '').strip().lower()
+    filter_q = request.GET.get('filter', 'all').strip()
+    sort_q   = request.GET.get('sort', 'risk_desc').strip()
+
+    # 获取全量计算数据
+    devices_data = _get_device_matrix_data()
+
+    # 1. 先进行搜索过滤
+    if search_q:
+        devices_data = [d for d in devices_data if search_q in d['device_name'].lower()]
+    
+    # 2. 计算当前搜索结果下的分类计数 (用于 OOB 更新)
+    counts = {
+        'all': len(devices_data),
+        'high': len([d for d in devices_data if d['current_status'] == 'Running' and d['anomaly_score'] > 0.75]),
+        'med': len([d for d in devices_data if d['current_status'] == 'Running' and 0.45 < d['anomaly_score'] <= 0.75]),
+        'low': len([d for d in devices_data if d['current_status'] == 'Running' and d['current_status'] == 'Running' and d['anomaly_score'] <= 0.45]),
+    }
+
+    # 3. 执行分类过滤
+    if filter_q == 'high':
+        devices_data = [d for d in devices_data if d['current_status'] == 'Running' and d['anomaly_score'] > 0.75]
+    elif filter_q == 'med':
+        devices_data = [d for d in devices_data if d['current_status'] == 'Running' and 0.45 < d['anomaly_score'] <= 0.75]
+    elif filter_q == 'low':
+        devices_data = [d for d in devices_data if d['current_status'] == 'Running' and d['anomaly_score'] <= 0.45]
+
+    # 4. 执行排序
+    if sort_q == 'risk_asc':
+        devices_data.sort(key=lambda x: x['anomaly_score'])
+    elif sort_q == 'name_asc':
+        devices_data.sort(key=lambda x: x['device_name'])
+    else: # 默认 risk_desc
+        devices_data.sort(key=lambda x: x['anomaly_score'], reverse=True)
+
+    context = {
+        'devices': devices_data,
+        'counts': counts
+    }
+
+    # 三级精准驱动逻辑 (V3.0.8)
+    target = request.headers.get('HX-Target')
+    is_htmx = request.headers.get('HX-Request')
+    
+    if is_htmx and target == 'dev-tbody':
+        # 1. 局部刷新：仅返回表格行
+        tpl = 'monitor/includes/device/table_rows.html'
+    elif is_htmx and target == 'main-content':
+        # 2. SPA跳转：返回设备页主体（含工具栏）
+        tpl = 'monitor/device.html'
+    else:
+        # 3. 初始进入/强制刷新：返回全量页面
+        tpl = 'monitor/device.html'
+
+    response = render(request, tpl, context)
+    
+    # 标头驱动数据推送
+    if is_htmx:
+        import json
+        response['HX-Trigger'] = json.dumps({"updateCounts": counts})
+        # 核心：确保 SPA 导航时 URL 同步 (V3.2.10)
+        if target and 'main-content' in target:
+            response['HX-Push-Url'] = request.get_full_path()
+        
+    return response
+
+
+def _calculate_rolling_oee(dev, local_now):
+    """
+    统一 OEE 计算逻辑 (V3.0.9): 30分钟滑动窗口聚合
+    """
+    from django.db.models import Sum
+    from datetime import timedelta
+    
+    window_start = local_now - timedelta(minutes=30)
+    window_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
+    first_rec = window_recs.order_by('timestamp').first()
+    
+    if first_rec:
+        agg = window_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
+        actual_out = agg['s'] or 0
+        input_qty = agg['i'] or 0
+        delta_t_hours = max((local_now - first_rec.timestamp).total_seconds() / 3600.0, 5/60.0)
+        theo_max = dev.standard_capacity * delta_t_hours
+        
+        if theo_max > 0:
+            p_val = min(actual_out / theo_max, 1.0)
+            q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
+            return p_val * q_val
+    return 0.0
+
+
+def _get_device_matrix_data():
+    """提取自 api_device_matrix 的核心数据计算逻辑，供 API 和 HTMX 视图共用"""
+    local_now = timezone.localtime(timezone.now())
+    devices = DeviceInfo.objects.all()
+    rows = []
+    
+    for dev in devices:
+        latest = ProductionSensorData.objects.filter(device=dev).order_by('-timestamp').first()
+        
+        if latest is None:
+            score = 0.0
+            process = '--'
+            oee_val = 0.0
+        else:
+            score = _predict_proba(latest) or 0.0
+            process = latest.machining_process
+            oee_val = _calculate_rolling_oee(dev, local_now)
+
+        # 格式化 UI 所需字段 (1:1 还原 JS 逻辑)
+        is_running = dev.current_status == 'Running'
+        risk_pct = f"{int(score * 100)}%" if is_running else '--'
+        risk_cls = (score > 0.75 and 'color-high' or score > 0.45 and 'color-med' or 'color-low') if is_running else 'color-normal'
+        
+        oee_pct = f"{int(oee_val * 100)}%" if oee_val > 0 else '--'
+        oee_cls = (oee_val < 0.45 and 'color-high' or oee_val < 0.75 and 'color-med' or 'color-low') if oee_val > 0 else 'color-normal'
+        
+        status_cls = dev.current_status.lower() if dev.current_status != 'Idle' else 'idle'
+        status_label = dev.current_status if dev.current_status != 'Idle' else 'Standby'
+        if dev.current_status == 'Down': status_label = 'Stopped'
+
+        rows.append({
+            'device_id': dev.id,
+            'device_name': dev.device_name,
+            'device_type': dev.device_type,
+            'machining_process': process,
+            'anomaly_score': score,
+            'risk_pct': risk_pct,
+            'risk_cls': risk_cls,
+            'oee_val': oee_val,
+            'oee_pct': oee_pct,
+            'oee_cls': oee_cls,
+            'current_status': dev.current_status,
+            'status_cls': status_cls,
+            'status_label': status_label,
+        })
+    
+    # 默认按风险降序
+    rows.sort(key=lambda x: x['anomaly_score'], reverse=True)
+    return rows
 
 @login_required
 def event_view(request):
@@ -571,107 +713,10 @@ def api_latest_alerts(request):
 def api_device_matrix(request):
     """
     GET /api/device-matrix/
-    返回全部设备最新一条传感记录 + AI anomaly_score，
-    按 anomaly_score 降序排列（最危险的设备排第一）。
-
-    V1.2.1 修正：统一使用最新单条记录进行 AI 推断。
-    原"随机抽 200 选 1"逻辑会在历史数据与实时流数据混合期导致风险值随机闪烁，
-    改为始终取 timestamp 最新的记录，确保显示值稳定且与实时流保持一致。
+    已重构：内部调用公共辅助函数 _get_device_matrix_data (V3.0.4)
     """
-        # ── V1.4.3 动态时间窗口 OEE 计算 ──
-    from django.utils import timezone
-    from django.utils.timezone import localtime
-    from django.db.models import Sum
-    
-    local_now = localtime(timezone.now())
-    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    devices = DeviceInfo.objects.all()
-    rows = []
-    
-    for dev in devices:
-        # 1. 获取最新记录用于展示基础信息与 AI 推断
-        latest = (
-            ProductionSensorData.objects
-            .filter(device=dev)
-            .order_by('-timestamp')
-            .first()
-        )
-        
-        if latest is None:
-            prob = None
-            process = '--'
-            sc, sp, fv = 0, 0, 0
-            oee_val = 0.0  # 缺省为 0
-        else:
-            prob    = _predict_proba(latest)
-            process = latest.machining_process
-            sc      = latest.spindle_current
-            sp      = latest.spindle_power
-            fv      = latest.feed_velocity
-            
-            # == V2.1.2 滑动窗口 OEE 计算 (最近 30 分钟瞬时快照) ==
-            from datetime import timedelta
-            window_start = local_now - timedelta(minutes=30)
-            window_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
-            first_rec = window_recs.order_by('timestamp').first()
-            
-            if first_rec:
-                agg = window_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
-                actual_out = agg['s'] or 0
-                input_qty = agg['i'] or 0
-                
-                # ΔT = Now - Window First Record Timestamp (滑动窗口墙钟法)
-                delta_t_hours = (local_now - first_rec.timestamp).total_seconds() / 3600.0
-                
-                # 启动阶段/样本过少保护：不足 5 分钟则按 5 分钟基准计算，防止数值爆表
-                delta_t_hours = max(delta_t_hours, 5 / 60.0)
-                
-                # 理论最大产量 = 标准产能 * 物理历经时长 (小时)
-                theo_max = dev.standard_capacity * delta_t_hours
-                
-                if theo_max > 0:
-                    # 计算 P 和 Q
-                    p_val = min(actual_out / theo_max, 1.0)
-                    q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
-                    oee_val = round(p_val * q_val, 4)
-                else:
-                    oee_val = 0.0
-            else:
-                oee_val = 0.0
-
-        # 最新未处理报警
-        latest_alert = (
-            AnomalyAlertLog.objects
-            .filter(record__device=dev, is_handled=False)
-            .order_by('-alert_time')
-            .first()
-        )
-
-        rows.append({
-            'device_id':        dev.id,
-            'device_name':      dev.device_name,
-            'device_type':      dev.device_type or '',
-            'current_status':   dev.current_status,
-            'machining_process': process,
-            'spindle_current':  sc,
-            'spindle_power':    sp,
-            'feed_velocity':    fv,
-            'anomaly_score':    prob,
-            'oee':              oee_val,   # 新的动态 OEE
-            'ai_alert':         prob is not None and prob > 0.8,
-            'unhandled_alert_id': latest_alert.id if latest_alert else None,
-            'standard_capacity': dev.standard_capacity,
-        })
-
-    # 按 anomaly_score 降序（None 排末位）
-    rows.sort(key=lambda r: r['anomaly_score'] if r['anomaly_score'] is not None else -1, reverse=True)
-
-    return JsonResponse({
-        'status': 'ok',
-        'count':  len(rows),
-        'data':   rows,
-    })
+    rows = _get_device_matrix_data()
+    return JsonResponse({'status': 'ok', 'data': rows})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -738,11 +783,22 @@ def api_device_stream(request, device_id):
     spindle_currents = []
     spindle_powers   = []
     anomaly_scores   = []
+    oee_list         = []
+
+    device = DeviceInfo.objects.filter(pk=device_id).first()
+    if not device:
+        return JsonResponse({'status': 'error', 'message': 'Device not found'}, status=404)
+
+    local_now = timezone.localtime(timezone.now())
+    # 实时窗口 OEE 计算 (V3.0.9) - 保持与表格 100% 一致
+    stable_oee = _calculate_rolling_oee(device, local_now)
 
     for rec in records:
         timestamps.append(rec.timestamp.isoformat())
         spindle_currents.append(rec.spindle_current)
         spindle_powers.append(rec.spindle_power)
+        # 固定返回聚合后的稳定值，避免瞬时 0.0% 干扰
+        oee_list.append(round(stable_oee * 100, 1))
         prob = _predict_proba(rec)
         anomaly_scores.append(round((prob or 0) * 100, 2))  # 转换为百分比
 
@@ -757,6 +813,7 @@ def api_device_stream(request, device_id):
         'spindle_current': spindle_currents,
         'spindle_power':   spindle_powers,
         'anomaly_score':   anomaly_scores,
+        'oee':             oee_list,
     })
 
 

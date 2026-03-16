@@ -193,13 +193,22 @@ async function fetchAlerts() {
             const t = new Date(a.alert_time);
             const diffMin = Math.round((Date.now() - t.getTime()) / 60000);
             const relTime = diffMin < 60 ? `${diffMin}分钟前` : `${Math.floor(diffMin / 60)}小时前`;
-            return `<div class="arow" onclick="window.location.href='/devices/?device=${a.device_id}'">
+            const jumpUrl = `/devices/?q=${encodeURIComponent(a.device_name || '')}`;
+            return `<a class="arow" 
+                        href="${jumpUrl}"
+                        style="text-decoration:none; color:inherit;"
+                        hx-get="${jumpUrl}" 
+                        hx-target="#main-content" 
+                        hx-push-url="true">
                 <div><div class="arow-time">${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}</div><div style="font-size:10px;color:#c0c4cc;">${relTime}</div></div>
                 <div class="arow-desc"><div class="dev" style="color:${sc};"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dot};margin-right:4px;vertical-align:middle;"></span>${a.device_name || '--'}</div><div style="color:#606266;font-size:11px;margin-top:1px;">${typeMap[a.alert_type] || '传感器异常报警'}</div></div>
                 <div class="arow-score" style="color:${sc};">${(score * 100).toFixed(0)}%</div>
                 <div class="arow-arrow">›</div>
-            </div>`;
+            </a>`;
         }).join('');
+
+        // 核心：处理新载入的 HTMX 属性 (V3.2.11)
+        if (window.htmx) htmx.process(el);
 
         const footerText = $('alert-footer-text');
         if (footerText && d.total !== undefined) footerText.textContent = `最新 ${d.data.length} 条异常 · 共 ${d.total} 条`;
@@ -358,8 +367,15 @@ window.renderHoneycomb = function (devices) {
 
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             if (dev) {
+                const jumpUrl = `/devices/?q=${encodeURIComponent(dev.device_name || '')}`;
                 g.style.cursor = 'pointer';
-                g.addEventListener('click', () => { window.location.href = `/devices/?device=${dev.device_id}`; });
+                g.onclick = () => {
+                    if (window.htmx) {
+                        htmx.ajax('GET', jumpUrl, { target: '#main-content', pushUrl: true });
+                    } else {
+                        window.location.href = jumpUrl;
+                    }
+                };
             }
 
             const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');

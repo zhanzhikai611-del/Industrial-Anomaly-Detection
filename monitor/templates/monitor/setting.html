@@ -5,26 +5,23 @@
 
 {% block extra_style %}
 <link rel="stylesheet" href="{% static 'monitor/css/setting.css' %}?v={% now 'U' %}">
-<style>
-    .set-modal-overlay {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        width: 100vw; height: 100vh;
-        background: rgba(0, 0, 0, 0.75);
-        backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 10000000;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
 <div class="set-wrap-global" x-data="{
     isStreamRunning: {% if config.is_realtime_active %}true{% else %}false{% endif %},
-    openResetModal() { window.dispatchEvent(new CustomEvent('open-reset-modal')); }
+    showResetModal: false, 
+    toast: { show: false, title: '', msg: '' }
 }"
 x-init="if(window.SettingApp) window.SettingApp.ui.init();"
-@stream-status-updated.window="isStreamRunning = $event.detail.isActive">
+@stream-status-updated="isStreamRunning = $event.detail.isActive"
+@close-reset-modal="showResetModal = false"
+@show-success-toast="
+    toast.title = $event.detail.title; 
+    toast.msg = $event.detail.msg; 
+    toast.show = true; 
+    setTimeout(() => toast.show = false, 4000);
+">
     <div class="set-container">
         <div class="set-col">
             {% include 'monitor/includes/setting/data_settings.html' %}
@@ -35,37 +32,33 @@ x-init="if(window.SettingApp) window.SettingApp.ui.init();"
             {% include 'monitor/includes/setting/database_stats.html' %}
         </div>
     </div>
+
+    <!-- 弹窗回归 content 块，由主 DOM 树统一管理生存期 (V3.1.7) -->
+    <div class="set-modal-overlay" id="reset-modal" 
+         x-show="showResetModal" 
+         :class="{ 'active': showResetModal }"
+         x-cloak
+         @click.self="showResetModal = false" 
+         @keydown.escape.window="showResetModal = false">
+        {% include 'monitor/includes/setting/modal_reset_confirm.html' %}
+    </div>
+
+    <!-- 成功提示 -->
+    <div id="success-toast-alpine" 
+         x-show="toast.show" 
+         :class="{ 'active': toast.show }"
+         x-transition.opacity 
+         class="toast-alpine-success" x-cloak>
+        <div class="toast-icon-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title" x-text="toast.title"></div>
+            <div class="toast-msg" x-text="toast.msg"></div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_body %}
-<!-- 系统设置全局组件：OOB 注入全局挂载点 (V3.0.3) -->
-<div id="global-modals-area" hx-swap-oob="true">
-    <div x-data="{ 
-        showResetModal: false, 
-        toast: { show: false, title: '', msg: '' } 
-    }"
-    @open-reset-modal.window="showResetModal = true"
-    @close-reset-modal.window="showResetModal = false"
-    @show-success-toast.window="
-        toast.title = $event.detail.title; 
-        toast.msg = $event.detail.msg; 
-        toast.show = true; 
-        setTimeout(() => toast.show = false, 4000);
-    ">
-        <!-- 移除 x-if 以保证 DOM 常驻 -->
-        {% include 'monitor/includes/setting/modal_reset_confirm.html' %}
-
-        <!-- 全局成功提示 -->
-        <div id="success-toast-alpine" x-show="toast.show" x-transition.opacity class="toast-alpine-success" x-cloak>
-            <div class="toast-icon-green">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <div class="toast-content">
-                <div class="toast-title" x-text="toast.title"></div>
-                <div class="toast-msg" x-text="toast.msg"></div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}

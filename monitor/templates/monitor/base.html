@@ -53,6 +53,8 @@
         <div class="content">
             {% block content %}{% endblock %}
         </div>
+        <!-- 弹窗物理挂载点：跟随页面导航自动清理 (V3.2.1) -->
+        {% block extra_body %}{% endblock %}
     </main>
 
     {% include 'monitor/includes/ai_agent_logic.html' %}
@@ -60,70 +62,62 @@
     <!-- HTMX 局部刷新后的 JS 引擎再初始化逻辑 (V3.0.2) -->
     <script>
         document.body.addEventListener('htmx:afterSettle', function(evt) {
-            // 1. 核心桥接：让 Alpine.js 重新扫描并初始化新进入 DOM 的组件
-            if (window.Alpine) {
-                if (evt.detail.target) {
-                    console.log('[SPA] Alpine discovery for target:', evt.detail.target.id);
-                    setTimeout(() => Alpine.initTree(evt.detail.target), 0);
-                }
-                
-                // 1.2 处理可能存在的 OOB 替换弹窗面板
-                const modalsArea = document.getElementById('global-modals-area');
-                if (modalsArea) {
-                    // 增加延迟并强制重置树
-                    setTimeout(() => {
-                        // 逻辑：如果已经有挂载的 x-data 但内容更新了，Alpine 有时需要重新评估
-                        Alpine.initTree(modalsArea);
-                        
-                        // 特殊处理：如果蒙版依然存在 x-cloak，尝试对每一个 Modal 独立初始化
-                        modalsArea.querySelectorAll('[x-cloak]').forEach(el => {
-                            if (el.getAttribute('x-cloak') !== null) {
-                                Alpine.initTree(el);
-                            }
-                        });
-                        console.log('[SPA] Alpine Deep discovery for OOB done');
-                    }, 80);
-                }
+            // 1. 核心桥接：HTMX 局部刷新后主动通知 Alpine 初始化新 DOM (V3.2.4)
+            if (window.Alpine && evt.detail.target) {
+                console.log('[SPA] Alpine init for:', evt.detail.target.id);
+                setTimeout(() => Alpine.initTree(evt.detail.target), 0);
             }
 
-            // 2. 检查是否是主内容区刷新进行状态同步
-            if (evt.detail.target.id === 'main-content') {
+            // 核心功能：同步导航高亮 (V3.2.7)
+            window.refreshNavStatus = function() {
                 const path = window.location.pathname;
-                console.log('[HTMX] Nav Settle:', path);
-                
-                // 3. 同步更新导航链接的 active 状态
+                const normalize = p => p.replace(/\/$/, '') || '/';
+                const nPath = normalize(path);
+
                 document.querySelectorAll('.nav-link, .nav-center-tab').forEach(el => {
                     const href = el.getAttribute('href');
                     if (!href) return;
-                    
+                    const nHref = normalize(href);
                     let isActive = false;
+
                     if (el.classList.contains('nav-center-tab')) {
-                        if (href === '/dashboard/') {
-                            const visionPages = ['/dashboard/', '/devices/', '/events/', '/accounts/', '/setting/'];
-                            isActive = visionPages.some(p => path.startsWith(p));
+                        if (nHref === '/dashboard') {
+                            const visionPaths = ['/dashboard', '/devices', '/events', '/accounts', '/setting'];
+                            isActive = visionPaths.some(p => nPath.startsWith(p));
                         } else {
-                            isActive = (path === href || (href !== '/' && path.startsWith(href)));
+                            isActive = (nPath === nHref || (nHref !== '/' && nPath.startsWith(nHref)));
                         }
                     } else {
-                        if (href === '/dashboard/') {
-                            isActive = (path === '/dashboard/');
-                        } else {
-                            isActive = (path === href || (href !== '/' && path.startsWith(href)));
-                        }
+                        // 侧边栏：仪表盘仅完全匹配，其他项前缀匹配
+                        isActive = (nHref === '/dashboard') ? (nPath === '/dashboard') : (nPath.startsWith(nHref));
                     }
+
                     if (isActive) el.classList.add('active');
                     else el.classList.remove('active');
                 });
-            }
+            };
+
+            // 监听 URL 变化与 DOM 渲染完成
+            document.body.addEventListener('htmx:pushedIntoHistory', window.refreshNavStatus);
+
+            document.body.addEventListener('htmx:afterSettle', (evt) => {
+                if (evt.detail.target.id === 'main-content') {
+                    console.log('[HTMX] Nav Settle:', window.location.pathname);
+                    
+                    // 重置各模块初始化锁
+                    if (window.SettingApp) SettingApp.state.isInitialized = false;
+                    if (window.AccountApp) AccountApp.state.isInitialized = false;
+                    if (window.DeviceApp) DeviceApp.state.isInitialized = false;
+
+                    // 同步 UI 状态
+                    window.refreshNavStatus(); 
+                    if (window.updateAiButtonUI) updateAiButtonUI();
+                }
+            });
         });
     </script>
 
     {% block extra_js %}{% endblock %}
-
-    <!-- 页面专用全局组件挂载点 (V2.2.4+) -->
-    <div id="global-modals-area">
-        {% block extra_body %}{% endblock %}
-    </div>
 </body>
 
 </html>

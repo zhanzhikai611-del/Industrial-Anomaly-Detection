@@ -1,17 +1,10 @@
-<!-- 重置确认 Modal -->
-<div class="set-modal-overlay" 
-     id="reset-modal"
-     x-show="showResetModal"
-     x-cloak
-     @click.self="showResetModal = false"
-     @keydown.escape.window="showResetModal = false">
-    <div class="modal-box">
-        <div class="modal-icon">⚠️</div>
-        <div class="modal-title">确定要重置分布吗？</div>
-        <div class="modal-text">该操作将立即重置全量 25 台设备到初始的梯度风险分布。</div>
-        <div class="modal-footer">
-            <button class="modal-btn btn-cancel" @click="showResetModal = false">取消</button>
-            <button class="modal-btn btn-confirm-red" id="btn-execute-reset" @click="SettingApp.stream.confirmReset(); showResetModal = false">立即重置</button>
-        </div>
+<!-- 重置确认 Modal 内层 -->
+<div class="modal-box">
+    <div class="modal-icon">⚠️</div>
+    <div class="modal-title">确定要重置分布吗？</div>
+    <div class="modal-text">该操作将立即重置全量 25 台设备到初始的梯度风险分布。</div>
+    <div class="modal-footer">
+        <button class="modal-btn btn-cancel" @click="showResetModal = false">取消</button>
+        <button class="modal-btn btn-confirm-red" id="btn-execute-reset" @click="SettingApp.stream.confirmReset(); showResetModal = false">立即重置</button>
     </div>
 </div>

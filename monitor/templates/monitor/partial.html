@@ -1,4 +1,11 @@
 <title hx-swap-oob="true">CNC Cloud | {% block title %}{% endblock %}</title>
+
+<div id="ai-agent-mount" hx-swap-oob="true">
+    {% if request.resolver_match.url_name == 'dashboard' %}
+        {% include 'monitor/includes/ai_agent_button.html' %}
+    {% endif %}
+</div>
+
 <div class="content">
     {% block content %}{% endblock %}
 </div>

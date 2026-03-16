@@ -15,8 +15,8 @@ window.AccountApp = {
         },
 
         showToast: function(msg, isError = false) {
-            // Dispatch event to Alpine
-            window.dispatchEvent(new CustomEvent('show-toast', { detail: { msg, isError } }));
+            const el = document.querySelector('.acc-wrap-global');
+            if (el) el.dispatchEvent(new CustomEvent('show-toast', { detail: { msg, isError }, bubbles: true }));
         },
 
         openModal: function(id) { 
@@ -26,15 +26,16 @@ window.AccountApp = {
         },
 
         closeModal: function(id) {
-            // Updated to sync with Alpine state
-            if (id === 'add-modal') window.dispatchEvent(new CustomEvent('close-add-modal'));
-            if (id === 'edit-modal') window.dispatchEvent(new CustomEvent('close-edit-modal'));
-            if (id === 'del-modal') window.dispatchEvent(new CustomEvent('close-del-modal'));
+            const el = document.querySelector('.acc-wrap-global');
+            if (!el) return;
+            if (id === 'add-modal') el.dispatchEvent(new CustomEvent('close-add-modal', { bubbles: true }));
+            if (id === 'edit-modal') el.dispatchEvent(new CustomEvent('close-edit-modal', { bubbles: true }));
+            if (id === 'del-modal') el.dispatchEvent(new CustomEvent('close-del-modal', { bubbles: true }));
             
             // Clear errors
-            const el = document.getElementById(id);
-            if (el) {
-                el.querySelectorAll('.fm-error').forEach(e => { e.style.display = 'none'; e.textContent = ''; });
+            const targetEl = document.getElementById(id);
+            if (targetEl) {
+                targetEl.querySelectorAll('.fm-error').forEach(e => { e.style.display = 'none'; e.textContent = ''; });
                 const errBox = document.getElementById(id.replace('-modal', '-error'));
                 if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
             }
