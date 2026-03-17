@@ -18,10 +18,7 @@ API 端点：
 
 import logging
 from datetime import timedelta
-from pathlib import Path
-
-import numpy as np
-import joblib
+from .services import ai_service, stats_service, alert_service, device_service
 
 from django.http import JsonResponse, HttpResponseForbidden
 from django.utils import timezone
@@ -77,24 +74,8 @@ def role_required(allowed_roles):
 
 @login_required
 def dashboard_view(request):
-    """首页 Dashboard (V3.0.12: 适配混合驱动初始加载)"""
-    ctx = _get_dashboard_stats_context(request)
-    # 拉取初始报警并预处理 (V3.0.13)
-    alerts = (AnomalyAlertLog.objects
-             .select_related('record', 'record__device')
-             .order_by('-alert_time')[:7])
-    
-    for alert in alerts:
-        score = alert.anomaly_score or 0.75
-        alert.risk_pct = int(score * 100)
-        if score > 0.8:
-            alert.risk_color = "#F5222D" # 危险
-        elif score > 0.6:
-            alert.risk_color = "#FAAD14" # 警告
-        else:
-            alert.risk_color = "#52C41A" # 正常
-            
-    ctx['alerts'] = alerts
+    """首页 Dashboard (V3.1.0: 逻辑下沉至 Service)"""
+    ctx = stats_service.get_dashboard_stats()
     return render(request, 'monitor/dashboard.html', ctx)
 
 
@@ -108,7 +89,7 @@ def device_view(request):
     sort_q   = request.GET.get('sort', 'risk_desc').strip()
 
     # 获取全量计算数据
-    devices_data = _get_device_matrix_data()
+    devices_data = stats_service.get_device_matrix_data()
 
     # 1. 先进行搜索过滤
     if search_q:
@@ -170,80 +151,7 @@ def device_view(request):
     return response
 
 
-def _calculate_rolling_oee(dev, local_now):
-    """
-    统一 OEE 计算逻辑 (V3.0.9): 30分钟滑动窗口聚合
-    """
-    from django.db.models import Sum
-    from datetime import timedelta
-    
-    window_start = local_now - timedelta(minutes=30)
-    window_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
-    first_rec = window_recs.order_by('timestamp').first()
-    
-    if first_rec:
-        agg = window_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
-        actual_out = agg['s'] or 0
-        input_qty = agg['i'] or 0
-        delta_t_hours = max((local_now - first_rec.timestamp).total_seconds() / 3600.0, 5/60.0)
-        theo_max = dev.standard_capacity * delta_t_hours
-        
-        if theo_max > 0:
-            p_val = min(actual_out / theo_max, 1.0)
-            q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
-            return p_val * q_val
-    return 0.0
 
-
-def _get_device_matrix_data():
-    """提取自 api_device_matrix 的核心数据计算逻辑，供 API 和 HTMX 视图共用"""
-    local_now = timezone.localtime(timezone.now())
-    devices = DeviceInfo.objects.all()
-    rows = []
-    
-    for dev in devices:
-        latest = ProductionSensorData.objects.filter(device=dev).order_by('-timestamp').first()
-        
-        if latest is None:
-            score = 0.0
-            process = '--'
-            oee_val = 0.0
-        else:
-            score = _predict_proba(latest) or 0.0
-            process = latest.machining_process
-            oee_val = _calculate_rolling_oee(dev, local_now)
-
-        # 格式化 UI 所需字段 (1:1 还原 JS 逻辑)
-        is_running = dev.current_status == 'Running'
-        risk_pct = f"{int(score * 100)}%" if is_running else '--'
-        risk_cls = (score > 0.75 and 'color-high' or score > 0.45 and 'color-med' or 'color-low') if is_running else 'color-normal'
-        
-        oee_pct = f"{int(oee_val * 100)}%" if oee_val > 0 else '--'
-        oee_cls = (oee_val < 0.45 and 'color-high' or oee_val < 0.75 and 'color-med' or 'color-low') if oee_val > 0 else 'color-normal'
-        
-        status_cls = dev.current_status.lower() if dev.current_status != 'Idle' else 'idle'
-        status_label = dev.current_status if dev.current_status != 'Idle' else 'Standby'
-        if dev.current_status == 'Down': status_label = 'Stopped'
-
-        rows.append({
-            'device_id': dev.id,
-            'device_name': dev.device_name,
-            'device_type': dev.device_type,
-            'machining_process': process,
-            'anomaly_score': score,
-            'risk_pct': risk_pct,
-            'risk_cls': risk_cls,
-            'oee_val': oee_val,
-            'oee_pct': oee_pct,
-            'oee_cls': oee_cls,
-            'current_status': dev.current_status,
-            'status_cls': status_cls,
-            'status_label': status_label,
-        })
-    
-    # 默认按风险降序
-    rows.sort(key=lambda x: x['anomaly_score'], reverse=True)
-    return rows
 
 @login_required
 def event_view(request):
@@ -300,7 +208,26 @@ def event_view(request):
 def setting_view(request):
     """Setting 系统设置页（仅 Admin 可访问）"""
     config = SystemConfig.get()
-    return render(request, 'monitor/setting.html', {'config': config})
+    
+    # 动态统计真实数据 (V3.2.1)
+    from .models import DeviceInfo, ProductionSensorData, AnomalyAlertLog
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    # 统计今日流水条数（实际投入件数）
+    today_stream_count = ProductionSensorData.objects.filter(timestamp__gte=today_start).count()
+    
+    stats = {
+        'total_devices': DeviceInfo.objects.count(),
+        'today_stream': f"{today_stream_count:,}",
+        'total_alerts': AnomalyAlertLog.objects.count()
+    }
+    
+    return render(request, 'monitor/setting.html', {
+        'config': config,
+        'db_stats': stats
+    })
 
 @login_required
 def factory_view(request):
@@ -369,49 +296,6 @@ def api_create_account(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-# ═══════════════════════════════════════════════════════════════════
-#  AI 模型全局单例加载（进程启动时执行一次）
-# ═══════════════════════════════════════════════════════════════════
-
-_ML_DIR = Path(__file__).resolve().parent.parent / 'ml_models'
-
-def _load_artifacts():
-    """安全加载 LR 模型和 StandardScaler，文件不存在时返回 None。"""
-    try:
-        model      = joblib.load(_ML_DIR / 'logistic_model.pkl')
-        scaler     = joblib.load(_ML_DIR / 'scaler.pkl')
-        feat_names = joblib.load(_ML_DIR / 'feature_names.pkl')
-        logger.info('[AI] 逻辑回归模型加载成功，特征维度=%d', len(feat_names))
-        return model, scaler, feat_names
-    except FileNotFoundError:
-        logger.warning('[AI] ml_models/ 文件不存在，AI 推断功能已禁用')
-        return None, None, None
-    except Exception as exc:
-        logger.error('[AI] 模型加载异常：%s', exc)
-        return None, None, None
-
-# 全局单例
-_LR_MODEL, _SCALER, _FEAT_NAMES = _load_artifacts()
-
-
-def _predict_proba(record: ProductionSensorData) -> float | None:
-    """
-    单条记录在线推断。
-    9 维聚合特征：[sc_mean, sp_mean, fv_mean, sc_max, sp_max, fv_max, sc_std, sp_std, fv_std]
-    """
-    if _LR_MODEL is None:
-        return None
-    try:
-        sc = record.spindle_current
-        sp = record.spindle_power
-        fv = record.feed_velocity
-        x = np.array([[sc, sp, fv, sc, sp, fv, 0.0, 0.0, 0.0]])
-        x_scaled = _SCALER.transform(x)
-        prob = float(_LR_MODEL.predict_proba(x_scaled)[0, 1])
-        return round(prob, 4)
-    except Exception as exc:
-        logger.warning('[AI] 推断异常：%s', exc)
-        return None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -430,18 +314,20 @@ def start_stream(request):
 @csrf_exempt
 @require_http_methods(['POST'])
 def api_toggle_stream(request):
+    """POST /api/system/toggle_stream/ — 控制数据流开关 (V3.1.0)"""
     import json
-    data = json.loads(request.body)
-    action = data.get('action')
-    cfg = SystemConfig.get()
-    
-    if action == 'start':
-        cfg.is_realtime_active = True
-    elif action == 'stop':
-        cfg.is_realtime_active = False
+    try:
+        data = json.loads(request.body)
+        action = data.get('action')
+        active = (action == 'start')
         
-    cfg.save()
-    return JsonResponse({'status': 'ok', 'is_active': cfg.is_realtime_active})
+        success = device_service.DeviceService.toggle_realtime_stream(active)
+        if success:
+            msg = "实时数据流已开启" if active else "已暂停实时流"
+            return JsonResponse({'status': 'ok', 'message': msg, 'is_realtime_active': active})
+        return JsonResponse({'status': 'error', 'message': '设置失败'}, status=500)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
@@ -466,148 +352,22 @@ def stream_status(request):
 @csrf_exempt
 @require_http_methods(['POST'])
 def api_reset_groups(request):
-    """POST /api/system/reset_groups/ — 全量重置设备生命周期分组梯度"""
-    try:
-        count = DeviceInfo.initial_repair_all()
-        return JsonResponse({
-            'status': 'ok', 
-            'message': f'风险梯度已重置，共影响 {count} 台设备',
-            'count': count
-        })
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    """POST /api/system/reset_groups/ — 全量重置设备生命周期分组梯度 (V3.1.0)"""
+    success = device_service.DeviceService.reset_all_device_groups()
+    if success:
+        return JsonResponse({'status': 'ok', 'message': '所有设备刀具损耗梯度已重置'})
+    return JsonResponse({'status': 'error', 'message': '重置失败'}, status=500)
 
 
 # ═══════════════════════════════════════════════════════════════════
 #  API 1：看板概览统计 /api/stats/
 # ═══════════════════════════════════════════════════════════════════
 
-def _get_dashboard_stats_context(request):
-    """提取 Dashboard 核心统计逻辑，供 API 和 HTMX 视图共享 (V3.0.11)"""
-    from django.utils.timezone import localtime
-    from django.db.models.functions import TruncHour
-    from datetime import timedelta
-    
-    local_now = localtime(timezone.now())
-    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # 1. 设备状态分布数据
-    running_count = DeviceInfo.objects.filter(current_status='Running').count()
-    idle_count    = DeviceInfo.objects.filter(current_status='Idle').count()
-    down_count    = DeviceInfo.objects.filter(current_status='Down').count()
-    total_devices = DeviceInfo.objects.count() or 25
-
-    # 2. 拉取今日流水进行聚合计算 (取最近 500 条估算)
-    today_qs = list(
-        ProductionSensorData.objects
-        .filter(timestamp__gte=today_start)
-        .select_related('device')
-        .order_by('-timestamp')[:500]
-    )
-
-    # ── A（可用性）────────────────
-    avg_a = round(running_count / total_devices, 4) if total_devices > 0 else 0.0
-
-    # ── P（性能）────────────────
-    _sample_actual = sum(r.actual_output or 0 for r in today_qs)
-    _sample_records = len(today_qs)
-    if _sample_records > 0 and running_count > 0:
-        _earliest_ts = today_qs[-1].timestamp
-        _sample_hours = (local_now - _earliest_ts).total_seconds() / 3600.0
-        _theo_step_hours = _sample_records / (running_count * (3600 / 3.0))
-        _sample_hours = max(_sample_hours, _theo_step_hours)
-        _rate_per_hour = _sample_actual / _sample_hours if _sample_hours > 0 else 0
-        _theoretical_rate = sum(DeviceInfo.objects.filter(current_status='Running').values_list('standard_capacity', flat=True))
-        avg_p = round(min(_rate_per_hour / _theoretical_rate, 1.0), 4) if _theoretical_rate > 0 else 0.0
-    else:
-        avg_p = 0.0
-
-    # ── 生产统计与目标 ──────────────
-    daily_target = (DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))['total_cap'] or 0) * 8
-    totals = ProductionSensorData.objects.filter(timestamp__gte=today_start).aggregate(
-        actual_total=Sum('actual_output'),
-        input_total=Sum('input_qty')
-    )
-    total_output = totals['actual_total'] or 0
-    total_input = totals['input_total'] or 0
-
-    avg_q = round(total_output / total_input, 4) if total_input > 0 else 1.0
-
-    # ── OEE 综合率 ─────────────────
-    avg_oee = round(avg_a * avg_p * avg_q, 4)
-
-    # ── 报警统计数据 ────────────────
-    unhandled_count = AnomalyAlertLog.objects.filter(is_handled=False).count()
-    alerts = (AnomalyAlertLog.objects
-             .select_related('record', 'record__device')
-             .order_by('-alert_time')[:7])
-    
-    # 预处理报警以便前端展示 (V3.0.14)
-    for alert in alerts:
-        score = alert.anomaly_score or 0.75
-        alert.risk_pct = int(score * 100)
-        if score > 0.8: alert.risk_color = "#F5222D"
-        elif score > 0.6: alert.risk_color = "#FAAD14"
-        else: alert.risk_color = "#52C41A"
-
-    alert_dist = list(
-        AnomalyAlertLog.objects
-        .filter(alert_time__gte=today_start)
-        .values('alert_type')
-        .annotate(cnt=Count('id'))
-        .order_by('-cnt')
-    )
-    # ── 小时产量统计 (最近 8 小时，含补零以兼容 SQLite 时区) ──
-    hourly_data = {}
-    # 计算相对于现在的过去 8 小时起点
-    eight_hours_ago = (local_now - timedelta(hours=7)).replace(minute=0, second=0, microsecond=0)
-    
-    # 预填充最近 8 小时的键
-    for i in range(8):
-        target_h = eight_hours_ago + timedelta(hours=i)
-        hourly_data[target_h] = 0
-    
-    # 获取记录并累加
-    prod_records = ProductionSensorData.objects.filter(timestamp__gte=eight_hours_ago).values('timestamp', 'actual_output')
-    for rec in prod_records:
-        hr = localtime(rec['timestamp']).replace(minute=0, second=0, microsecond=0)
-        if hr in hourly_data:
-            hourly_data[hr] += (rec['actual_output'] or 0)
-    
-    sorted_items = sorted(hourly_data.items())
-    hourly_labels = [h.strftime('%-H') for h, q in sorted_items]
-    hourly_output = [q for h, q in sorted_items]
-
-    return {
-        'avg_oee': avg_oee,
-        'oee_pct': f"{int(avg_oee * 100)}%",
-        'oee_q_val': f"{int(avg_q * 100)}%",
-        'oee_p_val': f"{int(avg_p * 100)}%",
-        'oee_a_val': f"{int(avg_a * 100)}%",
-        'oee_q_bar': int(avg_q * 100),
-        'oee_p_bar': int(avg_p * 100),
-        'oee_a_bar': int(avg_a * 100),
-        'oee_bar_width': int(avg_oee * 100),
-        'hourly_labels': hourly_labels,
-        'hourly_output': hourly_output,
-        'total_output': total_output,
-        'total_input': total_input,
-        'daily_target': daily_target,
-        'prod_rate_pct': f"{round((total_output / daily_target * 100), 1) if daily_target > 0 else 0.0}%",
-        'prod_bar_width': min(100, int((total_output / daily_target * 100) if daily_target > 0 else 0)),
-        'running_devices': running_count,
-        'idle_devices': idle_count,
-        'down_devices': down_count,
-        'total_devices': total_devices,
-        'unhandled_alerts': unhandled_count,
-        'alert_distribution': alert_dist,
-        'total_defects': total_input - total_output,
-    }
 
 @require_http_methods(['GET'])
 def api_dashboard_stats(request):
     """GET /api/stats/ — 传统的 JSON 接口 (保持向前兼容)"""
-    ctx = _get_dashboard_stats_context(request)
+    ctx = stats_service.get_dashboard_stats()
     return JsonResponse({
         'status': 'ok',
         'avg_oee': ctx['avg_oee'],
@@ -633,28 +393,18 @@ def dashboard_partial(request, fragment):
     可根据请求参数返回不同的仪表盘片段
     """
     if fragment == 'oee':
-        ctx = _get_dashboard_stats_context(request)
+        ctx = stats_service.get_dashboard_stats()
         return render(request, 'monitor/includes/dashboard/panel_oee.html', ctx)
     
     elif fragment == 'production':
-        ctx = _get_dashboard_stats_context(request)
+        ctx = stats_service.get_dashboard_stats()
         return render(request, 'monitor/includes/dashboard/panel_production.html', ctx)
         
     elif fragment == 'alerts':
         limit = min(int(request.GET.get('limit', 7)), 20)
-        alerts = (AnomalyAlertLog.objects
-                 .select_related('record', 'record__device')
-                 .order_by('-alert_time')[:limit])
+        alerts = alert_service.AlertService.get_formatted_alerts(limit=limit)
         
-        # 预处理报警以便前端展示 (V3.0.14)
-        for alert in alerts:
-            score = alert.anomaly_score or 0.75
-            alert.risk_pct = int(score * 100)
-            if score > 0.8: alert.risk_color = "#F5222D"
-            elif score > 0.6: alert.risk_color = "#FAAD14"
-            else: alert.risk_color = "#52C41A"
-
-        total_unhandled = AnomalyAlertLog.objects.filter(is_handled=False).count()
+        total_unhandled = alert_service.AlertService.get_unhandled_alerts_count()
         return render(request, 'monitor/includes/dashboard/panel_alerts.html', {
             'alerts': alerts,
             'unhandled_alerts': total_unhandled
@@ -682,7 +432,7 @@ def api_realtime_stream(request):
 
     running_devices = list(DeviceInfo.objects.filter(current_status='Running'))
     if not running_devices:
-        return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': _LR_MODEL is not None})
+        return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': ai_service.is_ai_ready()})
 
     dev = _random.choice(running_devices)
     rec = (
@@ -693,9 +443,9 @@ def api_realtime_stream(request):
         .first()
     )
     if not rec:
-        return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': _LR_MODEL is not None})
+        return JsonResponse({'status': 'ok', 'count': 0, 'data': [], 'ai_ready': ai_service.is_ai_ready()})
 
-    prob = _predict_proba(rec)
+    prob = ai_service.predict_proba(rec)
     data = [{
         'id':                  rec.id,
         'timestamp':           rec.timestamp.isoformat(),  # 使用数据库真实时间戳，暂停时不再变化
@@ -710,7 +460,7 @@ def api_realtime_stream(request):
         'anomaly_probability': prob,
         'ai_alert':            (prob is not None and prob > 0.75),
     }]
-    return JsonResponse({'status': 'ok', 'count': 1, 'data': data, 'ai_ready': _LR_MODEL is not None})
+    return JsonResponse({'status': 'ok', 'count': 1, 'data': data, 'ai_ready': ai_service.is_ai_ready()})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -753,9 +503,9 @@ def api_latest_alerts(request):
 def api_device_matrix(request):
     """
     GET /api/device-matrix/
-    已重构：内部调用公共辅助函数 _get_device_matrix_data (V3.0.4)
+    已重构：内部调用 stats_service.get_device_matrix_data() (V5.2.3)
     """
-    rows = _get_device_matrix_data()
+    rows = stats_service.get_device_matrix_data()
     return JsonResponse({'status': 'ok', 'data': rows})
 
 
@@ -831,7 +581,7 @@ def api_device_stream(request, device_id):
 
     local_now = timezone.localtime(timezone.now())
     # 实时窗口 OEE 计算 (V3.0.9) - 保持与表格 100% 一致
-    stable_oee = _calculate_rolling_oee(device, local_now)
+    stable_oee = stats_service.calculate_rolling_oee(device, local_now)
 
     for rec in records:
         timestamps.append(rec.timestamp.isoformat())
@@ -839,7 +589,7 @@ def api_device_stream(request, device_id):
         spindle_powers.append(rec.spindle_power)
         # 固定返回聚合后的稳定值，避免瞬时 0.0% 干扰
         oee_list.append(round(stable_oee * 100, 1))
-        prob = _predict_proba(rec)
+        prob = ai_service.predict_proba(rec)
         anomaly_scores.append(round((prob or 0) * 100, 2))  # 转换为百分比
 
     device = DeviceInfo.objects.filter(pk=device_id).first()
@@ -893,41 +643,13 @@ def api_alert_trend(request):
 # ═══════════════════════════════════════════════════════════════════
 
 @csrf_exempt
-@require_http_methods(['GET', 'POST'])
+@require_http_methods(['POST'])
 def api_handle_alert(request, alert_id):
-    """
-    POST /api/alerts/<alert_id>/handle/
-    闭环逻辑：
-      1. 将目标报警 is_handled = True
-      2. 同设备的其他所有未处理报警一并关闭（避免残留锁定）
-      3. 将 device_info.current_status 恢复为 'Running'
-    """
-    try:
-        alert = AnomalyAlertLog.objects.select_related('record__device').get(pk=alert_id)
-        device = alert.record.device
-
-        # 1. 关闭本条报警
-        alert.is_handled = True
-        alert.save(update_fields=['is_handled'])
-
-        # 2. 关闭该设备其他所有未处理报警（批量，避免残留）
-        AnomalyAlertLog.objects.filter(
-            record__device=device,
-            is_handled=False,
-        ).update(is_handled=True)
-
-        # 3. 恢复设备状态为 Running
-        device.current_status = 'Running'
-        device.save(update_fields=['current_status'])
-
-        return JsonResponse({
-            'status': 'ok',
-            'message': f'报警 {alert_id} 已处理，设备 {device.device_name} 已恢复运行',
-            'device_id': device.id,
-            'device_status': 'Running',
-        })
-    except AnomalyAlertLog.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': '报警记录不存在'}, status=404)
+    """POST /api/alerts/<id>/handle/ — 处理警报 (V3.1.0)"""
+    success = alert_service.AlertService.handle_alert(alert_id)
+    if success:
+        return JsonResponse({'status': 'ok', 'message': f'报警 {alert_id} 处理成功'})
+    return JsonResponse({'status': 'error', 'message': '报警不存在或处理失败'}, status=404)
 
 # ═══════════════════════════════════════════════════════════════════
 #  API 8（新增）：更新设备状态 /api/device/<id>/status/

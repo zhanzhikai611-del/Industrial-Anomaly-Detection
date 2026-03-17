@@ -5,8 +5,8 @@
         <div class="set-title-text">数据库统计</div>
     </div>
     <div class="set-body" style="padding-top: 10px;">
-        <div class="info-row"><span class="info-label">设备总数</span><span class="info-val" id="db-devices" style="font-family:'Helvetica Neue',sans-serif;">25</span></div>
-        <div class="info-row"><span class="info-label">今日传感流水</span><span class="info-val" id="db-stream">516,807（今日投入件数）</span></div>
-        <div class="info-row"><span class="info-label">历史报警总数</span><span class="info-val" id="db-alerts" style="font-family:'Helvetica Neue',sans-serif;">101099</span></div>
+        <div class="info-row"><span class="info-label">受控设备总数</span><span class="info-val" id="db-devices" style="font-family:'Helvetica Neue',sans-serif;">{{ db_stats.total_devices }} 台</span></div>
+        <div class="info-row"><span class="info-label">今日传感流水</span><span class="info-val" id="db-stream">{{ db_stats.today_stream }} 条</span></div>
+        <div class="info-row"><span class="info-label">累计预警日志</span><span class="info-val" id="db-alerts" style="font-family:'Helvetica Neue',sans-serif;">{{ db_stats.total_alerts }} 条</span></div>
     </div>
 </div>

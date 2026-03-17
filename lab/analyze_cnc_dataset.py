@@ -20,7 +20,7 @@ import numpy as np
 
 warnings.filterwarnings('ignore')
 
-DATA_DIR = 'CNCData'   # 相对路径，在项目根目录执行
+DATA_DIR = '../CNCData'   # 文件已移至 lab/，需向上跳一级指向根目录下的 CNCData
 
 # ── 目标字段（对应 Django 模型字段）─────────────────────────────────
 FIELDS = {

@@ -1,6 +1,6 @@
 # 基于机器学习的 CNC 工业生产数据异常预警系统
 
-> **当前版本**：V2.2.1 · Digital Twin Elite Edition
+> **当前版本**：V3.1.0 · Modern Fundamentalism Edition
 
 ## 1. 项目简介
 
@@ -29,9 +29,9 @@
 |------|--------|
 | 后端 | Python 3.12 / Django 4.x / Django Channels (ASGI) / Daphne |
 | 数据库 | MySQL 8.x（`industrial_warning_db`）|
-| 前端 | Vanilla JS / Three.js v145 / ECharts 5.5 / Bootstrap 5 / WebSocket |
-| AI 算法 | Logistic Regression 二分类检测 / Qwen-max (诊断与咨询) |
-| 仿真引擎 | Django Management Command（`run_realtime_stream`），每 3 秒生成 25 台设备数据 |
+| 前端 | HTMX + Alpine.js / Three.js v145 / ECharts 5.5 / WebSocket |
+| AI 算法 | Logistic Regression 二分类检测 / Qwen-3.5 (诊断与咨询) |
+| 仿真引擎 | Django Management Command（`run_realtime_stream`）|
 
 ## 4. 首次运行完整指南
 
@@ -75,7 +75,7 @@ venv/bin/python manage.py createsuperuser --username admin
 ### Step 4 — 初始化设备与历史仿真数据（仅首次）
 
 ```bash
-venv/bin/python simulate_real_cnc_data.py
+venv/bin/python core_scripts/simulate_real_cnc_data.py
 ```
 
 此脚本将：
@@ -101,7 +101,7 @@ venv/bin/python manage.py run_realtime_stream
 ```
 
 > **重要**：强烈建议使用 `manage.py run_realtime_stream` 作为日常 7x24 进行实时压测流生成的守护进程。
-> 尽管最新的 `simulate_real_cnc_data.py` 的仿真机制与它表现一致，但后者缺乏**实时滚动定时清理**的手段安全机制。`run_realtime_stream` 持有 `RETENTION_DAYS = 1`，将有效避免数据库由于持续堆积 3 秒一条的流水而不受控制地爆满。
+> 尽管最新的 `core_scripts/simulate_real_cnc_data.py` 的仿真机制与它表现一致，但后者缺乏**实时滚动定时清理**的手段安全机制。`run_realtime_stream` 持有 `RETENTION_DAYS = 1`，将有效避免数据库由于持续堆积 3 秒一条的流水而不受控制地爆满。
 
 ### Step 7 — 访问系统
 
@@ -139,13 +139,13 @@ venv/bin/python manage.py run_realtime_stream
 # 终端 1：Web 服务器 (ASGI)
 venv/bin/daphne -p 8000 IndustrialWarningSystem.asgi:application
 
-# 终端 2：实时数据流守护进程（⚠️ 必须使用此命令，勿用 simulate_real_cnc_data.py）
+# 终端 2：实时数据流守护进程（⚠️ 必须使用此命令，勿用 core_scripts/simulate_real_cnc_data.py）
 venv/bin/python manage.py run_realtime_stream
 ```
 
 > **两个测试数据脚本的核心差异对比：**
 >
-> | 对比项 | `simulate_real_cnc_data.py` | `manage.py run_realtime_stream` |
+> | 对比项 | `core_scripts/simulate_real_cnc_data.py` | `manage.py run_realtime_stream` |
 > |---|---|---|
 > | 一次性初始化 7 天历史流 | ✅ 支持，适合冷启动 | ❌ 不支持 |
 > | V5 实时脉冲计算引擎与级联预警 | ✅ 支持 | ✅ 支持 |
@@ -155,6 +155,12 @@ venv/bin/python manage.py run_realtime_stream
 ---
 
 ## 7. 版本更新日志
+
+ ### V3.1.0 — Modern Fundamentalism Edition (2026-03-17)
+ - **[重构] 前端架构升级**：引入 **HTMX + Alpine.js** 组合，实现原生的现代交互体验。
+ - **[优化] 系统自检中心**：设置页面全面重构，支持实时统计真实数据库传感器流水。
+ - **[修复] 时区统计偏差**：修正了今日传感流水在特定数据库环境下显示 0 条的 Bug。
+ - **[优化] 视觉标识**：全局统一版本号标识为 V3.1.0。
 
  ### V2.2.1 — Digital Twin Elite Edition (2026-03-12)
  - **[新增] 3D 数字孪生视图**：正式上线基于 Three.js 的数字工厂页面。
@@ -178,5 +184,5 @@ venv/bin/python manage.py run_realtime_stream
 | 项目 | 说明 |
 |------|------|
 | 数据保留策略 | 实时流守护进程每 15 分钟自动清理超过 **1 天** 的旧传感记录与报警 |
-| 手动修复分组 | `venv/bin/python fix_db_groups.py`（恢复 Group 1-5 梯度分布）|
-| 清除并重建历史 | 重新运行 `simulate_real_cnc_data.py` 并在提示时选择清除 |
+| 手动修复分组 | `venv/bin/python core_scripts/fix_db_groups.py`（恢复 Group 1-5 梯度分布）|
+| 清除并重建历史 | 重新运行 `core_scripts/simulate_real_cnc_data.py` 并在提示时选择清除 |

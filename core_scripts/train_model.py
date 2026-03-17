@@ -28,6 +28,12 @@ from pathlib import Path
 warnings.filterwarnings('ignore')
 
 # ── Django 环境初始化 ─────────────────────────────────────────────
+import sys
+from pathlib import Path
+# 获取项目根目录并加入搜索路径
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(BASE_DIR))
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'IndustrialWarningSystem.settings')
 import django
 django.setup()
@@ -49,7 +55,7 @@ SEP2 = '─' * 64
 # ═══════════════════════════════════════════════════════════════════
 #  Step 0：创建模型持久化目录
 # ═══════════════════════════════════════════════════════════════════
-ML_DIR = Path('ml_models')
+ML_DIR = BASE_DIR / 'ml_models'
 ML_DIR.mkdir(exist_ok=True)
 
 

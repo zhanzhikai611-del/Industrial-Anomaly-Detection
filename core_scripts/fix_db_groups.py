@@ -19,10 +19,14 @@ fix_db_groups.py
 import os
 import sys
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'IndustrialWarningSystem.settings')
+# ── Django 环境初始化 ─────────────────────────────────────────────
+from pathlib import Path
+# 获取项目根目录并加入搜索路径，确保在 core_scripts 目录下运行也能找到应用
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(BASE_DIR))
 
-import django
-django.setup()
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'IndustrialWarningSystem.settings')
+import django; django.setup()
 
 from monitor.models import DeviceInfo
 
