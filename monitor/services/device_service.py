@@ -29,8 +29,8 @@ class DeviceService:
         全量重置所有设备的特征组梯度 (模拟换刀/新工艺开始)
         """
         try:
-            # 批量操作性能更高
-            DeviceInfo.objects.all().update(current_group_id=1)
+            # 调用模型层定义的中心化梯度重置逻辑 (V3.2.2)
+            DeviceInfo.initial_repair_all()
             return True
         except Exception as e:
             logger.error(f"Reset groups error: {e}")
