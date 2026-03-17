@@ -49,3 +49,14 @@
     50% { opacity: 0.5; transform: scale(1.2); }
     100% { opacity: 1; transform: scale(1); }
 }
+
+/* ── 报警类型标签 (与事件中心一致) ── */
+.tag-current { display: inline-flex; background: #FEE2E2; color: #DC2626; padding: 1px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.tag-power { display: inline-flex; background: #FFEDD5; color: #EA580C; padding: 1px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.tag-velocity { display: inline-flex; background: #E0F2FE; color: #0284C7; padding: 1px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.tag-default { display: inline-flex; background: #f0f2f5; color: #909399; padding: 1px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+/* ── 风险颜色辅助类 ── */
+.risk-red { color: #F5222D !important; }
+.risk-orange { color: #FAAD14 !important; }
+.risk-green { color: #52C41A !important; }

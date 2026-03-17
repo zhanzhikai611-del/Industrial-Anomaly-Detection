@@ -8,32 +8,36 @@
 {% endblock %}
 
 {% block content %}
-<div x-data x-init="if (window.DeviceApp) window.DeviceApp.engine.init();">
+<div x-data x-init="if (window.DeviceApp) window.DeviceApp.engine.init();" style="display:flex; flex-direction:column; gap:16px;">
     {% include 'monitor/includes/device/toolbar.html' %}
     
-    <div class="card" style="padding:20px;">
-        <table class="tbl table-sm text-nowrap" id="dev-table" style="width: 100%;">
-            <thead>
-                <tr>
-                    <th class="w-15">设备</th>
-                    <th class="w-20">设备型号</th>
-                    <th class="w-20">当前工序</th>
-                    <th class="w-15">实时风险</th>
-                    <th class="w-15">实时效率</th>
-                    <th class="w-10">状态</th>
-                    <th class="w-5">处理</th>
-                </tr>
-            </thead>
-            <tbody id="dev-tbody" 
-                   hx-get="/devices/" 
-                   hx-trigger="every 8s" 
-                   hx-target="#dev-tbody" 
-                   hx-include="#dev-search, #dev-sort-val, [name='filter']">
-                {% include 'monitor/includes/device/table_rows.html' %}
-            </tbody>
-        </table>
-        <div id="dev-empty" style="display:none;text-align:center;padding:40px 0;color:var(--text-hint);">暂无匹配设备</div>
-        <div class="pagination" id="pagination"></div>
+    <div class="card" style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+        <div style="flex:1; overflow:auto;">
+            <table class="dev-table" id="dev-table" style="width:100%; border-collapse:collapse; table-layout:fixed;">
+                <thead class="dev-table-header">
+                    <tr>
+                        <th style="width:22%; padding-left:24px;">设备</th>
+                        <th style="width:14%;">设备型号</th>
+                        <th style="width:14%;">当前工序</th>
+                        <th style="width:12%; text-align:center;">实时风险</th>
+                        <th style="width:12%; text-align:center;">实时效率</th>
+                        <th style="width:18%; text-align:center;">状态</th>
+                        <th style="width:8%; text-align:center; padding-right:24px;">处理</th>
+                    </tr>
+                </thead>
+                <tbody id="dev-tbody" 
+                       hx-get="/devices/" 
+                       hx-trigger="every 8s" 
+                       hx-target="#dev-tbody" 
+                       hx-include="#dev-search, #dev-sort-val, [name='filter']">
+                    {% include 'monitor/includes/device/table_rows.html' %}
+                </tbody>
+            </table>
+            <div id="dev-empty" style="display:none; text-align:center; padding:48px 0; color:var(--text-hint);">
+                <div style="font-size:32px; margin-bottom:10px;">🔍</div>
+                <div>暂无匹配设备</div>
+            </div>
+        </div>
     </div>
 
     {% include 'monitor/includes/device/modal_ai_diagnosis.html' %}

@@ -1,31 +1,48 @@
 <div class="db-card db-card-bottom">
     <div class="db-title"><span class="db-title-bar"></span>生产计划达成看板</div>
-    <div style="font-size:11px;color:#909399;margin-bottom:2px;">今日总产量</div>
-    <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
-        <span id="prod-output" class="mono" style="font-size:32px;font-weight:700;color:#409EFF;">--</span>
-        <span style="font-size:13px;color:#909399;">件</span>
-        <span id="prod-badge" class="mono"
-            style="font-size:11px;border-radius:20px;padding:2px 8px;background:#ecf5ff;color:#409EFF;border:1px solid #b3d8ff;margin-left:4px;">--%</span>
-    </div>
-    <div class="slim-wrap" style="height:4px;margin-bottom:2px;">
-        <div class="slim-fill" id="prod-bar" style="width:0%;background:#409EFF;"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:#c0c4cc;margin-bottom:10px;">
-        <span>0</span><span>目标 <span class="mono" id="prod-target"
-                style="color:#303133;font-size:12px;">--</span> 件</span>
-    </div>
-    <!-- 各时段产量 ECharts -->
-    <div style="font-size:11px;color:#909399;margin-bottom:4px;">各时段产量（件）</div>
-    <div id="chart-hourly" style="height:150px; margin-top:4px;"></div>
-    <!-- 良品 / 次品 双卡 -->
-    <div class="prod-duo" style="margin-top: 10px;">
-        <div class="prod-kpi-card" style="background:#f0f9eb;border:1px solid #b7eb8f;">
-            <div class="prod-kpi-label" style="color:#52c41a;">良品</div>
-            <div class="prod-kpi-val" id="prod-quality" style="color:#52c41a;">-- 件</div>
+    
+    <!-- ① 今日产量统计 (HTMX刷新) -->
+    <div id="prod-stats-top" 
+         hx-get="{% url 'dashboard_partial' 'production' %}" 
+         hx-trigger="every 5s" 
+         hx-select="#prod-stats-top" 
+         hx-swap="outerHTML">
+        <div style="font-size:11px;color:#909399;margin-bottom:2px;">今日总产量</div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
+            <span id="prod-output" class="mono" style="font-size:32px;font-weight:700;color:#409EFF;">{{ total_output|default:"--" }}</span>
+            <span style="font-size:13px;color:#909399;">件</span>
+            <span id="prod-badge" class="mono"
+                style="font-size:11px;border-radius:20px;padding:2px 8px;background:#ecf5ff;color:#409EFF;border:1px solid #b3d8ff;margin-left:4px;">{{ prod_rate_pct|default:"--%" }}</span>
         </div>
-        <div class="prod-kpi-card" style="background:#fff2f0;border:1px solid #ffa39e;">
-            <div class="prod-kpi-label" style="color:#F5222D;">次品（损耗）</div>
-            <div class="prod-kpi-val" id="prod-defects" style="color:#F5222D;">-- 件</div>
+        <div class="slim-wrap" style="height:4px;margin-bottom:2px;">
+            <div class="slim-fill" id="prod-bar" style="width:{{ prod_bar_width|default:0 }}%;background:#409EFF;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#c0c4cc;margin-bottom:10px;">
+            <span>0</span><span>目标 <span class="mono" id="prod-target"
+                    style="color:#303133;font-size:12px;">{{ daily_target|default:"--" }}</span> 件</span>
+        </div>
+    </div>
+
+    <!-- ② 各时段产量 ECharts (居中，非HTMX刷新) -->
+    <div style="font-size:11px;color:#909399;margin-bottom:4px;margin-top:12px;">各时段产量（件）</div>
+    <div id="chart-hourly" style="height:140px; margin-bottom:12px;"></div>
+
+    <!-- ③ 良品 / 次品 双卡 (HTMX刷新) -->
+    <div id="prod-stats-bottom" 
+         hx-get="{% url 'dashboard_partial' 'production' %}" 
+         hx-trigger="every 5s" 
+         hx-select="#prod-stats-bottom" 
+         hx-swap="outerHTML">
+        <div class="prod-duo" style="gap: 16px; margin-top: 12px; margin-bottom: 4px;">
+            <div class="prod-kpi-card" style="background:#f6ffed; border:1px solid #b7eb8f; padding: 12px 8px;">
+                <div class="prod-kpi-label" style="color:#52c41a; font-size:11px; margin-bottom:2px; font-weight: 500;">良品</div>
+                <div class="prod-kpi-val" id="prod-quality" style="color:#52c41a; font-size:22px; font-weight: 700;">{{ total_output|default:"0" }} <span style="font-size:12px; font-weight:normal; margin-left:2px;">件</span></div>
+            </div>
+            <div class="prod-kpi-card" style="background:#fff1f0; border:1px solid #ffa39e; padding: 12px 8px;">
+                <div class="prod-kpi-label" style="color:#f5222d; font-size:11px; margin-bottom:2px; font-weight: 500;">次品(损耗)</div>
+                <div class="prod-kpi-val" id="prod-defects" style="color:#f5222d; font-size:22px; font-weight: 700;">{{ total_defects|default:"0" }} <span style="font-size:12px; font-weight:normal; margin-left:2px;">件</span></div>
+            </div>
         </div>
     </div>
 </div>
+

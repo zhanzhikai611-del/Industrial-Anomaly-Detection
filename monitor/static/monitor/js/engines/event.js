@@ -178,7 +178,7 @@ window.EventApp = {
                 EventApp.state.oneTimeInited = true;
             }
 
-            // 2. Delayed DOM Init
+            // 2. Fast DOM Init
             setTimeout(() => {
                 const statsEl = document.getElementById('statsChart');
                 const trendEl = document.getElementById('trendChart');
@@ -193,17 +193,15 @@ window.EventApp = {
                 if (EventApp.state.trendChart) EventApp.state.trendChart.dispose();
                 
                 EventApp.charts.init();
-                console.log('[EventApp] Charts Initialized');
 
-                // SPA ECharts layout fix
+                // 立即触发一次强制调整以确保渲染正确
                 const forceResize = () => {
                     if (EventApp.state.statsChart) EventApp.state.statsChart.resize();
                     if (EventApp.state.trendChart) EventApp.state.trendChart.resize();
                 };
                 requestAnimationFrame(forceResize);
-                setTimeout(forceResize, 150);
-                setTimeout(forceResize, 600);
-            }, 300);
+                setTimeout(forceResize, 100); 
+            }, 50);
         }
     }
 };

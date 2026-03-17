@@ -1,4 +1,7 @@
-<div class="db-card db-card-bottom" style="overflow:hidden;">
+<div class="db-card db-card-bottom" style="overflow:hidden;" 
+     hx-get="{% url 'dashboard_partial' 'alerts' %}" 
+     hx-trigger="every 10s" 
+     hx-swap="outerHTML">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div class="db-title" style="margin-bottom:0;"><span class="db-title-bar"></span>实时异常上报</div>
     </div>
@@ -10,11 +13,43 @@
         <span style="font-size:11px;color:#909399;text-align:right;">风险</span>
         <span></span>
     </div>
-    <div id="alert-list" style="flex:1;overflow-y:auto;"></div>
+        <div id="alert-list" style="flex:1;overflow-y:auto;padding-top:2px;">
+            {% for alert in alerts %}
+            <div class="arow animate-fade-in" onclick="if(window.DashboardApp) window.DashboardApp.ui.openAlertDetail('{{ alert.id }}')" 
+                 style="grid-template-columns: 50px 1fr auto auto; padding: 6px 8px; min-height: 48px;">
+                <span class="arow-time" style="font-size:10px; color:#bfbfbf; width:50px; line-height: 1.2;">{{ alert.alert_time|timesince }}前</span>
+                <div class="arow-desc" style="display:flex; flex-direction:column; gap:2px; padding-left:4px;">
+                    <span class="dev {% if alert.risk_pct > 80 %}risk-red{% elif alert.risk_pct > 60 %}risk-orange{% else %}risk-green{% endif %}" 
+                          style="font-weight:600; font-size:12px;">
+                        {{ alert.record.device.device_name }}
+                    </span>
+                    <div style="margin-top:0px; line-height: 1;">
+                        {% if alert.alert_type == 'HIGH_CURRENT' %}
+                        <span class="tag-current" style="transform: scale(0.85); transform-origin: left center;">主轴过电流</span>
+                        {% elif alert.alert_type == 'HIGH_POWER' %}
+                        <span class="tag-power" style="transform: scale(0.85); transform-origin: left center;">主轴过载</span>
+                        {% elif alert.alert_type == 'LOW_VELOCITY' %}
+                        <span class="tag-velocity" style="transform: scale(0.85); transform-origin: left center;">进给速度骤降</span>
+                        {% else %}
+                        <span class="tag-default" style="transform: scale(0.85); transform-origin: left center;">{{ alert.get_alert_type_display }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="arow-score {% if alert.risk_pct > 80 %}risk-red{% elif alert.risk_pct > 60 %}risk-orange{% else %}risk-green{% endif %}" 
+                     style="font-size:13px; font-weight:700;">
+                    {{ alert.risk_pct|default:85 }}%
+                </div>
+                <i class="fas fa-chevron-right arow-arrow" style="margin-left:4px; font-size: 10px;"></i>
+            </div>
+            {% empty %}
+        <div style="text-align:center;padding:40px 0;color:#bfbfbf;font-size:12px;">暂无未处理异常</div>
+        {% endfor %}
+    </div>
     <!-- 底栏: 最新 x 条 · 共 x 条 | 查看全部 -->
     <div
         style="display:flex;justify-content:space-between;align-items:center;padding:12px 2px 4px;margin-top:auto;border-top:1px solid #f0f2f5;">
-        <span style="font-size:12px;color:#909399;" id="alert-footer-text">最新 7 条异常 · 共 -- 条</span>
+        <span style="font-size:12px;color:#909399;" id="alert-footer-text">最新 {{ alerts|length }} 条异常 · 共 {{ unhandled_alerts }} 条</span>
         <a href="/events/" style="font-size:12px;color:#409EFF;text-decoration:none;">查看全部 →</a>
     </div>
 </div>
+

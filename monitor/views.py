@@ -17,6 +17,7 @@ API 端点：
 """
 
 import logging
+from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +33,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from django.shortcuts import render, redirect, get_object_or_404
+from django.db.models import Avg, Sum, Count
 
 from .models import (
     SystemConfig, DeviceInfo, UserProfile,
@@ -75,8 +77,25 @@ def role_required(allowed_roles):
 
 @login_required
 def dashboard_view(request):
-    """首页 Dashboard"""
-    return render(request, 'monitor/dashboard.html')
+    """首页 Dashboard (V3.0.12: 适配混合驱动初始加载)"""
+    ctx = _get_dashboard_stats_context(request)
+    # 拉取初始报警并预处理 (V3.0.13)
+    alerts = (AnomalyAlertLog.objects
+             .select_related('record', 'record__device')
+             .order_by('-alert_time')[:7])
+    
+    for alert in alerts:
+        score = alert.anomaly_score or 0.75
+        alert.risk_pct = int(score * 100)
+        if score > 0.8:
+            alert.risk_color = "#F5222D" # 危险
+        elif score > 0.6:
+            alert.risk_color = "#FAAD14" # 警告
+        else:
+            alert.risk_color = "#52C41A" # 正常
+            
+    ctx['alerts'] = alerts
+    return render(request, 'monitor/dashboard.html', ctx)
 
 
 @login_required
@@ -249,19 +268,25 @@ def event_view(request):
     for tc in type_counts:
         stats_data[tc['alert_type']] = tc['count']
         
+    # 聚合最近 24 小时的趋势 (优化：1次查询代替24次查询)
+    last_24h_start = now - timedelta(hours=24)
+    recent_alerts = AnomalyAlertLog.objects.filter(alert_time__gte=last_24h_start).values_list('alert_time', flat=True)
+    
     from django.utils.timezone import localtime
     now_local = localtime(now)
+    
+    # 建立小时索引
+    hour_counts = {}
+    for at in recent_alerts:
+        at_l = localtime(at).replace(minute=0, second=0, microsecond=0)
+        hour_counts[at_l] = hour_counts.get(at_l, 0) + 1
+    
     trend_labels = []
     trend_values = []
     for i in range(23, -1, -1):
-        start_t = now - timedelta(hours=i+1)
-        end_t   = now - timedelta(hours=i)
-        
-        end_t_local = now_local - timedelta(hours=i)
-        trend_labels.append(end_t_local.strftime('%H:00'))
-        
-        cnt = AnomalyAlertLog.objects.filter(alert_time__gte=start_t, alert_time__lt=end_t).count()
-        trend_values.append(cnt)
+        target_dt = (now_local - timedelta(hours=i)).replace(minute=0, second=0, microsecond=0)
+        trend_labels.append(target_dt.strftime('%H'))
+        trend_values.append(hour_counts.get(target_dt, 0))
 
     return render(request, 'monitor/event.html', {
         'page_obj': page_obj,
@@ -457,33 +482,22 @@ def api_reset_groups(request):
 #  API 1：看板概览统计 /api/stats/
 # ═══════════════════════════════════════════════════════════════════
 
-@require_http_methods(['GET'])
-def api_dashboard_stats(request):
-    """
-    GET /api/stats/
-    返回第一层 Dashboard 所需全部聚合数据：
-      - OEE 三分项（可用性 A、表现性 P、质量率 Q）及综合得分
-      - 当日总产出 / 总投入
-      - 设备状态分布（Running / Idle / Down）
-      - 今日报警分类频次
-
-    V1.1 重构：废除 per-record 平均逻辑，改用设备级联计算模型。
-      A = (Running设备数 / 总设备数) × 排班修正系数
-      P = Σ(actual_output) / Σ(theoretical_output)   全厂级
-      Q = 1 - (高风险设备数 × 次品系数) / 总设备数
-      OEE = A × P × Q
-    """
+def _get_dashboard_stats_context(request):
+    """提取 Dashboard 核心统计逻辑，供 API 和 HTMX 视图共享 (V3.0.11)"""
     from django.utils.timezone import localtime
+    from django.db.models.functions import TruncHour
+    from datetime import timedelta
+    
     local_now = localtime(timezone.now())
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # ── 设备状态分布 ──────────────────────────────────────────────
+    # 1. 设备状态分布数据
     running_count = DeviceInfo.objects.filter(current_status='Running').count()
     idle_count    = DeviceInfo.objects.filter(current_status='Idle').count()
     down_count    = DeviceInfo.objects.filter(current_status='Down').count()
     total_devices = DeviceInfo.objects.count() or 25
 
-    # ── 拉取今日最近流水用于聚合（OEE AI推断用，上限500条） ──────────
+    # 2. 拉取今日流水进行聚合计算 (取最近 500 条估算)
     today_qs = list(
         ProductionSensorData.objects
         .filter(timestamp__gte=today_start)
@@ -491,102 +505,51 @@ def api_dashboard_stats(request):
         .order_by('-timestamp')[:500]
     )
 
-    # ═══════════════════════════════════════════════════════════════
-    #  OEE 级联计算模型（V1.4.2 修正，适配 STEP_MINS=0.05 新格式）
-    # ═══════════════════════════════════════════════════════════════
+    # ── A（可用性）────────────────
+    avg_a = round(running_count / total_devices, 4) if total_devices > 0 else 0.0
 
-    # ── A（可用性）= Running设备比率 ────────────────
-    avg_a = round(running_count / total_devices, 4)
-
-    # ── P（性能）= 近期实际生产速率 / 理论满载速率 ──────────────────────────
-    # 使用近 500 条流水日志（today_qs），估算当前的全局生产速率。
-    # 废弃原本的 8 点早班时间锁，使 24 小时任何时段都能进行准确的瞬时性能核算
-
+    # ── P（性能）────────────────
     _sample_actual = sum(r.actual_output or 0 for r in today_qs)
     _sample_records = len(today_qs)
-
-    # 用最近 500 条数据估算全局生产速率 (V2.1.1 墙钟法优化)
     if _sample_records > 0 and running_count > 0:
-        # 墙钟法：从样本中最老的一条至今的真实物理耗时
         _earliest_ts = today_qs[-1].timestamp
         _sample_hours = (local_now - _earliest_ts).total_seconds() / 3600.0
-        
-        # 兜底：如果样本极其新鲜（小于理论步长），使用理论步长，防止 P 值因分母过小而突波
         _theo_step_hours = _sample_records / (running_count * (3600 / 3.0))
         _sample_hours = max(_sample_hours, _theo_step_hours)
-        
-        _rate_per_hour = _sample_actual / _sample_hours if _sample_hours > 0 else 0  # 产量/小时
-        
-        # 理论满载速率（当前 Running 设备的标准产能之和）
-        _devices_with_caps = DeviceInfo.objects.filter(current_status='Running').values_list('standard_capacity', flat=True)
-        _theoretical_rate = sum(_devices_with_caps)  # 件/小时
-        
-        if _theoretical_rate > 0:
-            avg_p = round(min(_rate_per_hour / _theoretical_rate, 1.0), 4)
-        else:
-            avg_p = None
+        _rate_per_hour = _sample_actual / _sample_hours if _sample_hours > 0 else 0
+        _theoretical_rate = sum(DeviceInfo.objects.filter(current_status='Running').values_list('standard_capacity', flat=True))
+        avg_p = round(min(_rate_per_hour / _theoretical_rate, 1.0), 4) if _theoretical_rate > 0 else 0.0
     else:
-        avg_p = None
+        avg_p = 0.0
 
-    # ── 生产计划基础统计 (用于看板展示及 Q 指标计算) ────────────────
-    from django.db.models import Sum
-    from django.db.models.functions import TruncHour
-    from datetime import timedelta
+    # ── 生产统计与目标 ──────────────
+    daily_target = (DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))['total_cap'] or 0) * 8
+    totals = ProductionSensorData.objects.filter(timestamp__gte=today_start).aggregate(
+        actual_total=Sum('actual_output'),
+        input_total=Sum('input_qty')
+    )
+    total_output = totals['actual_total'] or 0
+    total_input = totals['input_total'] or 0
 
-    # 1. 动态产能目标计算: 全厂标准产能之和 * 8小时标准班
-    daily_target_dict = DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))
-    daily_target = (daily_target_dict['total_cap'] or 0) * 8
+    avg_q = round(total_output / total_input, 4) if total_input > 0 else 1.0
 
-    # 2. 全量当日良品与投入统计（用于计算真实良率 Q）
-    start_of_local_day = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_all_qs = ProductionSensorData.objects.filter(timestamp__gte=start_of_local_day)
+    # ── OEE 综合率 ─────────────────
+    avg_oee = round(avg_a * avg_p * avg_q, 4)
 
-    total_output = 0
-    total_input = 0
-    if today_all_qs.exists():
-        totals = today_all_qs.aggregate(
-            actual_total=Sum('actual_output'),
-            input_total=Sum('input_qty')
-        )
-        total_output = totals['actual_total'] or 0
-        total_input = totals['input_total'] or 0
-
-    # ── Q（良率）= 实际良品产出 / 实际投入总量 (V2.1.2 物理实测逻辑) ──
-    if total_input > 0:
-        avg_q = round(total_output / total_input, 4)
-    else:
-        avg_q = 1.0  # 无产出时默认为 100% 良率
-
-    # ── OEE = A × P × Q（严格连乘）────────────────────────────────
-    if avg_a is not None and avg_p is not None and avg_q is not None:
-        avg_oee = round(avg_a * avg_p * avg_q, 4)
-    else:
-        avg_oee = None
-
-    # ── 生产计划达成分析重构 (V1.4.2) ──────────────────────────────────
-    from django.db.models import Sum
-    from django.db.models.functions import TruncHour
-    from datetime import timedelta
-
-    # (注：total_output 和 total_input 已在上方 Q 计算部分完成聚合)
-
-    # 3. 按小时(最近8小时)分布的真实良品产量
-    hourly_output_array = []
-    hourly_labels = []
+    # ── 报警统计数据 ────────────────
+    unhandled_count = AnomalyAlertLog.objects.filter(is_handled=False).count()
+    alerts = (AnomalyAlertLog.objects
+             .select_related('record', 'record__device')
+             .order_by('-alert_time')[:7])
     
-    for i in range(7, -1, -1):
-        start_t = local_now - timedelta(hours=i)
-        start_h = start_t.replace(minute=0, second=0, microsecond=0)
-        end_h = start_h + timedelta(hours=1)
-        
-        hourly_labels.append(start_h.strftime('%Hh'))
-        
-        h_qs = ProductionSensorData.objects.filter(timestamp__gte=start_h, timestamp__lt=end_h)
-        val = h_qs.aggregate(s=Sum('actual_output'))['s'] or 0
-        hourly_output_array.append(val)
+    # 预处理报警以便前端展示 (V3.0.14)
+    for alert in alerts:
+        score = alert.anomaly_score or 0.75
+        alert.risk_pct = int(score * 100)
+        if score > 0.8: alert.risk_color = "#F5222D"
+        elif score > 0.6: alert.risk_color = "#FAAD14"
+        else: alert.risk_color = "#52C41A"
 
-    # ── 今日报警分类频次 ──────────────────────────────────────────
-    from django.db.models import Count
     alert_dist = list(
         AnomalyAlertLog.objects
         .filter(alert_time__gte=today_start)
@@ -594,34 +557,111 @@ def api_dashboard_stats(request):
         .annotate(cnt=Count('id'))
         .order_by('-cnt')
     )
+    # ── 小时产量统计 (最近 8 小时，含补零以兼容 SQLite 时区) ──
+    hourly_data = {}
+    # 计算相对于现在的过去 8 小时起点
+    eight_hours_ago = (local_now - timedelta(hours=7)).replace(minute=0, second=0, microsecond=0)
+    
+    # 预填充最近 8 小时的键
+    for i in range(8):
+        target_h = eight_hours_ago + timedelta(hours=i)
+        hourly_data[target_h] = 0
+    
+    # 获取记录并累加
+    prod_records = ProductionSensorData.objects.filter(timestamp__gte=eight_hours_ago).values('timestamp', 'actual_output')
+    for rec in prod_records:
+        hr = localtime(rec['timestamp']).replace(minute=0, second=0, microsecond=0)
+        if hr in hourly_data:
+            hourly_data[hr] += (rec['actual_output'] or 0)
+    
+    sorted_items = sorted(hourly_data.items())
+    hourly_labels = [h.strftime('%-H') for h, q in sorted_items]
+    hourly_output = [q for h, q in sorted_items]
 
-    unhandled_count = AnomalyAlertLog.objects.filter(is_handled=False).count()
-
-    return JsonResponse({
-        'status':          'ok',
-        # OEE
-        'avg_oee':         avg_oee,
-        'avg_oee_pct':     f'{avg_oee:.1%}' if avg_oee is not None else '--',
-        'availability':    avg_a,
-        'performance':     avg_p,
-        'quality':         avg_q,
-        # 产量与计划
-        'total_output':    total_output,
-        'total_input':     total_input,
-        'daily_target':    daily_target,
-        'hourly_labels':   hourly_labels,
-        'hourly_output':   hourly_output_array,
-        # 设备状态
+    return {
+        'avg_oee': avg_oee,
+        'oee_pct': f"{int(avg_oee * 100)}%",
+        'oee_q_val': f"{int(avg_q * 100)}%",
+        'oee_p_val': f"{int(avg_p * 100)}%",
+        'oee_a_val': f"{int(avg_a * 100)}%",
+        'oee_q_bar': int(avg_q * 100),
+        'oee_p_bar': int(avg_p * 100),
+        'oee_a_bar': int(avg_a * 100),
+        'oee_bar_width': int(avg_oee * 100),
+        'hourly_labels': hourly_labels,
+        'hourly_output': hourly_output,
+        'total_output': total_output,
+        'total_input': total_input,
+        'daily_target': daily_target,
+        'prod_rate_pct': f"{round((total_output / daily_target * 100), 1) if daily_target > 0 else 0.0}%",
+        'prod_bar_width': min(100, int((total_output / daily_target * 100) if daily_target > 0 else 0)),
         'running_devices': running_count,
-        'idle_devices':    idle_count,
-        'down_devices':    down_count,
-        'total_devices':   total_devices,
-        # 报警
+        'idle_devices': idle_count,
+        'down_devices': down_count,
+        'total_devices': total_devices,
         'unhandled_alerts': unhandled_count,
         'alert_distribution': alert_dist,
-        'ai_model_loaded':  _LR_MODEL is not None,
-        'computed_at':      timezone.now().isoformat(),
+        'total_defects': total_input - total_output,
+    }
+
+@require_http_methods(['GET'])
+def api_dashboard_stats(request):
+    """GET /api/stats/ — 传统的 JSON 接口 (保持向前兼容)"""
+    ctx = _get_dashboard_stats_context(request)
+    return JsonResponse({
+        'status': 'ok',
+        'avg_oee': ctx['avg_oee'],
+        'availability': ctx['oee_a_bar'] / 100.0,
+        'performance': ctx['oee_p_bar'] / 100.0,
+        'quality': ctx['oee_q_bar'] / 100.0,
+        'total_output': ctx['total_output'],
+        'total_input': ctx['total_input'],
+        'daily_target': ctx['daily_target'],
+        'running_devices': ctx['running_devices'],
+        'idle_devices': ctx['idle_devices'],
+        'down_devices': ctx['down_devices'],
+        'total_devices': ctx['total_devices'],
+        'unhandled_alerts': ctx['unhandled_alerts'],
+        'hourly_labels': ctx.get('hourly_labels', []),
+        'hourly_output': ctx.get('hourly_output', []),
     })
+
+@login_required
+def dashboard_partial(request, fragment):
+    """
+    HTMX 局部刷新视图 (V3.0.12)
+    可根据请求参数返回不同的仪表盘片段
+    """
+    if fragment == 'oee':
+        ctx = _get_dashboard_stats_context(request)
+        return render(request, 'monitor/includes/dashboard/panel_oee.html', ctx)
+    
+    elif fragment == 'production':
+        ctx = _get_dashboard_stats_context(request)
+        return render(request, 'monitor/includes/dashboard/panel_production.html', ctx)
+        
+    elif fragment == 'alerts':
+        limit = min(int(request.GET.get('limit', 7)), 20)
+        alerts = (AnomalyAlertLog.objects
+                 .select_related('record', 'record__device')
+                 .order_by('-alert_time')[:limit])
+        
+        # 预处理报警以便前端展示 (V3.0.14)
+        for alert in alerts:
+            score = alert.anomaly_score or 0.75
+            alert.risk_pct = int(score * 100)
+            if score > 0.8: alert.risk_color = "#F5222D"
+            elif score > 0.6: alert.risk_color = "#FAAD14"
+            else: alert.risk_color = "#52C41A"
+
+        total_unhandled = AnomalyAlertLog.objects.filter(is_handled=False).count()
+        return render(request, 'monitor/includes/dashboard/panel_alerts.html', {
+            'alerts': alerts,
+            'unhandled_alerts': total_unhandled
+        })
+    
+    return HttpResponseForbidden()
+
 
 
 # ═══════════════════════════════════════════════════════════════════

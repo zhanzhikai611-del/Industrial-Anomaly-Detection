@@ -20,7 +20,8 @@ window.FactoryApp = {
         focusId: null,
         clock: new THREE.Clock(),
         ws: null,
-        isInitialized: false
+        isInitialized: false,
+        animationId: null
     },
 
     // ══════════════════════════════════════
@@ -260,7 +261,7 @@ window.FactoryApp = {
     // ══════════════════════════════════════
     engine: {
         animate: function() {
-            requestAnimationFrame(FactoryApp.engine.animate);
+            FactoryApp.state.animationId = requestAnimationFrame(FactoryApp.engine.animate);
             if (window.TWEEN) TWEEN.update();
             const state = FactoryApp.state;
             if (state.controls) state.controls.update();
@@ -377,6 +378,42 @@ window.FactoryApp = {
                 }
             }
             FactoryApp.ui.unfocus();
+        },
+
+        // ── 生命周期：销毁清理 (V3.3.2) ──
+        destroy: function() {
+            const state = FactoryApp.state;
+            console.log("[FACTORY] Relinquishing GPU and Network resources...");
+            
+            // 1. 停止动画循环
+            if (state.animationId) {
+                cancelAnimationFrame(state.animationId);
+            }
+            
+            // 2. 断开 WebSocket (禁用重连)
+            if (state.ws) {
+                state.ws.onclose = null;
+                state.ws.close();
+                state.ws = null;
+            }
+            
+            // 3. 释放 Three.js 资源
+            if (state.renderer) {
+                state.renderer.dispose();
+                // 强制丢失上下文以释放 GPU 显存
+                const gl = state.renderer.getContext();
+                const extension = gl.getExtension('WEBGL_lose_context');
+                if (extension) extension.loseContext();
+                
+                const container = document.getElementById('canvasArea');
+                if (container && state.renderer.domElement) {
+                    container.removeChild(state.renderer.domElement);
+                }
+            }
+            
+            // 4. 移除全局事件监听
+            window.removeEventListener('resize', FactoryApp.engine.onResize);
+            state.isInitialized = false;
         }
     },
 
@@ -598,4 +635,11 @@ document.addEventListener('click', function (e) {
 // Bootstrapper
 document.addEventListener('DOMContentLoaded', () => {
     FactoryApp.scene.init();
+});
+
+// 监听页面卸载执行清理 (方案 B 最小化适配)
+window.addEventListener('beforeunload', () => {
+    if (window.FactoryApp && FactoryApp.engine.destroy) {
+        FactoryApp.engine.destroy();
+    }
 });

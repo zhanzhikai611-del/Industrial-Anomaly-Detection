@@ -1,18 +1,12 @@
-// Playwright script
 const { chromium } = require('playwright');
-
 (async () => {
     try {
         const browser = await chromium.launch();
         const page = await browser.newPage();
         
-        // Disable images/css for speed
-        await page.route('**/*.(css|png|jpg|jpeg|webp)', route => route.abort());
-
-        // We need to login if redirected
         await page.goto('http://127.0.0.1:8000/dashboard/');
         
-        // Wait for potential login form
+        // Login if needed
         if (await page.$('#id_username')) {
             await page.fill('#id_username', 'admin');
             await page.fill('#id_password', 'admin');
@@ -21,7 +15,6 @@ const { chromium } = require('playwright');
         }
 
         console.log("Logged in. Navigating to accounts via HTMX");
-        
         // Navigate via HTMX sidebar
         const a = await page.$$('a.nav-link');
         for (let l of a) {
@@ -35,16 +28,10 @@ const { chromium } = require('playwright');
         
         await page.waitForTimeout(1500); // Wait for HTMX swap
         
-        const hasAddUsername = await page.evaluate(() => !!document.getElementById('add-username'));
-        console.log("Has #add-username after HTMX swap:", hasAddUsername);
+        await page.screenshot({ path: 'screenshot_htmx.png' });
         
-        if (!hasAddUsername) {
-            const oobExists = await page.evaluate(() => !!document.getElementById('global-modals-area'));
-            console.log("Does #global-modals-area exist?", oobExists);
-            
-            const oobInMain = await page.evaluate(() => document.getElementById('main-content').innerHTML.includes('global-modals-area'));
-            console.log("Is global-modals-area STUCK inside main-content?", oobInMain);
-        }
+        const errors = await page.evaluate(() => window.errors || []);
+        console.log("Errors:", errors);
         
         await browser.close();
     } catch(e) {

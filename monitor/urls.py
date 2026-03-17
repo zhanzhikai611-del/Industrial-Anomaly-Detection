@@ -20,6 +20,7 @@ urlpatterns = [
 
     # ── SaaS 多页面路由 ──────────────────────────────────────────
     path('dashboard/', views.dashboard_view, name='dashboard'),
+    path('dashboard/partial/<str:fragment>/', views.dashboard_partial, name='dashboard_partial'), # HTMX 局部刷新
     path('devices/',   views.device_view,   name='device'),
     path('events/',    views.event_view,    name='event'),
     path('accounts/',  views.account_view,  name='account'),
