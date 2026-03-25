@@ -21,27 +21,36 @@ window.FactoryApp = {
         clock: new THREE.Clock(),
         ws: null,
         isInitialized: false,
-        animationId: null
+        animationId: null,
+        cachedModels: new Map() // 新增：存储加载好的模型模板
     },
 
     // ══════════════════════════════════════
     // Scene Initiation
     // ══════════════════════════════════════
+    // ══════════════════════════════════════
     scene: {
-        init: function() {
+        init: async function () {
             const container = document.getElementById('canvasArea');
             if (!container) return;
 
+            // 1. 初始化模型加载 (V4.2 新增)
+            try {
+                await FactoryApp.loader.loadAllModels();
+            } catch (e) {
+                console.error("Critical Model Loading Error:", e);
+                // 即使加载失败也允许进入，使用后备模型
+            }
+
             const state = FactoryApp.state;
             state.scene = new THREE.Scene();
-            state.scene.background = new THREE.Color(0xe2e8f0);
+            // --- 风格重塑：雅致科技灰 (Slate-800) [V4.6 修正] ---
+            state.scene.background = new THREE.Color(0x1e293b);
 
-            // Isometric Orthographic Camera
+            // Perspective Camera (更适合沉浸式观察内部设备)
             const aspect = container.clientWidth / container.clientHeight;
-            const d = 1000;
-            state.camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 10000);
-            state.camera.position.set(1200, 1000, 1200);
-            state.camera.zoom = 1.0;
+            state.camera = new THREE.PerspectiveCamera(45, aspect, 10, 30000);
+            state.camera.position.set(0, 1800, 2800); // 居中正斜上方视角
             state.camera.updateProjectionMatrix();
 
             state.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });
@@ -50,18 +59,32 @@ window.FactoryApp = {
             state.renderer.shadowMap.enabled = true;
             state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             state.renderer.outputEncoding = THREE.sRGBEncoding;
+
+            // --- 提亮方案：色调映射与曝光调整 (V4.4 修正) ---
+            state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            state.renderer.toneMappingExposure = 1.0;
+
             container.appendChild(state.renderer.domElement);
 
             state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
             state.controls.enableDamping = true;
             state.controls.dampingFactor = 0.05;
-            state.controls.maxPolarAngle = Math.PI / 2.5;
-            state.controls.minZoom = 0.8;
-            state.controls.maxZoom = 4.0;
+            // --- 风格重塑：自由移动视角 (沉浸式数字孪生) ---
+            state.controls.minPolarAngle = 0;              // 允许全方位俯视
+            state.controls.maxPolarAngle = Math.PI / 2.1;  // 限制不低过地平线
+            state.controls.target.set(0, 0, 0);            // 视点锁定中心
+            state.controls.minDistance = 100;              // 允许拉近进入厂房
+            state.controls.maxDistance = 6000;             // 允许拉远查看全景
+            state.controls.enablePan = true;               // 开启平移功能
 
-            const ambi = new THREE.AmbientLight(0xffffff, 0.5);
+            const ambi = new THREE.AmbientLight(0xffffff, 0.6); // 调整：0.8 -> 0.6
             state.scene.add(ambi);
-            const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+
+            // --- 提亮方案：新增半球光 (V4.4 修正) ---
+            const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+            state.scene.add(hemi);
+
+            const dir = new THREE.DirectionalLight(0xffffff, 1.3); // 调整：1.8 -> 1.3
             dir.position.set(500, 1000, 300);
             dir.castShadow = true;
             dir.shadow.camera.left = -2000; dir.shadow.camera.right = 2000;
@@ -69,8 +92,7 @@ window.FactoryApp = {
             dir.shadow.mapSize.set(2048, 2048);
             state.scene.add(dir);
 
-            FactoryApp.scene.createGround();
-            FactoryApp.scene.createWorkshopStructure();
+            FactoryApp.scene.addFactoryScene();
             FactoryApp.scene.createMachineGrid();
             FactoryApp.scene.createDataParticles();
 
@@ -82,91 +104,125 @@ window.FactoryApp = {
             FactoryApp.engine.animate();
             FactoryApp.socket.connect();
             FactoryApp.ui.addLog("v4.5 Simulation Active.");
+
+            // 隐藏加载层 (V4.2)
+            const loaderOverlay = document.getElementById('loading-overlay');
+            if (loaderOverlay) {
+                loaderOverlay.style.opacity = '0';
+                setTimeout(() => loaderOverlay.style.display = 'none', 500);
+            }
+
             state.isInitialized = true;
         },
 
-        createGround: function() {
+        addFactoryScene: function () {
             const state = FactoryApp.state;
-            const geo = new THREE.PlaneGeometry(4000, 4000);
-            const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 });
-            const ground = new THREE.Mesh(geo, mat);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            state.scene.add(ground);
+            const template = state.cachedModels.get('factory_scene');
+            if (template) {
+                const factory = template.clone();
 
-            const grid = new THREE.GridHelper(4000, 40, 0x1e293b, 0xcccccc);
-            grid.material.opacity = 0.3;
-            grid.material.transparent = true;
-            grid.position.y = 1;
-            state.scene.add(grid);
-        },
+                // 初步缩放：根据 5x5 设备阵列 (约1800x1800) 进行适配
+                // 暂时预设 50 倍缩放，后续可根据预览结果微调
+                const s = 75;
+                factory.scale.set(s, s, s);
 
-        createWorkshopStructure: function() {
-            const state = FactoryApp.state;
-            const mat = new THREE.MeshStandardMaterial({ color: 0x475569, transparent: true, opacity: 0.4 });
-            const wallGeo = new THREE.BoxGeometry(3000, 80, 10);
-            const w1 = new THREE.Mesh(wallGeo, mat); w1.position.set(0, 40, -1500); state.scene.add(w1);
-            const w2 = new THREE.Mesh(wallGeo, mat); w2.rotation.y = Math.PI / 2; w2.position.set(-1500, 40, 0); state.scene.add(w2);
+                // 自动对齐地面
+                const box = new THREE.Box3().setFromObject(factory);
+                factory.position.y = -box.min.y;
 
-            const colMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
-            const colGeo = new THREE.BoxGeometry(30, 400, 30);
-            for (let i = -1400; i <= 1400; i += 700) {
-                const c = new THREE.Mesh(colGeo, colMat); c.position.set(i, 200, -1450); state.scene.add(c);
+                factory.traverse(node => {
+                    if (node.isMesh) {
+                        node.receiveShadow = true;
+                        node.castShadow = true;
+                        // 保持模型完整展现
+                        node.visible = true;
+                    }
+                });
+
+                state.scene.add(factory);
+                console.log("Factory Full Scene Integrated. Free Exploration Active.");
             }
         },
 
-        createMachineGrid: function() {
-            for (let r = 0; r < 5; r++) {
-                for (let c = 0; c < 5; c++) {
-                    const id = r * 5 + c + 1;
-                    const x = (c - 2) * 450;
-                    const z = (r - 2) * 450;
-                    FactoryApp.scene.addMachine(id, x, z);
+        createMachineGrid: function () {
+            const spacingZ = 450; // 前后间距
+            const spacingX = 650; // 左右车间跨度
+
+            for (let id = 1; id <= 25; id++) {
+                let x, z;
+                if (id <= 10) {
+                    // 第一列 (1-10) 左侧
+                    x = -spacingX;
+                    z = (id - 5.5) * spacingZ;
+                } else if (id <= 20) {
+                    // 第二列 (11-20) 中间
+                    x = 0;
+                    z = (id - 15.5) * spacingZ;
+                } else {
+                    // 第三列 (21-25) 右侧
+                    x = spacingX;
+                    z = (id - 23) * spacingZ; // 5台居中排列
                 }
+                FactoryApp.scene.addMachine(id, x, z);
             }
         },
 
-        addMachine: function(id, x, z) {
+        addMachine: function (id, x, z) {
             const state = FactoryApp.state;
             const group = new THREE.Group();
             group.position.set(x, 0, z);
-            group.userData = { id, name: `CNC-${id.toString().padStart(2, '0')}` };
+            group.userData = { id, name: `Machine-${id.toString().padStart(2, '0')}` };
 
-            const body = new THREE.Mesh(
-                new THREE.BoxGeometry(200, 160, 200),
-                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.05 })
-            );
-            body.position.y = 80;
-            body.castShadow = true;
-            group.add(body);
+            // 根据编号范围分配模型
+            let modelKey = 'cnc1';
+            if (id <= 10) modelKey = 'cnc3';      // 1-10: CNC3
+            else if (id <= 20) modelKey = 'cnc2'; // 11-20: CNC2
+            else modelKey = 'cnc1';               // 21-25: CNC1
 
-            const consoleBox = new THREE.Mesh(
-                new THREE.BoxGeometry(40, 100, 60),
-                new THREE.MeshStandardMaterial({ color: 0xf1f5f9 })
-            );
-            consoleBox.position.set(120, 50, 60);
-            group.add(consoleBox);
+            const template = state.cachedModels.get(modelKey);
+            let windowScreen = null;
+            let bodyMesh = null;
 
-            const labelPlate = new THREE.Mesh(
-                new THREE.PlaneGeometry(140, 45),
-                new THREE.MeshBasicMaterial({ map: FactoryApp.utils.createSideLabelTex(group.userData.name) })
-            );
-            labelPlate.rotation.y = Math.PI / 2;
-            labelPlate.position.set(100.5, 120, 0);
-            group.add(labelPlate);
+            if (template) {
+                const model = template.clone();
 
-            const windowScreen = new THREE.Mesh(
-                new THREE.PlaneGeometry(120, 80),
-                new THREE.MeshStandardMaterial({
-                    color: 0x0f172a,
-                    emissive: 0x444d5d,
-                    emissiveIntensity: 0
-                })
-            );
-            windowScreen.position.set(0, 100, 101);
-            group.add(windowScreen);
+                // --- 个性化比例、旋转与对齐方案 [V5.4 修正] ---
+                let s = 80;
+                if (modelKey === 'cnc1') {
+                    s = 90;
+                    model.rotation.x = 0;
+                    model.rotation.y = 0;
+                } else if (modelKey === 'cnc2') {
+                    s = 15;                   // 16 * 0.8 = 12.8
+                    model.rotation.y = Math.PI; // 修正前后 (180 deg)
+                } else if (modelKey === 'cnc3') {
+                    s = 210;                    // 200 * 0.9 = 180
+                    model.rotation.y = 0;       // 旋转 180 度 (从原来 PI 翻回到 0)
+                }
+                model.scale.set(s, s, s);
 
-            const glowGeo = new THREE.PlaneGeometry(600, 600);
+                group.add(model);
+
+                // 动态高度对齐：自动计算模型包围盒并修正 Position.Y (防止沉入地板)
+                const box = new THREE.Box3().setFromObject(model);
+                model.position.y = -box.min.y;
+
+                model.traverse(node => {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                        // 寻找模型自带的屏幕部件
+                        if (node.name.toLowerCase().includes('screen') || node.name.toLowerCase().includes('glass') || node.name.toLowerCase().includes('monitor')) {
+                            windowScreen = node;
+                        }
+                        if (!bodyMesh) bodyMesh = node;
+                    }
+                });
+                // [已移除] 移除原有的 labelPlate (标签) 和 fallback windowScreen (大蓝板)
+            }
+
+            // --- 优化方案：缩小光效覆盖范围 (V4.6) ---
+            const glowGeo = new THREE.PlaneGeometry(400, 400);
             const glowMat = new THREE.MeshBasicMaterial({
                 map: FactoryApp.utils.createGlowTex(),
                 color: 0x409eff,
@@ -182,10 +238,19 @@ window.FactoryApp = {
             group.add(glow);
 
             state.scene.add(group);
-            state.machines.set(id, { group, body, windowScreen, labelPlate, glow, oee: 0.8, status: 'Idle', phase: Math.random() * Math.PI });
+            state.machines.set(id, {
+                group,
+                body: bodyMesh,
+                windowScreen,
+                labelPlate: null, // 标记为 null
+                glow,
+                oee: 0.8,
+                status: 'Idle',
+                phase: Math.random() * Math.PI
+            });
         },
 
-        createDataParticles: function() {
+        createDataParticles: function () {
             const state = FactoryApp.state;
             const geo = new THREE.BoxGeometry(6, 6, 6);
             for (let i = 0; i < 30; i++) {
@@ -199,10 +264,63 @@ window.FactoryApp = {
     },
 
     // ══════════════════════════════════════
+    // Model Loader (V4.2 Add)
+    // ══════════════════════════════════════
+    loader: {
+        loadAllModels: function () {
+            const progressBar = document.getElementById('progress-bar');
+            const statusText = document.getElementById('loader-status');
+
+            const models = [
+                { id: 'cnc1', path: '/static/monitor/models/CNC01.glb' },
+                { id: 'cnc2', path: '/static/monitor/models/CNC02.glb' },
+                { id: 'cnc3', path: '/static/monitor/models/CNC03.glb' },
+                { id: 'factory_scene', path: '/static/monitor/models/simple_factory_scene.glb' }
+            ];
+
+            const loader = new THREE.GLTFLoader();
+            const totalModels = models.length;
+            let loadedCount = 0;
+
+            // 总体进度计算 (3个模型平均分布)
+            const updateProgress = (idx, itemProgress) => {
+                const totalProgress = ((loadedCount) / totalModels) * 100 + (itemProgress / totalModels);
+                if (progressBar) progressBar.style.width = totalProgress + '%';
+            };
+
+            return Promise.all(models.map((m, index) => {
+                return new Promise((resolve) => {
+                    loader.load(m.path,
+                        (gltf) => {
+                            FactoryApp.state.cachedModels.set(m.id, gltf.scene);
+                            loadedCount++;
+                            if (statusText) statusText.innerText = `资源已就绪: ${m.id} (${loadedCount}/${totalModels})`;
+                            updateProgress(index, 100);
+                            resolve();
+                        },
+                        (xhr) => {
+                            if (xhr.lengthComputable) {
+                                const percent = (xhr.loaded / xhr.total) * 100;
+                                updateProgress(index, percent);
+                                if (statusText) statusText.innerText = `正在下载模型 ${m.id}: ${Math.round(percent)}%`;
+                            }
+                        },
+                        (err) => {
+                            console.error(`Failed to load ${m.id}:`, err);
+                            loadedCount++; // 即使失败也继续
+                            resolve();
+                        }
+                    );
+                });
+            }));
+        }
+    },
+
+    // ══════════════════════════════════════
     // Socket & Data Sync
     // ══════════════════════════════════════
     socket: {
-        connect: function() {
+        connect: function () {
             const loc = window.location;
             const wsUrl = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.host + '/ws/factory/';
             const ws = new WebSocket(wsUrl);
@@ -238,18 +356,21 @@ window.FactoryApp = {
             };
         },
 
-        sync3DStates: function() {
+        sync3DStates: function () {
             const state = FactoryApp.state;
             state.currentDevices.forEach((dev, idx) => {
                 const meshId = idx + 1;
                 const m = state.machines.get(meshId);
                 if (m) {
-                    m.group.userData.id = dev.device_id; 
+                    m.group.userData.id = dev.device_id;
                     m.status = dev.current_status;
                     m.oee = dev.oee || 0;
                     if (dev.device_name && m.group.userData.name !== dev.device_name) {
                         m.group.userData.name = dev.device_name;
-                        m.labelPlate.material.map = FactoryApp.utils.createSideLabelTex(dev.device_name);
+                        // 安全检查：仅在 labelPlate 存在时更新 (V4.3 已移除)
+                        if (m.labelPlate && m.labelPlate.material) {
+                            m.labelPlate.material.map = FactoryApp.utils.createSideLabelTex(dev.device_name);
+                        }
                     }
                 }
             });
@@ -260,7 +381,7 @@ window.FactoryApp = {
     // Engine & Animation
     // ══════════════════════════════════════
     engine: {
-        animate: function() {
+        animate: function () {
             FactoryApp.state.animationId = requestAnimationFrame(FactoryApp.engine.animate);
             if (window.TWEEN) TWEEN.update();
             const state = FactoryApp.state;
@@ -270,19 +391,20 @@ window.FactoryApp = {
 
             state.machines.forEach((m) => {
                 let freq = 0.5;
-                let color = new THREE.Color(0x409eff);
+                // 默认呼吸灯色：提亮为亮蓝色 (V4.5)
+                let color = new THREE.Color(0x00d4ff);
 
                 if (m.status === 'Running') {
                     if (m.oee > 0.75) freq = 1.2;
                     else if (m.oee >= 0.45) freq = 0.7;
                     else freq = 0.3;
-                    color.set(0x409eff);
+                    color.set(0x00d4ff); // 运行态：高亮蓝
                 } else if (m.status === 'Idle' || m.status === 'Standby') {
                     freq = 0.6;
-                    color.set(0xffa940);
+                    color.set(0x00d4ff); // 待机态：也显示为蓝色（用户指定），但可通过动画区分
                 } else if (m.status === 'Down' || m.status === 'Stop') {
                     freq = 1.0;
-                    color.set(0xff4d4f);
+                    color.set(0xff4d4f); // 故障态：保留红色提示
                 }
 
                 if (m.status !== 'Offline') {
@@ -290,18 +412,24 @@ window.FactoryApp = {
                     const pulse = (Math.sin(m.phase) + 1) / 2;
 
                     m.glow.material.color.copy(color);
-                    const baseOpacity = (m.status === 'Running') ? 0.4 : 0.7;
+                    // --- 提亮方案：大幅增强不透明度使其明显 ---
+                    const baseOpacity = 1.0;
                     m.glow.material.opacity = pulse * baseOpacity;
 
-                    if (m.status === 'Running') {
-                        m.windowScreen.material.emissive.set(0x444d5d);
-                        m.windowScreen.material.emissiveIntensity = pulse * 1.5;
-                    } else {
-                        m.windowScreen.material.emissiveIntensity = 0;
+                    // 安全检查：仅当识别到模型内部屏幕时执行高亮动画
+                    if (m.windowScreen && m.windowScreen.material && m.windowScreen.material.emissive) {
+                        if (m.status === 'Running') {
+                            m.windowScreen.material.emissive.set(0x444d5d);
+                            m.windowScreen.material.emissiveIntensity = pulse * 1.5;
+                        } else {
+                            m.windowScreen.material.emissiveIntensity = 0;
+                        }
                     }
                 } else {
                     m.glow.material.opacity = 0;
-                    m.windowScreen.material.emissiveIntensity = 0;
+                    if (m.windowScreen && m.windowScreen.material) {
+                        m.windowScreen.material.emissiveIntensity = 0;
+                    }
                 }
             });
 
@@ -317,13 +445,13 @@ window.FactoryApp = {
             }
         },
 
-        resetParticle: function(p) {
+        resetParticle: function (p) {
             p.position.set((Math.random() - 0.5) * 2000, 2, (Math.random() - 0.5) * 2000);
             p.userData.vel = new THREE.Vector3((Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
             p.userData.life = 100 + Math.random() * 200;
         },
 
-        onResize: function() {
+        onResize: function () {
             const container = document.getElementById('canvasArea');
             if (!container) return;
             const state = FactoryApp.state;
@@ -335,7 +463,7 @@ window.FactoryApp = {
             state.renderer.setSize(container.clientWidth, container.clientHeight);
         },
 
-        onMouseMove: function(e) {
+        onMouseMove: function (e) {
             const container = document.getElementById('canvasArea');
             const state = FactoryApp.state;
             const rect = container.getBoundingClientRect();
@@ -365,38 +493,44 @@ window.FactoryApp = {
             }
         },
 
-        onClick: function() {
+        onClick: function () {
             const state = FactoryApp.state;
             state.raycaster.setFromCamera(state.mouse, state.camera);
             const intersects = state.raycaster.intersectObjects(state.scene.children, true);
             if (intersects.length > 0) {
                 let obj = intersects[0].object;
-                while (obj.parent && !obj.userData.id) obj = obj.parent;
-                if (obj.userData.id) {
-                    FactoryApp.ui.focusMachine(obj.userData.id);
-                    return;
+                // 向上追溯，直到找到带有 device_id 的父节点
+                while (obj.parent && !obj.userData.id) {
+                    obj = obj.parent;
                 }
+
+                if (obj.userData && obj.userData.id) {
+                    FactoryApp.ui.focusMachine(obj.userData.id);
+                } else {
+                    FactoryApp.ui.unfocus(false); // 点击背景：原地不动，仅切换UI界面
+                }
+            } else {
+                FactoryApp.ui.unfocus(false); // 点击空白：不回弹
             }
-            FactoryApp.ui.unfocus();
         },
 
         // ── 生命周期：销毁清理 (V3.3.2) ──
-        destroy: function() {
+        destroy: function () {
             const state = FactoryApp.state;
             console.log("[FACTORY] Relinquishing GPU and Network resources...");
-            
+
             // 1. 停止动画循环
             if (state.animationId) {
                 cancelAnimationFrame(state.animationId);
             }
-            
+
             // 2. 断开 WebSocket (禁用重连)
             if (state.ws) {
                 state.ws.onclose = null;
                 state.ws.close();
                 state.ws = null;
             }
-            
+
             // 3. 释放 Three.js 资源
             if (state.renderer) {
                 state.renderer.dispose();
@@ -404,13 +538,13 @@ window.FactoryApp = {
                 const gl = state.renderer.getContext();
                 const extension = gl.getExtension('WEBGL_lose_context');
                 if (extension) extension.loseContext();
-                
+
                 const container = document.getElementById('canvasArea');
                 if (container && state.renderer.domElement) {
                     container.removeChild(state.renderer.domElement);
                 }
             }
-            
+
             // 4. 移除全局事件监听
             window.removeEventListener('resize', FactoryApp.engine.onResize);
             state.isInitialized = false;
@@ -421,33 +555,33 @@ window.FactoryApp = {
     // UI Interactions
     // ══════════════════════════════════════
     ui: {
-        toggleUserMenu: function() {
+        toggleUserMenu: function () {
             const menu = document.getElementById('user-dropdown');
             if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         },
 
-        addLog: function(msg) {
+        addLog: function (msg) {
             const logList = document.getElementById('logList');
             if (!logList) return;
             const entry = document.createElement('div');
             entry.className = 'log-entry';
-            
+
             if (msg.includes('OPTIMIZED') || msg.includes('SUCCESS') || msg.includes('ENGINE:')) {
                 entry.style.color = 'var(--primary)';
                 entry.style.fontWeight = '700';
             }
-            
+
             const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
             entry.innerHTML = `<span style="color:#94a3b8; font-weight:400;">[${time}]</span> ${msg}`;
             logList.appendChild(entry);
-            
+
             if (logList.children.length > 50) logList.firstChild.remove();
 
             const railBody = logList.parentElement;
             railBody.scrollTop = railBody.scrollHeight;
         },
 
-        updateStatsDisplay: function() {
+        updateStatsDisplay: function () {
             const state = FactoryApp.state;
             const r = state.currentDevices.filter(d => d.current_status === 'Running').length;
             const s = state.currentDevices.filter(d => d.current_status === 'Down').length;
@@ -459,7 +593,7 @@ window.FactoryApp = {
             if (stEl) stEl.innerText = s;
         },
 
-        focusMachine: function(id) {
+        focusMachine: function (id) {
             const state = FactoryApp.state;
             state.focusId = id;
             let m = null;
@@ -470,7 +604,7 @@ window.FactoryApp = {
                 }
             }
             if (!m) return;
-            
+
             const targetPos = m.group.position;
             const camTarget = targetPos.clone().add(new THREE.Vector3(600, 500, 600));
 
@@ -500,7 +634,7 @@ window.FactoryApp = {
             const insEl = document.getElementById('inspectEl');
             if (logEl) logEl.style.display = 'none';
             if (insEl) insEl.style.display = 'block';
-            
+
             FactoryApp.ui.updateInspector(id);
             if (state.ws && state.ws.readyState === WebSocket.OPEN) {
                 state.ws.send(JSON.stringify({
@@ -510,27 +644,24 @@ window.FactoryApp = {
             }
         },
 
-        unfocus: function() {
+        unfocus: function (forceReset = false) {
             const state = FactoryApp.state;
             state.focusId = null;
             if (window.TWEEN) {
                 TWEEN.removeAll();
 
-                new TWEEN.Tween(state.camera.position)
-                    .to({ x: 1200, y: 1000, z: 1200 }, 1000)
-                    .easing(TWEEN.Easing.Quintic.Out)
-                    .start();
+                // 只有点击 RETURN 或明确要求时才执行回弹动画
+                if (forceReset) {
+                    new TWEEN.Tween(state.camera.position)
+                        .to({ x: 0, y: 1800, z: 2800 }, 1000)
+                        .easing(TWEEN.Easing.Quintic.Out)
+                        .start();
 
-                new TWEEN.Tween(state.controls.target)
-                    .to({ x: 0, y: 0, z: 0 }, 1000)
-                    .easing(TWEEN.Easing.Quintic.Out)
-                    .start();
-
-                new TWEEN.Tween(state.camera)
-                    .to({ zoom: 1.0 }, 1000)
-                    .easing(TWEEN.Easing.Quintic.Out)
-                    .onUpdate(() => state.camera.updateProjectionMatrix())
-                    .start();
+                    new TWEEN.Tween(state.controls.target)
+                        .to({ x: 0, y: 0, z: 0 }, 1000)
+                        .easing(TWEEN.Easing.Quintic.Out)
+                        .start();
+                }
             }
 
             const labelEl = document.getElementById('railLabel');
@@ -541,18 +672,28 @@ window.FactoryApp = {
             if (insEl) insEl.style.display = 'none';
         },
 
-        updateInspector: function(id) {
+        updateInspector: function (id) {
             const state = FactoryApp.state;
             const dev = state.currentDevices.find(d => d.device_id == id);
             if (!dev) return;
-            
+
             const nameEl = document.getElementById('ins-name');
             if (nameEl) nameEl.innerText = dev.device_name;
-            
+
             let statusZh = dev.current_status;
             if (statusZh === 'Running') statusZh = '运行中';
             else if (statusZh === 'Idle') statusZh = '待机中';
             else if (statusZh === 'Down') statusZh = '故障停机';
+
+            // 确保 RETURN 按钮的逻辑独立且强力
+            const btn = document.getElementById('ins-return');
+            if (btn) {
+                btn.onclick = (e) => {
+                    if (e) e.stopPropagation(); // 阻止冒泡到背景 Canvas
+                    console.log("[FactoryApp] Return Button Clicked -> Triggering Spring-Back");
+                    FactoryApp.ui.unfocus(true);
+                };
+            }
 
             const statEl = document.getElementById('ins-stat');
             if (statEl) {
@@ -560,7 +701,7 @@ window.FactoryApp = {
                 statEl.style.color = dev.current_status === 'Running' ? '#67c23a' :
                     (dev.current_status === 'Idle' ? '#E6A23C' : '#f56c6c');
             }
-                
+
             const oeeEl = document.getElementById('ins-oee');
             const curEl = document.getElementById('ins-cur');
             const powEl = document.getElementById('ins-pow');
@@ -569,7 +710,7 @@ window.FactoryApp = {
             if (powEl) powEl.innerText = (dev.spindle_power || 0).toFixed(2) + ' W';
         },
 
-        renderDeviceDetails: function(data) {
+        renderDeviceDetails: function (data) {
             const advEl = document.getElementById('ins-advice');
             if (advEl) advEl.innerText = data.advice || '--';
             const histEl = document.getElementById('ins-history');
@@ -589,11 +730,11 @@ window.FactoryApp = {
     // Utilities & Textures
     // ══════════════════════════════════════
     utils: {
-        json_parse_safe: function(str) {
+        json_parse_safe: function (str) {
             try { return JSON.parse(str); } catch (e) { return null; }
         },
 
-        createGlowTex: function() {
+        createGlowTex: function () {
             const canvas = document.createElement('canvas');
             canvas.width = 128; canvas.height = 128;
             const context = canvas.getContext('2d');
@@ -607,7 +748,7 @@ window.FactoryApp = {
             return new THREE.CanvasTexture(canvas);
         },
 
-        createSideLabelTex: function(text) {
+        createSideLabelTex: function (text) {
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 128;
             const ctx = canvas.getContext('2d');
@@ -619,6 +760,63 @@ window.FactoryApp = {
             ctx.textBaseline = 'middle';
             ctx.fillText(text, 256, 64, 480);
             return new THREE.CanvasTexture(canvas);
+        },
+
+        // --- 风格重塑：动态几何电路纹理生成器 (V5.0) ---
+        createCircuitTex: function () {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            // 底色：深灰蓝
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            // 第一层：极细网格底噪
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 1024; i += 32) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1024); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1024, i); ctx.stroke();
+            }
+
+            // 第二层：不规则几何折线 (电路走线)
+            const colors = ['#409eff', '#00d4ff', '#94a3b8'];
+            for (let i = 0; i < 40; i++) {
+                ctx.strokeStyle = colors[Math.floor(Math.random() * colors.length)];
+                ctx.globalAlpha = Math.random() * 0.4 + 0.1;
+                ctx.lineWidth = Math.random() * 2 + 1;
+
+                let curX = Math.floor(Math.random() * 32) * 32;
+                let curY = Math.floor(Math.random() * 32) * 32;
+
+                ctx.beginPath();
+                ctx.moveTo(curX, curY);
+
+                // 走 2-4 个折弯
+                const segments = Math.floor(Math.random() * 3) + 2;
+                for (let j = 0; j < segments; j++) {
+                    const isX = Math.random() > 0.5;
+                    const dist = (Math.floor(Math.random() * 6) + 1) * 32;
+                    if (isX) curX += (Math.random() > 0.5 ? dist : -dist);
+                    else curY += (Math.random() > 0.5 ? dist : -dist);
+                    ctx.lineTo(curX, curY);
+                }
+                ctx.stroke();
+
+                // 特定位置绘制科技圆点 (节点)
+                if (Math.random() > 0.6) {
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.beginPath();
+                    ctx.arc(curX, curY, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 4); // 进行 4x4 阵列平铺
+            return tex;
         }
     }
 };

@@ -10,6 +10,7 @@
     <!-- Core UI & 3D Deps -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/21.0.0/tween.umd.js"></script>
     
     <link rel="stylesheet" href="{% static 'monitor/css/factory.css' %}">
@@ -28,12 +29,61 @@
             --font: -apple-system, 'Helvetica Neue', Arial, 'PingFang SC', sans-serif;
             --font-mono: 'Menlo', 'Courier New', monospace;
         }
+
+        /* Loading Overlay Styles */
+        #loading-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            color: white;
+            transition: opacity 0.5s ease;
+        }
+        .loader-box {
+            width: 350px;
+            text-align: center;
+        }
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #409eff, #40d0ff);
+            transition: width 0.3s ease;
+        }
+        .loader-text {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
     </style>
 </head>
 
 <body>
     <!-- Standalone Header -->
     {% include 'monitor/includes/factory/header_standalone.html' %}
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay">
+        <div class="loader-box">
+            <h2 style="margin-bottom:10px; font-weight: 300; letter-spacing: 2px; color: #409eff;">Loading Digital Twin......</h2>
+            <div class="progress-container">
+                <div id="progress-bar"></div>
+            </div>
+            <div class="loader-text" id="loader-status">正在连接资源服务器...</div>
+        </div>
+    </div>
 
     <div class="main-wrapper">
         <!-- 3D Scene Area -->

@@ -38,6 +38,11 @@ class CopilotConsumer(AsyncWebsocketConsumer):
                                 should_continue=lambda: self.keep_running
                             )
                         )
+                elif action == 'stop':
+                    self.keep_running = False
+                    if self.agent_task and not self.agent_task.done():
+                        self.agent_task.cancel()
+                    await self.push_log("[System] Copilot 模式已由用户手动停止运行。")
             
             elif mode == 'ask':
                 if self.agent_task and not self.agent_task.done():

@@ -6,13 +6,15 @@
 window.DeviceApp = {
     state: {
         allDevices: [],
+        filteredDevices: [], // 新增：供 Alpine x-for 直接使用
         activeFilter: 'all',
-        currentPage: 1,
+        searchTerm: '',      // 新增：搜索状态
+        sortMode: 'risk_desc', // 新增：排序状态
+        currentPage: 1,      // 新增：分页相关
         pageSize: 10,
         repairDevId: null,
         modalChartInst: null,
         modalPollTimer: null,
-        _urlDeviceChecked: false,
         isInitialized: false,
         oneTimeInited: false,
         pollInterval: null
@@ -20,8 +22,9 @@ window.DeviceApp = {
 
     engine: {
         init: async function() {
-            console.log('[DeviceApp] Initializing engine components...');
-            
+            console.log('[DeviceApp] Initializing Shell & Data engine...');
+            window.$ = window.$ || (id => document.getElementById(id));
+
             // 1. One-time Global Init
             if (!DeviceApp.state.oneTimeInited) {
                 window.addEventListener('resize', () => { 
@@ -33,27 +36,18 @@ window.DeviceApp = {
                 DeviceApp.state.oneTimeInited = true;
             }
 
-            // 2. DOM Helpers & Initial Load
-            window.$ = window.$ || (id => document.getElementById(id));
-            DeviceApp.engine.setFilter('all');
+            // 2. Initial Data Load
+            await DeviceApp.engine.fetchDevices();
             
-            // 核心：处理来自仪表盘的跳转搜索 (V3.2.7)
+            // 处理搜索参数跳转
             const urlParams = new URLSearchParams(window.location.search);
             const q = urlParams.get('q');
-            const searchInput = $('dev-search');
-            
-            if (q && searchInput) {
-                searchInput.value = q;
-                // 延迟 100ms 触发，确保 DOM 已经 settle 且侧边栏已高亮
-                setTimeout(() => {
-                    if (window.htmx) htmx.trigger(searchInput, 'search');
-                }, 100);
-            } else {
-                // 如果没有搜索参数，则执行常规首屏抓取
-                await DeviceApp.engine.fetchDevices();
+            if (q) {
+                DeviceApp.state.searchTerm = q;
+                DeviceApp.engine.sortAndRender();
             }
-            
-            // 3. Background polling
+
+            // 3. Background polling (JSON ONLY now)
             if (DeviceApp.state.pollInterval) clearInterval(DeviceApp.state.pollInterval);
             DeviceApp.state.pollInterval = setInterval(DeviceApp.engine.fetchDevices, 5000);
 
@@ -76,60 +70,90 @@ window.DeviceApp = {
         },
 
         updateFilterCounts: function() {
-            const list = DeviceApp.state.allDevices;
+            // 已由 Alpine.js 状态驱动接管，见 sortAndRender
+        },
+
+        setFilter: function(f) {
+            DeviceApp.state.activeFilter = f;
+            DeviceApp.state.currentPage = 1; // 切换过滤重置分页
+            DeviceApp.engine.sortAndRender();
+        },
+
+        sortAndRender: function() {
+            const list = DeviceApp.state.allDevices || [];
+            if (!list.length) return;
+
+            const keyword = (DeviceApp.state.searchTerm || '').trim().toLowerCase();
+            const filter = DeviceApp.state.activeFilter;
+            const sortMode = DeviceApp.state.sortMode;
+
+            let results = [...list];
+
+            // 1. Apply Search
+            if (keyword) {
+                results = results.filter(d => d.device_name.toLowerCase().includes(keyword));
+            }
+
+            // 2. Apply Risk Filters
+            if (filter === 'high') results = results.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) > 0.75);
+            else if (filter === 'med') results = results.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) > 0.45 && (d.anomaly_score ?? 0) <= 0.75);
+            else if (filter === 'low') results = results.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) <= 0.45);
+
+            // 3. Apply Sorting
+            if (sortMode === 'risk_desc') results.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
+            else if (sortMode === 'risk_asc') results.sort((a, b) => (a.anomaly_score ?? 0) - (b.anomaly_score ?? 0));
+            else if (sortMode === 'oee_desc') results.sort((a, b) => (b.oee_val ?? 0) - (a.oee_val ?? 0));
+            else if (sortMode === 'name_asc') results.sort((a, b) => a.device_name.localeCompare(b.device_name));
+
+            // 4. Client-side Pagination
+            const total = results.length;
+            const size = DeviceApp.state.pageSize;
+            const maxPage = Math.max(1, Math.ceil(total / size));
+            
+            // 安全修正当前页
+            if (DeviceApp.state.currentPage > maxPage) DeviceApp.state.currentPage = maxPage;
+            const current = DeviceApp.state.currentPage;
+            
+            const startIdx = (current - 1) * size;
+            const endIdx = Math.min(startIdx + size, total);
+            const paginated = results.slice(startIdx, endIdx);
+
+            DeviceApp.state.filteredDevices = paginated;
+
+            // 5. Notify Alpine via custom event (Alpine v3 compatible)
+            window.dispatchEvent(new CustomEvent('devices-updated', {
+                detail: {
+                    devices: paginated,
+                    activeF: filter,
+                    counts: DeviceApp.engine.getUpdateCountsInternal(),
+                    pagination: {
+                        total: total,
+                        current: current,
+                        size: size,
+                        maxPage: maxPage,
+                        start: total > 0 ? startIdx + 1 : 0,
+                        end: endIdx,
+                        pages: Array.from({length: maxPage}, (_, i) => i + 1)
+                    }
+                }
+            }));
+        },
+
+        gotoPage: function(p) {
+            if (p < 1) return;
+            DeviceApp.state.currentPage = p;
+            DeviceApp.engine.sortAndRender();
+        },
+
+        getUpdateCountsInternal: function() {
+            const list = DeviceApp.state.allDevices || [];
             const running = list.filter(x => x.current_status === 'Running');
-            const counts = {
+            return {
                 all: list.length,
                 high: running.filter(x => (x.anomaly_score ?? 0) > 0.75).length,
                 med: running.filter(x => (x.anomaly_score ?? 0) > 0.45 && (x.anomaly_score ?? 0) <= 0.75).length,
                 low: running.filter(x => (x.anomaly_score ?? 0) <= 0.45).length
             };
-            
-            if ($('fc-all')) $('fc-all').textContent = counts.all;
-            if ($('fc-high')) $('fc-high').textContent = counts.high;
-            if ($('fc-med')) $('fc-med').textContent = counts.med;
-            if ($('fc-low')) $('fc-low').textContent = counts.low;
-        },
-
-        setFilter: function(f) {
-            DeviceApp.state.activeFilter = f;
-            DeviceApp.state.currentPage = 1;
-            ['all', 'high', 'med', 'low'].forEach(k => {
-                const elm = $('fp-' + k);
-                if (elm) {
-                    elm.style.borderWidth = (k === f) ? '2px' : '1px';
-                    elm.style.opacity = (k === f) ? '1' : '0.65';
-                }
-            });
-            DeviceApp.engine.sortAndRender();
-        },
-
-        sortAndRender: function() {
-            const searchInput = $('dev-search');
-            const sortInput = $('dev-sort');
-            if (!searchInput || !sortInput) return;
-
-            const keyword = searchInput.value.trim().toLowerCase();
-            const sortSelection = sortInput.value;
-            const filter = DeviceApp.state.activeFilter;
-
-            let list = DeviceApp.state.allDevices;
-            
-            // Apply Search
-            if (keyword) list = list.filter(d => d.device_name.toLowerCase().includes(keyword));
-            
-            // Apply Filters
-            if (filter === 'high') list = list.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) > 0.75);
-            else if (filter === 'med') list = list.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) > 0.45 && (d.anomaly_score ?? 0) <= 0.75);
-            else if (filter === 'low') list = list.filter(d => d.current_status === 'Running' && (d.anomaly_score ?? 0) <= 0.45);
-
-            // Apply Sort
-            if (sortSelection === 'risk_desc') list.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
-            else if (sortSelection === 'risk_asc') list.sort((a, b) => (a.anomaly_score ?? 0) - (b.anomaly_score ?? 0));
-            else if (sortSelection === 'oee_desc') list.sort((a, b) => (b.oee_score ?? 0) - (a.oee_score ?? 0));
-            else list.sort((a, b) => a.device_name.localeCompare(b.device_name));
-
-            DeviceApp.engine.renderTable(list);
         },
 
         filterTable: function() {
@@ -137,13 +161,6 @@ window.DeviceApp = {
             DeviceApp.engine.sortAndRender();
         },
 
-        renderTable: function(list) {
-            // 已废弃：后端 template_rows.html 替代了此处的 JS 拼接
-        },
-
-        gotoPage: function(p) {
-            // V3.0 暂不使用前端假分页
-        },
 
         toggleStatusMenu: function(event, devId) {
             event.stopPropagation();
@@ -189,7 +206,8 @@ window.DeviceApp = {
         },
 
         selectSort: function(val, label) {
-            if ($('dev-sort')) $('dev-sort').value = val;
+            DeviceApp.state.sortMode = val;
+            DeviceApp.state.currentPage = 1; // 切换排序重置分页
             if ($('sort-pill-text')) $('sort-pill-text').textContent = label;
             document.querySelectorAll('.sort-dropdown-item').forEach(item => {
                 item.classList.toggle('active', item.dataset.val === val);

@@ -8,7 +8,19 @@
 {% endblock %}
 
 {% block content %}
-<div x-data x-init="if (window.DeviceApp) window.DeviceApp.engine.init();" style="display:flex; flex-direction:column; gap:16px;">
+<!-- [V3.2.0 Shell-Data Transformation] 
+     Root element holds the primary Alpine state, synced manually by DeviceApp.engine via CustomEvents -->
+<div id="device-root" 
+     x-data="{ 
+        devices: [], 
+        activeF: 'all', 
+        counts: {all: '--', high: '--', med: '--', low: '--'},
+        pagination: { total: 0, current: 1, maxPage: 1, start: 0, end: 0, pages: [] }
+     }" 
+     x-init="DeviceApp.engine.init()" 
+     @devices-updated.window="devices = $event.detail.devices; activeF = $event.detail.activeF; counts = $event.detail.counts; pagination = $event.detail.pagination"
+     style="display:flex; flex-direction:column; gap:16px;">
+    
     {% include 'monitor/includes/device/toolbar.html' %}
     
     <div class="card" style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden;">
@@ -25,18 +37,91 @@
                         <th style="width:8%; text-align:center; padding-right:24px;">处理</th>
                     </tr>
                 </thead>
-                <tbody id="dev-tbody" 
-                       hx-get="/devices/" 
-                       hx-trigger="every 8s" 
-                       hx-target="#dev-tbody" 
-                       hx-include="#dev-search, #dev-sort-val, [name='filter']">
-                    {% include 'monitor/includes/device/table_rows.html' %}
+                <tbody id="dev-tbody">
+                    <!-- Alpine x-for Implementation (1:1 Style Match) -->
+                    <template x-for="dev in devices" :key="dev.device_id">
+                        <tr style="cursor:pointer;" @click="DeviceApp.modals.openAIModal(dev.device_id)">
+                            <td style="font-weight:600; color:var(--text); padding-left:24px;" x-text="dev.device_name"></td>
+                            <td style="color:var(--text-hint);" x-text="dev.device_type || '--'"></td>
+                            <td style="color:var(--text-sec); font-size:12px;" x-text="dev.machining_process || '--'"></td>
+                            <td :class="dev.risk_cls" style="font-weight:700; text-align:center;" x-text="dev.risk_pct"></td>
+                            <td :class="dev.oee_cls" style="font-weight:700; text-align:center;" x-text="dev.oee_pct"></td>
+                            <td style="text-align:center;">
+                                <div class="status-container">
+                                    <div class="status-pill" :class="dev.status_cls" 
+                                         @click.stop="DeviceApp.engine.toggleStatusMenu($event, dev.device_id)"
+                                         x-text="dev.status_label">
+                                    </div>
+                                    <div class="status-dropdown" :id="'status-menu-' + dev.device_id">
+                                        <div class="status-item" :class="{ active: dev.current_status === 'Running' }"
+                                             @click.stop="DeviceApp.engine.selectStatus(dev.device_id, 'Running')">
+                                            <span class="status-dot dot-running"></span>Running
+                                        </div>
+                                        <div class="status-item" :class="{ active: dev.current_status === 'Idle' }"
+                                             @click.stop="DeviceApp.engine.selectStatus(dev.device_id, 'Idle')">
+                                            <span class="status-dot dot-idle"></span>Standby
+                                        </div>
+                                        <div class="status-item" :class="{ active: dev.current_status === 'Down' }"
+                                             @click.stop="DeviceApp.engine.selectStatus(dev.device_id, 'Down')">
+                                            <span class="status-dot dot-down"></span>Stopped
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align:center; padding-right:24px;">
+                                <button class="action-icon-btn"
+                                    :disabled="dev.current_status !== 'Down'"
+                                    @click.stop="DeviceApp.modals.openRepairModal(dev.device_id, dev.device_name)"
+                                    title="下发维修工单">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
                 </tbody>
             </table>
-            <div id="dev-empty" style="display:none; text-align:center; padding:48px 0; color:var(--text-hint);">
-                <div style="font-size:32px; margin-bottom:10px;">🔍</div>
+            <!-- Empty State -->
+            <div id="dev-empty" x-show="devices.length === 0" style="text-align:center; padding:48px 0; color:var(--text-hint);">
                 <div>暂无匹配设备</div>
             </div>
+        </div>
+
+        <!-- 分页 Footer (对齐账号管理风格) -->
+        <div class="acc-footer" x-show="pagination.total > 0" style="border-top: 1px solid #f0f2f5;">
+            <span class="acc-footer-info">
+                第 <span x-text="pagination.start"></span>–<span x-text="pagination.end"></span> 条，共 <span x-text="pagination.total"></span> 条
+            </span>
+            <ul class="pagination">
+                <!-- Previous -->
+                <li class="page-item" :class="{ disabled: pagination.current === 1 }">
+                    <span class="page-link" @click="DeviceApp.engine.gotoPage(pagination.current - 1)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                    </span>
+                </li>
+
+                <!-- Page Numbers -->
+                <template x-for="p in pagination.pages" :key="p">
+                    <li class="page-item" :class="{ active: p === pagination.current }"
+                        x-show="p >= pagination.current - 2 && p <= pagination.current + 2">
+                        <span class="page-link" x-text="p" @click="DeviceApp.engine.gotoPage(p)"></span>
+                    </li>
+                </template>
+
+                <!-- Next -->
+                <li class="page-item" :class="{ disabled: pagination.current === pagination.maxPage }">
+                    <span class="page-link" @click="DeviceApp.engine.gotoPage(pagination.current + 1)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                    </span>
+                </li>
+            </ul>
         </div>
     </div>
 

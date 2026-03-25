@@ -95,3 +95,12 @@
 .dev-table th { background: #fafafa; border-bottom: 1px solid #ebeef5; color: #909399; font-size: 13px; font-weight: 500; padding: 12px 20px; text-align: left; }
 .dev-table td { padding: 12px 20px; border-bottom: 1px solid #f5f7fa; font-size: 14px; vertical-align: middle; }
 .dev-table tbody tr:hover { background: #fbfdff; }
+
+/* ── Pagination ── */
+.acc-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-top: 1px solid #f0f2f5; background: #fff; }
+.acc-footer-info { font-size: 12px; color: #909399; }
+.pagination { display: flex; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.page-item .page-link { display: flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; font-size: 12px; color: #606266; background: #fff; border: 1px solid #dcdfe6; border-radius: 4px; text-decoration: none; transition: all .15s; cursor: pointer; }
+.page-item.active .page-link { color: #303133; background: #f4f4f5; border-color: #dcdfe6; font-weight: 700; cursor: default; }
+.page-item.disabled .page-link { color: #c0c4cc; pointer-events: none; background: #fafafa; }
+.page-item:not(.disabled):not(.active) .page-link:hover { color: var(--primary); border-color: #c6e2ff; background: #ecf5ff; }

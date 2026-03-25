@@ -425,7 +425,8 @@ function appendTerminalLog(msg, time) {
     let coloredMsg = msg;
     const labelColors = {
         '[System]': '#3ABFF8', '[Target]': '#FFB703', '[Action]': '#F87171',
-        '[Data]': '#9CA3AF', '[Info]': '#34D399', '[AI]': '#C084FC'
+        '[Data]': '#9CA3AF', '[Info]': '#34D399', '[AI]': '#C084FC',
+        '[Recovery]': '#10B981', '[Status]': '#818CF8'
     };
 
     Object.entries(labelColors).forEach(([tag, color]) => {

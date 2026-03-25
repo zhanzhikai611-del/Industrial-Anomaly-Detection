@@ -1,61 +1,49 @@
 <!-- ── 顶部工具栏 ── -->
-<div class="toolbar-bar" x-data="{ activeF: 'all', counts: {all: {{ counts.all|default:'--' }}, high: {{ counts.high|default:'--' }}, med: {{ counts.med|default:'--' }}, low: {{ counts.low|default:'--' }}} }"
-     @update-counts.window="counts = $event.detail">
-    <!-- 实时搜索：增加 HTMX 绑定 -->
+<div class="toolbar-bar">
+    <!-- 实时搜索：改为 Alpine 与 Vanilla JS 联动 -->
     <input id="dev-search" 
            name="q"
            class="search-input" 
            placeholder="搜索设备名…" 
            value="{{ request.GET.q|default:'' }}"
-           hx-get="/devices/"
-           hx-trigger="keyup changed delay:300ms, search"
-           hx-target="#dev-tbody"
-           hx-include="#dev-sort-val, [name='filter']">
+           @input="DeviceApp.state.searchTerm = $event.target.value; DeviceApp.state.currentPage = 1; DeviceApp.engine.sortAndRender()">
     
     <div class="sort-container">
-        <div class="sort-pill" id="sort-pill-text" onclick="DeviceApp.engine.toggleSortMenu(event)">风险降序</div>
+        <div class="sort-pill" id="sort-pill-text" @click="DeviceApp.engine.toggleSortMenu($event)">风险降序</div>
         <div class="sort-dropdown" id="sort-dropdown-menu">
-            <div class="sort-dropdown-item active" data-val="risk_desc" onclick="DeviceApp.engine.selectSort('risk_desc', '风险降序')">风险降序</div>
-            <div class="sort-dropdown-item" data-val="risk_asc" onclick="DeviceApp.engine.selectSort('risk_asc', '风险升序')">风险升序</div>
-            <div class="sort-dropdown-item" data-val="name_asc" onclick="DeviceApp.engine.selectSort('name_asc', '名称排序')">名称排序</div>
+            <div class="sort-dropdown-item active" data-val="risk_desc" @click="DeviceApp.engine.selectSort('risk_desc', '风险降序')">风险降序</div>
+            <div class="sort-dropdown-item" data-val="risk_asc" @click="DeviceApp.engine.selectSort('risk_asc', '风险升序')">风险升序</div>
+            <div class="sort-dropdown-item" data-val="name_asc" @click="DeviceApp.engine.selectSort('name_asc', '名称排序')">名称排序</div>
+            <div class="sort-dropdown-item" data-val="oee_desc" @click="DeviceApp.engine.selectSort('oee_desc', '效率优先')">效率优先</div>
         </div>
-        <!-- 隐藏域供 HTMX 包含 -->
-        <input type="hidden" name="sort" id="dev-sort-val" value="risk_desc">
     </div>
 
     <div style="flex:1"></div>
 
-    <!-- 过滤器：增加 hx-get 绑定 -->
-    <input type="hidden" name="filter" :value="activeF">
-
     <div class="filter-pill" id="fp-all" 
          :style="{ borderWidth: activeF === 'all' ? '2px' : '1px', opacity: activeF === 'all' ? '1' : '0.65' }"
-         @click="activeF = 'all'"
-         hx-get="/devices/?filter=all" hx-target="#dev-tbody" hx-include="#dev-search">
+         @click="DeviceApp.engine.setFilter('all')">
         <span class="fp-label">所有设备</span>
         <span class="fp-num" id="fc-all" x-text="counts.all">--</span>
     </div>
     <div class="filter-pill" id="fp-high" 
          :style="{ borderWidth: activeF === 'high' ? '2px' : '1px', opacity: activeF === 'high' ? '1' : '0.65' }"
          style="border-color: #fde2e2;"
-         @click="activeF = 'high'"
-         hx-get="/devices/?filter=high" hx-target="#dev-tbody" hx-include="#dev-search">
+         @click="DeviceApp.engine.setFilter('high')">
         <span class="fp-label color-high">高风险</span>
         <span class="fp-num color-high" id="fc-high" x-text="counts.high">--</span>
     </div>
     <div class="filter-pill" id="fp-med" 
          :style="{ borderWidth: activeF === 'med' ? '2px' : '1px', opacity: activeF === 'med' ? '1' : '0.65' }"
          style="border-color: #faecd8;"
-         @click="activeF = 'med'"
-         hx-get="/devices/?filter=med" hx-target="#dev-tbody" hx-include="#dev-search">
+         @click="DeviceApp.engine.setFilter('med')">
         <span class="fp-label color-med">中风险</span>
         <span class="fp-num color-med" id="fc-med" x-text="counts.med">--</span>
     </div>
     <div class="filter-pill" id="fp-low" 
          :style="{ borderWidth: activeF === 'low' ? '2px' : '1px', opacity: activeF === 'low' ? '1' : '0.65' }"
          style="border-color: #e1f3d8;"
-         @click="activeF = 'low'"
-         hx-get="/devices/?filter=low" hx-target="#dev-tbody" hx-include="#dev-search">
+         @click="DeviceApp.engine.setFilter('low')">
         <span class="fp-label color-low">低风险</span>
         <span class="fp-num color-low" id="fc-low" x-text="counts.low">--</span>
     </div>
