@@ -148,6 +148,7 @@ window.EventApp = {
                 if (typeQ === 'HIGH_CURRENT' && !rawTypeStr.includes('过电流')) matches = false;
                 if (typeQ === 'HIGH_POWER' && !rawTypeStr.includes('过载')) matches = false;
                 if (typeQ === 'LOW_VELOCITY' && !rawTypeStr.includes('速度')) matches = false;
+                if (typeQ === 'DOWNTIME' && !rawTypeStr.includes('停机')) matches = false;
                 if (searchQ && !deviceName.includes(searchQ)) matches = false;
 
                 tr.style.display = matches ? '' : 'none';

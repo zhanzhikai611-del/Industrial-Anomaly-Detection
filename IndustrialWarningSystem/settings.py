@@ -83,6 +83,17 @@ CHANNEL_LAYERS = {
     },
 }
 
+# ── Redis 缓存配置 (V3.3.0) ──────────────────────────────────────────
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 # 使用 MySQL 数据库（pymysql 驱动，在项目 __init__.py 中初始化）

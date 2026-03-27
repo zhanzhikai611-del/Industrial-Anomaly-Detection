@@ -29,6 +29,8 @@
                     <span class="tag-power">主轴过载</span>
                     {% elif event.alert_type == 'LOW_VELOCITY' %}
                     <span class="tag-velocity">进给速度骤降</span>
+                    {% elif event.alert_type == 'DOWNTIME' %}
+                    <span class="tag-downtime" style="background: #722ed1; color: white;">设备非计划停机</span>
                     {% else %}
                     <span class="tag-default">{{ event.get_alert_type_display }}</span>
                     {% endif %}

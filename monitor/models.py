@@ -319,7 +319,6 @@ class AnomalyAlertLog(models.Model):
         ('HIGH_CURRENT',   '主轴过电流物理报警'),
         ('HIGH_POWER',     '主轴过载物理报警'),
         ('LOW_VELOCITY',   '进给速度骤降报警'),
-        ('DOWNTIME',       '停机超时报警'),
         ('OTHER',          '其他'),
     ]
 

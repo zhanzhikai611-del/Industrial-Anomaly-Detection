@@ -1,6 +1,6 @@
 # 基于机器学习的 CNC 工业生产数据异常预警系统
 
-> **当前版本**：V3.2.0 · Elite Diagnostic Edition (2026-03-27)
+> **当前版本**：V3.3.1 · Performance & Physics Synchronization Edition (2026-03-28)
 
 ## 1. 项目简介
 
@@ -31,10 +31,10 @@
 | 层级 | 技术栈 |
 |------|--------|
 | 后端 | Python 3.12 / Django 4.x / Django Channels (ASGI) / Daphne |
-| 数据库 | MySQL 8.x（`industrial_warning_db`）|
+| 数据库 | MySQL 8.x / **Redis 7.x (性能缓存层)** |
 | 前端 | HTMX + Alpine.js / Three.js v145 / ECharts 5.5 / WebSocket |
 | AI 算法 | Logistic Regression 二分类检测 / Qwen-3.5 (诊断与咨询) |
-| 仿真引擎 | Django Management Command（`run_realtime_stream`）|
+| 仿真引擎 | Django Management Command / **Redis Atomic Counters** |
 
 ## 4. 首次运行完整指南
 
@@ -159,11 +159,16 @@ venv/bin/python manage.py run_realtime_stream
 
 ## 7. 版本更新日志
 
-  ### V3.2.0 — Elite Diagnostic Edition (2026-03-27)
-  - **[新增] 环境感知 3D 详情页**：正式上线单台设备的 3D 数字孪生视图，替代旧有的 5x5 全景展示，提升诊断精度。
-  - **[优化] 交互系统**：基于 OrbitControls 实现单体模型的手动旋转、平移与缩放，操作体验更趋专业化。
-  - **[优化] 动态视觉表现**：详情页指标卡（风险/效率）支持根据实时阈值动态变换背景与边框色，强化异常感知。
-  - **[维护] 规范化清理**：移除详情页冗余 3D 脚本全局引用，解决 Proxy 数据代理导致的控制失效问题。
+  ### V3.3.1 — Performance & Physics Synchronization Edition (2026-03-28) [✨最新✨]
+- **[重构] 核心指标 P (Performance) 算法**：采用「流水潜力对齐逻辑」。直接对齐 600 条记录的实产与标准能力，彻底消除采样边界偏差带来的数值飘移（告别虚高 100%）。
+- **[优化] 核心指标 A (Availability) 算法**：由瞬时快照升级为「时间加权移动平均」。通过对最近 1 分钟内的停机记录进行物理闭环求和，使看板具备真正的“故障记忆”能力。
+- **[系统] 接入 Redis 高性能内核**：
+    - **实时计数器**：实现产量指标的内存级原子累加，大幅降低 MySQL 读取压力。
+    - **看板级缓存**：对统计密集型接口执行 60s 缓存，保障高并发下的响应速度。
+- **[修复] 仿真单位冲突**：修正了仿真引擎中 downtime 与 loading_time 的单位（分钟级统一），根治了可用性指标显示为负数的 Bug。
+
+### V3.2.0 — Elite Diagnostic Edition (2026-03-27)
+- **[新增] 环境感知 3D 详情页**：正式上线单台设备的 3D 数字孪生视图，替代旧有的 5x5 全景展示，提升诊断精度。
 
   ### V3.1.0 — Modern Fundamentalism Edition (2026-03-17)
  - **[重构] 前端架构升级**：引入 **HTMX + Alpine.js** 组合，实现原生的现代交互体验。

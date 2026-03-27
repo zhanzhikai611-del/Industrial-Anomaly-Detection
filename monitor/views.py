@@ -177,16 +177,16 @@ def event_view(request):
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # 按照类型统计
+    # 按照类型统计 (已移除 DOWNTIME)
     type_counts = AnomalyAlertLog.objects.filter(alert_time__gte=today_start).values('alert_type').annotate(count=Count('id'))
     stats_data = {'HIGH_CURRENT': 0, 'HIGH_POWER': 0, 'LOW_VELOCITY': 0}
     for tc in type_counts:
-        stats_data[tc['alert_type']] = tc['count']
-        
-    # 聚合最近 24 小时的趋势 (优化：1次查询代替24次查询)
+        if tc['alert_type'] in stats_data:
+            stats_data[tc['alert_type']] = tc['count']
+    
+    # 补回被误删的趋势图计算逻辑 (V3.3.1)
     last_24h_start = now - timedelta(hours=24)
     recent_alerts = AnomalyAlertLog.objects.filter(alert_time__gte=last_24h_start).values_list('alert_time', flat=True)
-    
     from django.utils.timezone import localtime
     now_local = localtime(now)
     
@@ -366,7 +366,10 @@ def api_reset_groups(request):
 # ═══════════════════════════════════════════════════════════════════
 
 
+from django.views.decorators.cache import cache_control
+
 @require_http_methods(['GET'])
+@cache_control(no_cache=True, must_revalidate=True, no_store=True)
 def api_dashboard_stats(request):
     """GET /api/stats/ — 传统的 JSON 接口 (保持向前兼容)"""
     ctx = stats_service.get_dashboard_stats()
@@ -515,6 +518,7 @@ def api_latest_alerts(request):
 # ═══════════════════════════════════════════════════════════════════
 
 @require_http_methods(['GET'])
+@cache_control(no_cache=True, must_revalidate=True, no_store=True)
 def api_device_matrix(request):
     """
     GET /api/device-matrix/
