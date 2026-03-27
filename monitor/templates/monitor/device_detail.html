@@ -149,30 +149,30 @@
 
     .btn-diagnose-trigger {
         position: absolute;
-        top: 20px;
-        right: 20px;
+        top: 14px;
+        right: 25px;
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 16px;
+        padding: 8px 20px;
         background: #fff;
-        border: 1px solid var(--primary);
-        color: var(--primary);
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
+        border: 1px solid #7B61FF;
+        color: #7B61FF;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 700;
         cursor: pointer;
         transition: all 0.2s;
         z-index: 10;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        box-shadow: 0 1px 3px rgba(123, 97, 255, 0.1);
     }
 
     .btn-diagnose-trigger:hover {
-        background: var(--primary);
-        color: #fff;
+        background: #F8F5FF;
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        box-shadow: 0 4px 12px rgba(123, 97, 255, 0.2);
     }
+
 
     .metrics-grid-row {
         display: flex;
@@ -339,30 +339,61 @@
     }
 
     .ai-hub-container {
-        width: 800px;
-        max-width: 90vw;
+        width: 480px;
         background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+        border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); /* Adjusted to match Figma shadow */
         overflow: hidden;
         display: flex;
         flex-direction: column;
         max-height: 85vh;
+        position: relative;
+        border: 1px solid #ebeef5;
+    }
+
+    /* Figma Glow Effect */
+    .ai-hub-container::before {
+        content: "";
+        position: absolute;
+        top: -40px;
+        right: -40px;
+        width: 128px;
+        height: 128px;
+        background: #f0f5ff;
+        filter: blur(64px);
+        opacity: 0.6;
+        border-radius: 50%;
+        pointer-events: none;
     }
 
     .ai-hub-header {
-        padding: 16px 24px;
-        border-bottom: 1px solid var(--border);
+        padding: 24px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background: #f8fafc;
+        background: transparent;
+        position: relative;
+        z-index: 1;
+    }
+
+    .ai-hub-title-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .ai-hub-accent {
+        width: 4px;
+        height: 14px;
+        background: #7b61ff;
+        border-radius: 1px;
     }
 
     .ai-hub-title {
         font-size: 15px;
         font-weight: 700;
-        color: var(--text);
+        color: #303133;
+        font-family: var(--font-sans);
     }
 
     .ai-hub-close {
@@ -378,14 +409,55 @@
     .ai-content-body {
         flex: 1;
         overflow-y: auto;
-        padding: 24px;
+        padding: 0 24px 24px 24px;
         min-height: 400px;
     }
 
     .ai-response-box {
-        line-height: 1.7;
-        font-size: 14px;
-        color: var(--text-sec);
+        background: #f8fafc;
+        border: 1px solid #f0f2f5;
+        border-radius: 10px;
+        padding: 21px 17px;
+        line-height: 1.6;
+        font-size: 12px;
+        color: #606266;
+    }
+
+    .ai-response-block h1, .ai-response-block h2, .ai-response-block h3 {
+        font-size: 13px;
+        font-weight: 600;
+        color: #303133;
+        margin: 16px 0 8px 0;
+    }
+
+    .ai-response-block h1:first-child {
+        margin-top: 0;
+        font-weight: 400;
+        color: #606266;
+    }
+
+    .ai-response-block p {
+        margin-bottom: 12px;
+    }
+
+    .ai-response-block ul, .ai-response-block ol {
+        margin-bottom: 12px;
+        padding-left: 8px;
+    }
+
+    .ai-response-block li {
+        list-style: none;
+        position: relative;
+        padding-left: 12px;
+        margin-bottom: 6px;
+    }
+
+    .ai-response-block li::before {
+        content: "•";
+        position: absolute;
+        left: 0;
+        color: #f56c6c;
+        font-weight: bold;
     }
 
     .ai-response-block {
@@ -480,12 +552,13 @@
         <!-- Upper Info Card -->
         <div class="main-card">
             <button class="btn-diagnose-trigger" @click="openAIModal()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4z"></path>
-                    <path
-                        d="M18 10h-2M18 14h-2M18 18h-2M6 10H4M6 14H4M6 18H4M10 22h4a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z">
-                    </path>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M7.99992 5.33329V2.66663H5.33325" stroke="currentColor" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M12.0001 5.33337H4.00008C3.2637 5.33337 2.66675 5.93033 2.66675 6.66671V12C2.66675 12.7364 3.2637 13.3334 4.00008 13.3334H12.0001C12.7365 13.3334 13.3334 12.7364 13.3334 12V6.66671C13.3334 5.93033 12.7365 5.33337 12.0001 5.33337Z" stroke="currentColor" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M1.33325 9.33337H2.66659" stroke="currentColor" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M13.3333 9.33337H14.6666" stroke="currentColor" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M10 8.66663V9.99996" stroke="currentColor" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M6 8.66663V9.99996" stroke="currentColor" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 AI 智能诊断
             </button>
@@ -605,17 +678,23 @@
         <div class="ai-hub-modal" x-show="showAIModal" x-transition x-cloak>
             <div class="ai-hub-container">
                 <div class="ai-hub-header">
-                    <div class="ai-hub-title">AI 智能专家诊断</div>
-                    <div style="display:flex; align-items:center; gap:16px;">
-                        <button class="btn-diagnose-trigger" style="position:static; padding:5px 12px;"
+                    <div class="ai-hub-title-group">
+                        <div class="ai-hub-accent"></div>
+                        <div class="ai-hub-title">AI 智能诊断</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <button class="btn-diagnose-trigger" style="position:static; padding:4px 10px; font-size:12px;"
                             @click="startDiagnosis()" x-show="!diagnosing && hasDiagnosis">
                             重新诊断
                         </button>
                         <div class="ai-hub-close" @click="showAIModal = false">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M7.99992 5.33329V2.66663H5.33325" stroke="#7B61FF" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M12.0001 5.33337H4.00008C3.2637 5.33337 2.66675 5.93033 2.66675 6.66671V12C2.66675 12.7364 3.2637 13.3334 4.00008 13.3334H12.0001C12.7365 13.3334 13.3334 12.7364 13.3334 12V6.66671C13.3334 5.93033 12.7365 5.33337 12.0001 5.33337Z" stroke="#7B61FF" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M1.33325 9.33337H2.66659" stroke="#7B61FF" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M13.3333 9.33337H14.6666" stroke="#7B61FF" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M10 8.66663V9.99996" stroke="#7B61FF" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M6 8.66663V9.99996" stroke="#7B61FF" stroke-width="1.33333" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </div>
                     </div>
