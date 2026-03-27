@@ -1,6 +1,7 @@
 <div class="db-card" 
      hx-get="{% url 'dashboard_partial' 'oee' %}" 
      hx-trigger="every 5s" 
+     hx-sync="this:replace"
      hx-swap="outerHTML">
     <div class="db-title"><span class="db-title-bar"></span>综合效能指标（OEE）
         <span id="oee-pct" class="mono"

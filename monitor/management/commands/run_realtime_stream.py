@@ -17,8 +17,6 @@ monitor/management/commands/run_realtime_stream.py
 import time
 import random
 import logging
-import json
-import redis
 import numpy as np
 from datetime import timedelta
 
@@ -249,18 +247,9 @@ class Command(BaseCommand):
     help = '实时数据流守护进程：受 SystemConfig.is_realtime_active 开关控制，每 3 秒追加一轮数据'
 
     def handle(self, *args, **options):
-        # 初始化 Redis 客户端
-        try:
-            r = redis.Redis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
-            r.ping()
-            redis_available = True
-        except Exception as e:
-            self.stdout.write(self.style.WARNING(f'⚠ Redis 连接失败 ({e})，将仅写入数据库。'))
-            redis_available = False
-
         self.stdout.write(self.style.SUCCESS(
             '\n══════════════════════════════════════════\n'
-            '  🚀  实时数据流守护进程已启动\n'
+            '  🚀  实时数据流守护进程已启动 (DB 日志模式)\n'
             f'  轮询间隔: {STREAM_INTERVAL}s | 异常概率: {ANOMALY_PROB:.0%}\n'
             '  按 Ctrl+C 安全退出\n'
             '══════════════════════════════════════════\n'
@@ -305,7 +294,7 @@ class Command(BaseCommand):
 
                 if not devices:
                     self.stdout.write(self.style.WARNING(
-                        f'[{tick:>6}] ⚠  数据库中没有设备，请先运行 simulate_real_cnc_data.py'
+                        f'[{tick:>6}] ⚠  数据库中没有设备'
                     ))
                     time.sleep(STREAM_INTERVAL)
                     continue
@@ -335,25 +324,11 @@ class Command(BaseCommand):
                         rec_obj.save()
                         records_created += 1
 
-                worn_flag = '⚠' if alerts_created > 0 else '✓'
                 log_text = f'写入 {records_created} 条  报警 {alerts_created} 条'
                 self.stdout.write(f'[{tick:>6}] ▶  {now:%H:%M:%S}  ' + log_text)
 
-                # 将日志推入 Redis List (供 WS 消费) 或 SystemLog (数据库备份)
-                engine_msg = f'ENGINE: {records_created} nodes written successfully. (Session: STREAM-{tick})'
-                if redis_available:
-                    try:
-                        log_payload = {
-                            'timestamp': now.strftime('%H:%M:%S'),
-                            'message': engine_msg,
-                            'type': 'engine_log'
-                        }
-                        r.lpush('simulation_logs', json.dumps(log_payload))
-                        r.ltrim('simulation_logs', 0, 99)
-                    except Exception as e:
-                        logger.error(f"Redis Push Error: {e}")
-                
                 # 无论 Redis 是否可用，都写入 SystemLog 供长效查询或无 Redis 时的降级方案
+                engine_msg = f'ENGINE: {records_created} nodes written successfully. (Session: STREAM-{tick})'
                 try:
                     SystemLog.objects.create(message=engine_msg, log_type='engine_log', timestamp=now)
                     # 清理旧日志（保持 100 条）

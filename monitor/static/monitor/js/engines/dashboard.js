@@ -112,40 +112,72 @@ function initDashboardCharts() {
 }
 
 // ── 2. Data Polling Logic ──
-async function fetchHourlyChart() {
+// [V3.2.4] ECharts Self-Repair Handler
+// Since HTMX swaps the outerHTML of the panel every 5s, we must re-init if the canvas is gone.
+document.addEventListener('updateHourlyChart', (e) => {
+    const d = e.detail;
+    if (!d) return;
+
+    const el = document.getElementById('chart-hourly');
+    if (!el) return;
+
+    // Detect if chart element was swapped or instance was lost
+    if (!window.cHourly || window.cHourly.getDom() !== el) {
+        if (window.cHourly) window.cHourly.dispose();
+        window.cHourly = echarts.init(el);
+        // Re-apply basic config (since initDashboardCharts only runs once)
+        window.cHourly.setOption({
+            grid: { left: 4, right: 4, top: 12, bottom: 20, containLabel: false },
+            xAxis: {
+                type: 'category', data: [],
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { fontSize: 10, color: '#909399', interval: 0 }
+            },
+            yAxis: { type: 'value', show: false },
+            series: [{
+                type: 'bar', data: [],
+                itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#409EFF' }, { offset: 1, color: '#a8c8ff' }] }, borderRadius: [2, 2, 0, 0] },
+                barMaxWidth: 18
+            }]
+        });
+    }
+
+    window.cHourly.setOption({ xAxis: { data: d.labels || [] }, series: [{ data: d.values || [] }] });
+});
+
+// fetchHourlyChart 被 'updateHourlyChart' 事件取代，仅在必要时手动调用
+async function fetchHourlyChart(signal) {
     try {
-        const d = await fetch('/api/stats/').then(r => r.json());
+        const d = await fetch('/api/stats/', { signal }).then(r => r.json());
         if (d.status !== 'ok') return;
         if (window.cHourly) {
-            const labels = d.hourly_labels || [];
-            const barData = d.hourly_output || [];
-            window.cHourly.setOption({ xAxis: { data: labels }, series: [{ data: barData }] });
+            window.cHourly.setOption({ xAxis: { data: d.hourly_labels || [] }, series: [{ data: d.hourly_output || [] }] });
         }
-    } catch (e) { console.warn('[hourly-chart]', e); }
+    } catch (e) { if(e.name !== 'AbortError') console.warn('[hourly-chart]', e); }
 }
 
-async function fetchMatrix() {
+async function fetchMatrix(signal) {
     try {
-        const d = await fetch('/api/device-matrix/').then(r => r.json());
+        const d = await fetch('/api/device-matrix/', { signal }).then(r => r.json());
         if (d.status !== 'ok') return;
         const sorted = [...d.data].sort((a, b) => (a.device_id || 0) - (b.device_id || 0));
         if (window.renderHoneycomb) window.renderHoneycomb(sorted);
-    } catch (e) { console.warn('[matrix]', e); }
+    } catch (e) { if(e.name !== 'AbortError') console.warn('[matrix]', e); }
 }
 
-async function fetchTrend() {
+async function fetchTrend(signal) {
     try {
-        const d = await fetch('/api/alert-trend/').then(r => r.json());
+        const d = await fetch('/api/alert-trend/', { signal }).then(r => r.json());
         if (d.status !== 'ok') return;
         if (window.cTrend) window.cTrend.setOption({ xAxis: { data: d.labels }, series: [{ data: d.values }] });
-    } catch (e) { console.warn('[trend]', e); }
+    } catch (e) { if(e.name !== 'AbortError') console.warn('[trend]', e); }
 }
 
 // fetchAlerts 已经被 HTMX 取代 (V3.0.12)
 
-async function fetchStream() {
+async function fetchStream(signal) {
     try {
-        const d = await fetch('/api/stream/').then(r => r.json());
+        const d = await fetch('/api/stream/', { signal }).then(r => r.json());
         if (d.status !== 'ok' || !d.data.length) return;
         const latest = d.data[0];
         const t = new Date(latest.timestamp);
@@ -155,27 +187,47 @@ async function fetchStream() {
         probArr.push(latest.anomaly_probability != null ? +(latest.anomaly_probability * 100).toFixed(1) : 0);
         if (tsArr.length > MAX_PTS) { tsArr.shift(); curArr.shift(); probArr.shift(); }
         if (window.cLine) window.cLine.setOption({ xAxis: { data: tsArr }, series: [{ data: curArr }, { data: probArr }] });
-    } catch (e) { console.warn('[stream]', e); }
+    } catch (e) { if(e.name !== 'AbortError') console.warn('[stream]', e); }
 }
 
+// ── 2.1 Polling Safety ──
+let pollAbortController = null;
+let isPollingActive = false;
+
 window.pollAll = async function() {
+    if (isPollingActive) return;
+    
     const checkEl = document.getElementById('oee-pct');
     if (!checkEl) {
         if (DashboardApp.state.pollInterval) clearInterval(DashboardApp.state.pollInterval);
         return;
     }
 
+    isPollingActive = true;
+    if (pollAbortController) pollAbortController.abort();
+    pollAbortController = new AbortController();
+    const { signal } = pollAbortController;
+
     try {
-        const st = await fetch('/api/stream-status/').then(r => r.json());
+        const st = await fetch('/api/stream-status/', { signal }).then(r => r.json());
         const badge = $('stream-status-badge');
         if (badge) {
             badge.innerHTML = st.is_realtime_active 
                 ? `<span style="width:7px;height:7px;background:#52c41a;border-radius:50%;box-shadow:0 0 5px #52c41a;animation:pulse 1.5s infinite;"></span><span style="color:#52c41a;">LIVE</span>`
                 : `<span style="width:7px;height:7px;background:#909399;border-radius:50%;"></span><span style="color:#909399;">PAUSED</span>`;
         }
-        fetchHourlyChart(); fetchMatrix(); fetchStream();
-        if (++trendTick === 1 || trendTick % 20 === 0) fetchTrend();
-    } catch (e) { console.warn('[poll]', e); }
+
+        // [V3.2.1] fetchHourlyChart 仅由 HTMX 触发，此处不再重复调用
+        await Promise.allSettled([
+            fetchMatrix(signal),
+            fetchStream(signal),
+            (++trendTick === 1 || trendTick % 12 === 0) ? fetchTrend(signal) : Promise.resolve()
+        ]);
+    } catch (e) { 
+        if(e.name !== 'AbortError') console.warn('[poll]', e); 
+    } finally {
+        isPollingActive = false;
+    }
 }
 
 // ── 3. Topology (Honeycomb) Engine ──
@@ -574,9 +626,9 @@ window.DashboardApp = {
                 fetchTrend();
                 window.pollAll();
                 
-                // Polling Lifecycle
+                // Polling Lifecycle (V3.2.1: 5s 周期，降低后端压力)
                 if (DashboardApp.state.pollInterval) clearInterval(DashboardApp.state.pollInterval);
-                DashboardApp.state.pollInterval = setInterval(window.pollAll, 3000);
+                DashboardApp.state.pollInterval = setInterval(window.pollAll, 5000);
                 
                 initAgentSocket();
                 DashboardApp.state.isInitialized = true;

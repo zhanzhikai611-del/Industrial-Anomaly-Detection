@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Max
+from django.db.models.functions import TruncHour
 from ..models import DeviceInfo, ProductionSensorData, AnomalyAlertLog, SystemConfig
 from . import ai_service
 
@@ -28,13 +29,27 @@ def calculate_rolling_oee(dev, local_now):
     return 0.0
 
 def get_device_matrix_data():
-    """提取自 api_device_matrix 的核心数据计算逻辑，供 API 和 HTMX 视图共用"""
+    """提取自 api_device_matrix 的核心数据计算逻辑，增加批处理优化 (V5.2.4)"""
     local_now = timezone.localtime(timezone.now())
+    window_start = local_now - timedelta(minutes=30)
+    
+    # 1. 批处理优化：一次性获取所有设备最新记录
+    latest_ids = ProductionSensorData.objects.values('device').annotate(max_id=Max('id')).values_list('max_id', flat=True)
+    latest_map = {r.device_id: r for r in ProductionSensorData.objects.filter(id__in=latest_ids).select_related('device')}
+    
+    # 2. 批处理优化：一次性获取所有设备 30 分钟聚合数据 (解决 N+1)
+    window_aggs = ProductionSensorData.objects.filter(timestamp__gte=window_start).values('device').annotate(
+        s=Sum('actual_output'),
+        i=Sum('input_qty'),
+        first_ts=Max('timestamp') # 近似处理
+    )
+    agg_map = {a['device']: a for a in window_aggs}
+
     devices = DeviceInfo.objects.all()
     rows = []
     
     for dev in devices:
-        latest = ProductionSensorData.objects.filter(device=dev).order_by('-timestamp').first()
+        latest = latest_map.get(dev.id)
         
         if latest is None:
             score = 0.0
@@ -43,16 +58,26 @@ def get_device_matrix_data():
         else:
             score = ai_service.predict_proba(latest) or 0.0
             process = latest.machining_process
-            oee_val = calculate_rolling_oee(dev, local_now)
+            
+            # 使用聚合快照快速计算 OEE
+            agg = agg_map.get(dev.id)
+            if agg:
+                actual_out = agg['s'] or 0
+                input_qty = agg['i'] or 0
+                # 统一取 30 分钟窗口比例
+                delta_t_hours = 0.5 
+                theo_max = dev.standard_capacity * delta_t_hours
+                p_val = min(actual_out / theo_max, 1.0) if theo_max > 0 else 0.0
+                q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
+                oee_val = p_val * q_val
+            else:
+                oee_val = 0.0
 
-        # 格式化 UI 所需字段 (1:1 还原 JS 逻辑)
         is_running = dev.current_status == 'Running'
         risk_pct = f"{int(score * 100)}%" if is_running else '--'
         risk_cls = (score > 0.75 and 'color-high' or score > 0.45 and 'color-med' or 'color-low') if is_running else 'color-normal'
-        
         oee_pct = f"{int(oee_val * 100)}%" if oee_val > 0 else '--'
         oee_cls = (oee_val < 0.45 and 'color-high' or oee_val < 0.75 and 'color-med' or 'color-low') if oee_val > 0 else 'color-normal'
-        
         status_cls = dev.current_status.lower() if dev.current_status != 'Idle' else 'idle'
         status_label = dev.current_status if dev.current_status != 'Idle' else 'Standby'
         if dev.current_status == 'Down': status_label = 'Stopped'
@@ -73,7 +98,6 @@ def get_device_matrix_data():
             'status_label': status_label,
         })
     
-    # 默认按风险降序
     rows.sort(key=lambda x: x['anomaly_score'], reverse=True)
     return rows
 
@@ -169,23 +193,30 @@ def get_dashboard_stats():
         .order_by('-cnt')
     )
 
-    # ── 小时产量统计 (最近 8 小时) ──
-    hourly_data = {}
+    # ── 小时产量统计 (最近 8 小时) (V3.2.1 性能优化：混合聚合模式) ──
+    # [V3.2.2] 兼容性修复：由于部分 MySQL 环境未挂载时区表，改用“先查后算”模式，避开 TruncHour 报错
     eight_hours_ago = (local_now - timedelta(hours=7)).replace(minute=0, second=0, microsecond=0)
     
+    # 获取近 8 小时所有流水（通过索引过滤，数据量可控，避免全表扫描）
+    hourly_recs = (
+        ProductionSensorData.objects
+        .filter(timestamp__gte=eight_hours_ago)
+        .values_list('timestamp', 'actual_output')
+    )
+    
+    db_map = {}
+    for ts, out in hourly_recs:
+        # [V3.2.3] TZ 对齐：数据库 fetch 回的是 UTC，必须转为本地时区后再进行截断匹配
+        local_ts = timezone.localtime(ts) 
+        h_key = local_ts.replace(minute=0, second=0, microsecond=0)
+        db_map[h_key] = db_map.get(h_key, 0) + (out or 0)
+
+    hourly_labels = []
+    hourly_output = []
     for i in range(8):
         target_h = eight_hours_ago + timedelta(hours=i)
-        hourly_data[target_h] = 0
-    
-    prod_records = ProductionSensorData.objects.filter(timestamp__gte=eight_hours_ago).values('timestamp', 'actual_output')
-    for rec in prod_records:
-        hr = localtime(rec['timestamp']).replace(minute=0, second=0, microsecond=0)
-        if hr in hourly_data:
-            hourly_data[hr] += (rec['actual_output'] or 0)
-    
-    sorted_items = sorted(hourly_data.items())
-    hourly_labels = [h.strftime('%-H') for h, q in sorted_items]
-    hourly_output = [q for h, q in sorted_items]
+        hourly_labels.append(target_h.strftime('%-H'))
+        hourly_output.append(db_map.get(target_h, 0))
 
     return {
         'avg_oee': avg_oee,

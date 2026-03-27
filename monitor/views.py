@@ -400,7 +400,20 @@ def dashboard_partial(request, fragment):
     
     elif fragment == 'production':
         ctx = stats_service.get_dashboard_stats()
-        return render(request, 'monitor/includes/dashboard/panel_production.html', ctx)
+        response = render(request, 'monitor/includes/dashboard/panel_production.html', ctx)
+        
+        # [V3.2.1] 性能补丁：将图表数据随 HTML 一并推送，减少一次 API 请求
+        import json
+        chart_data = {
+            'labels': ctx.get('hourly_labels', []),
+            'values': ctx.get('hourly_output', [])
+        }
+        # [V3.2.5] 兼容性修复：改用 HX-Trigger-After-Swap，确保 DOM 交换完成后再通知 JS 初始化图标
+        # 这能解决竞态条件下 ECharts 容器尚未出现在文档流中就触发事件导致的渲染失败
+        triggers = {}
+        triggers['updateHourlyChart'] = chart_data
+        response['HX-Trigger-After-Swap'] = json.dumps(triggers)
+        return response
         
     elif fragment == 'alerts':
         limit = min(int(request.GET.get('limit', 7)), 20)

@@ -1,12 +1,13 @@
-<div class="db-card db-card-bottom">
+<div id="panel-production" 
+     class="db-card db-card-bottom"
+     hx-get="{% url 'dashboard_partial' 'production' %}" 
+     hx-trigger="every 5s" 
+     hx-sync="this:replace"
+     hx-swap="outerHTML">
     <div class="db-title"><span class="db-title-bar"></span>生产计划达成看板</div>
     
-    <!-- ① 今日产量统计 (HTMX刷新) -->
-    <div id="prod-stats-top" 
-         hx-get="{% url 'dashboard_partial' 'production' %}" 
-         hx-trigger="every 5s" 
-         hx-select="#prod-stats-top" 
-         hx-swap="outerHTML">
+    <!-- ① 今日产量统计 -->
+    <div id="prod-stats-top">
         <div style="font-size:11px;color:#909399;margin-bottom:2px;">今日总产量</div>
         <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
             <span id="prod-output" class="mono" style="font-size:32px;font-weight:700;color:#409EFF;">{{ total_output|default:"--" }}</span>
@@ -23,16 +24,12 @@
         </div>
     </div>
 
-    <!-- ② 各时段产量 ECharts (居中，非HTMX刷新) -->
+    <!-- ② 各时段产量 ECharts (居中，通过 JS 联动刷新，不重复发起 HTMX 请求) -->
     <div style="font-size:11px;color:#909399;margin-bottom:4px;margin-top:12px;">各时段产量（件）</div>
     <div id="chart-hourly" style="height:140px; margin-bottom:12px;"></div>
 
-    <!-- ③ 良品 / 次品 双卡 (HTMX刷新) -->
-    <div id="prod-stats-bottom" 
-         hx-get="{% url 'dashboard_partial' 'production' %}" 
-         hx-trigger="every 5s" 
-         hx-select="#prod-stats-bottom" 
-         hx-swap="outerHTML">
+    <!-- ③ 良品 / 次品 双卡 -->
+    <div id="prod-stats-bottom">
         <div class="prod-duo" style="gap: 16px; margin-top: 12px; margin-bottom: 4px;">
             <div class="prod-kpi-card" style="background:#f6ffed; border:1px solid #b7eb8f; padding: 12px 8px;">
                 <div class="prod-kpi-label" style="color:#52c41a; font-size:11px; margin-bottom:2px; font-weight: 500;">良品</div>

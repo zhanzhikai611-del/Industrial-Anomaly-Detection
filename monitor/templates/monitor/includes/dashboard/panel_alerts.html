@@ -1,6 +1,7 @@
 <div class="db-card db-card-bottom" style="overflow:hidden;" 
      hx-get="{% url 'dashboard_partial' 'alerts' %}" 
      hx-trigger="every 10s" 
+     hx-sync="this:replace"
      hx-swap="outerHTML">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div class="db-title" style="margin-bottom:0;"><span class="db-title-bar"></span>实时异常上报</div>
