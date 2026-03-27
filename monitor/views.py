@@ -150,7 +150,14 @@ def device_view(request):
         
     return response
 
-
+@login_required
+def device_detail_view(request, device_id):
+    """
+    Device Detail 设备详情页 (V3.2.0)
+    跳转至独占的单台设备诊断面板，包含实时数据、图表、日志以及AI诊断中枢。
+    """
+    device = get_object_or_404(DeviceInfo, pk=device_id)
+    return render(request, 'monitor/device_detail.html', {'device': device})
 
 
 @login_required
@@ -228,11 +235,6 @@ def setting_view(request):
         'config': config,
         'db_stats': stats
     })
-
-@login_required
-def factory_view(request):
-    """Digital Factory 数字孪生工厂大屏（V2.2.0）"""
-    return render(request, 'monitor/factory.html')
 
 @login_required
 @role_required(['Admin'])
@@ -572,6 +574,8 @@ def api_device_stream(request, device_id):
     timestamps       = []
     spindle_currents = []
     spindle_powers   = []
+    feed_velocities  = []
+    machining_processes = []
     anomaly_scores   = []
     oee_list         = []
 
@@ -587,12 +591,33 @@ def api_device_stream(request, device_id):
         timestamps.append(rec.timestamp.isoformat())
         spindle_currents.append(rec.spindle_current)
         spindle_powers.append(rec.spindle_power)
+        feed_velocities.append(rec.feed_velocity)
+        machining_processes.append(rec.get_machining_process_display())
         # 固定返回聚合后的稳定值，避免瞬时 0.0% 干扰
         oee_list.append(round(stable_oee * 100, 1))
         prob = ai_service.predict_proba(rec)
         anomaly_scores.append(round((prob or 0) * 100, 2))  # 转换为百分比
 
     device = DeviceInfo.objects.filter(pk=device_id).first()
+
+    logs_data = []
+    if device and device.maintenance_advice:
+        logs_data.append({
+            'id': f"m_{device.id}",
+            'time': timezone.localtime(timezone.now()).strftime('%m-%d %H:%M:%S'),
+            'source': '系统工单',
+            'content': device.maintenance_advice
+        })
+        
+    recent_alerts = AnomalyAlertLog.objects.filter(record__device=device).order_by('-alert_time')[:5]
+    for a in recent_alerts:
+        score_info = f" 置信度: {a.anomaly_score*100:.1f}%" if a.anomaly_score else ""
+        logs_data.append({
+            'id': f"a_{a.id}",
+            'time': timezone.localtime(a.alert_time).strftime('%m-%d %H:%M:%S'),
+            'source': '预警拦截',
+            'content': f"[{a.get_alert_type_display()}]{score_info}"
+        })
 
     return JsonResponse({
         'status':          'ok',
@@ -602,8 +627,11 @@ def api_device_stream(request, device_id):
         'timestamps':      timestamps,
         'spindle_current': spindle_currents,
         'spindle_power':   spindle_powers,
+        'feed_velocity':   feed_velocities,
+        'process':         machining_processes,
         'anomaly_score':   anomaly_scores,
         'oee':             oee_list,
+        'logs':            logs_data,
     })
 
 

@@ -12,7 +12,7 @@
 
     <nav class="sidebar-nav">
         <!-- 仪表盘 -->
-        <a href="/dashboard/" hx-get="/dashboard/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'factory' %}active{% endif %}">
+        <a href="/dashboard/" hx-get="/dashboard/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -23,7 +23,7 @@
         </a>
 
         <!-- 设备监控 -->
-        <a href="/devices/" hx-get="/devices/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'device' %}active{% endif %}">
+        <a href="/devices/" hx-get="/devices/" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML" hx-sync="this:replace" class="nav-link {% if request.resolver_match.url_name == 'device' or request.resolver_match.url_name == 'device_detail' %}active{% endif %}">
             <svg viewBox="0 0 24 24">
                 <rect x="4" y="4" width="16" height="16" rx="2" />
                 <rect x="9" y="9" width="6" height="6" />

@@ -1,0 +1,795 @@
+{% extends base_template %}
+{% load static %}
+{% block title %}设备详情 - {{ device.device_name }}{% endblock %}
+
+{% block extra_style %}
+<link rel="stylesheet" href="{% static 'monitor/css/device.css' %}">
+<style>
+    :root {
+        --primary: #3b82f6;
+        --primary-light: #eff6ff;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --text: #1f2937;
+        --text-sec: #4b5563;
+        --text-hint: #9ca3af;
+        --bg: #f8fafc;
+        --border: #e2e8f0;
+        --radius: 8px;
+        --font-mono: 'Roboto Mono', monospace;
+    }
+
+    .monitor-detail-wrapper {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .breadcrumb-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .back-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #fff;
+        border: 1px solid var(--border);
+        color: var(--text-sec);
+        transition: all 0.2s;
+    }
+
+    .back-btn:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: var(--primary-light);
+    }
+
+    .breadcrumb-text {
+        font-size: 13px;
+        color: var(--text-sec);
+        text-decoration: none;
+    }
+
+    .breadcrumb-text:hover {
+        color: var(--primary);
+    }
+
+    .breadcrumb-sep {
+        color: var(--text-hint);
+    }
+
+    .breadcrumb-current {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .main-card {
+        background: #fff;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        position: relative;
+    }
+
+    .card-header-flex {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+
+    .card-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .status-badge.running {
+        background: #f0f9eb;
+        color: #67c23a;
+        border: 1px solid #c2e7b0;
+    }
+
+    .status-badge.idle {
+        background: #fdf6ec;
+        color: #e6a23c;
+        border: 1px solid #f5dab1;
+    }
+
+    .status-badge.down {
+        background: #fef0f0;
+        color: #f56c6c;
+        border: 1px solid #fab6b6;
+    }
+
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .btn-diagnose-trigger {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #fff;
+        border: 1px solid var(--primary);
+        color: var(--primary);
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        z-index: 10;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+    }
+
+    .btn-diagnose-trigger:hover {
+        background: var(--primary);
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    }
+
+    .metrics-grid-row {
+        display: flex;
+        gap: 16px;
+        margin-top: 10px;
+        align-items: stretch;
+        /* Aligns 3D container with metrics columns height */
+    }
+
+    .metrics-col {
+        width: 180px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        justify-content: space-between;
+        /* Spread cards to fill height */
+    }
+
+    .metric-card {
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #f1f5f9;
+        transition: all 0.2s;
+        flex: 1;
+        /* Make cards expand equally */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        background: #f1f5f9;
+        border-color: var(--border);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    /* ── Metric Card Status Levels ── */
+    .metric-card.status-high {
+        background: #fff1f0;
+        border-color: #ffa39e;
+    }
+    .metric-card.status-high .metric-value, .metric-card.status-high .metric-unit {
+        color: #f5222d;
+    }
+
+    .metric-card.status-med {
+        background: #fffbe6;
+        border-color: #ffe58f;
+    }
+    .metric-card.status-med .metric-value, .metric-card.status-med .metric-unit {
+        color: #faad14;
+    }
+
+    .metric-card.status-low {
+        background: #f6ffed;
+        border-color: #b7eb8f;
+    }
+    .metric-card.status-low .metric-value, .metric-card.status-low .metric-unit {
+        color: #52c41a;
+    }
+
+    .metric-title {
+        font-size: 11px;
+        color: var(--text-sec);
+        margin-bottom: 2px;
+        font-weight: 500;
+    }
+
+    .metric-value-container {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+
+    .metric-value {
+        font-size: 22px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        color: var(--text);
+    }
+
+    .metric-unit {
+        font-size: 11px;
+        color: var(--text-hint);
+        font-weight: 500;
+    }
+
+    .model-3d-placeholder {
+        flex: 2;
+        background: radial-gradient(circle at 50% 50%, #f1f5f9 0%, #e2e8f0 100%);
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .bottom-grid {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 16px;
+    }
+
+    .chart-container {
+        height: 280px;
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    .logs-table-wrapper {
+        height: 280px;
+        overflow-y: auto;
+        margin-top: 10px;
+    }
+
+    .logs-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .logs-table th {
+        position: sticky;
+        top: 0;
+        background: #fafafa;
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--text-hint);
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        z-index: 10;
+    }
+
+    .logs-table td {
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--text-sec);
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .log-time {
+        font-family: var(--font-mono);
+        color: var(--text-hint);
+    }
+
+    .log-detail {
+        color: var(--text);
+        font-weight: 500;
+    }
+
+    /* AI Modal Styling */
+    .ai-hub-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    }
+
+    .ai-hub-container {
+        width: 800px;
+        max-width: 90vw;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 85vh;
+    }
+
+    .ai-hub-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f8fafc;
+    }
+
+    .ai-hub-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .ai-hub-close {
+        cursor: pointer;
+        color: var(--text-hint);
+        transition: color 0.15s;
+    }
+
+    .ai-hub-close:hover {
+        color: var(--danger);
+    }
+
+    .ai-content-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+        min-height: 400px;
+    }
+
+    .ai-response-box {
+        line-height: 1.7;
+        font-size: 14px;
+        color: var(--text-sec);
+    }
+
+    .ai-response-block {
+        animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .typewriter-cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.2em;
+        background: var(--primary);
+        margin-left: 2px;
+        vertical-align: middle;
+        animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0;
+        }
+    }
+
+    .empty-prompt {
+        color: var(--text-hint);
+        font-style: italic;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .empty-prompt::before {
+        content: "";
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--primary);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div hx-inherit="all">
+    <!-- Three.js (Inherited from base.html scope) -->
+
+    <div class="monitor-detail-wrapper" x-data="DeviceDetailApp({{ device.id }}, '{{ device.device_name }}')"
+        x-init="init()" x-cloak>
+
+        <!-- Breadcrumbs -->
+        <div class="breadcrumb-header">
+            <a href="/devices/" class="back-btn" hx-get="/devices/" hx-target="#main-content" hx-push-url="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+            </a>
+            <a href="/devices/" class="breadcrumb-text" hx-get="/devices/" hx-target="#main-content"
+                hx-push-url="true">设备列表</a>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-current">{{ device.device_name }}</span>
+        </div>
+
+        <!-- Upper Info Card -->
+        <div class="main-card">
+            <button class="btn-diagnose-trigger" @click="openAIModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4z"></path>
+                    <path
+                        d="M18 10h-2M18 14h-2M18 18h-2M6 10H4M6 14H4M6 18H4M10 22h4a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z">
+                    </path>
+                </svg>
+                AI 智能诊断
+            </button>
+
+            <div class="card-header-flex">
+                <div class="card-title">
+                    {{ device.device_name }}
+                    <div class="status-badge {{ device.current_status|lower }}">
+                        <span class="status-dot"></span>
+                        {{ device.current_status }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="metrics-grid-row">
+                <!-- Left Metrics -->
+                <div class="metrics-col">
+                    <div class="metric-card">
+                        <div class="metric-title">主轴反馈电流</div>
+                        <div class="metric-value-container">
+                            <span class="metric-value" x-text="metrics.current">--</span>
+                            <span class="metric-unit">A</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">主轴输出功率</div>
+                        <div class="metric-value-container">
+                            <span class="metric-value" x-text="metrics.power">--</span>
+                            <span class="metric-unit">W</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">进给速度</div>
+                        <div class="metric-value-container">
+                            <span class="metric-value" x-text="metrics.velocity">--</span>
+                            <span class="metric-unit">mm/s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Twin Model -->
+                <div id="model-3d-container" class="model-3d-placeholder">
+                    <div id="three-loading"
+                        style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:var(--text-hint); font-size:12px;">
+                        正在载入三维数字孪生实体...
+                    </div>
+                </div>
+
+                <!-- Right Metrics -->
+                <div class="metrics-col">
+                    <div class="metric-card" :class="getRiskClass(metrics.ai_confidence)">
+                        <div class="metric-title">AI 实时风险</div>
+                        <div class="metric-value-container">
+                            <span class="metric-value" x-text="metrics.ai_confidence">--</span>
+                            <span class="metric-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="metric-card" :class="getOEEClass(metrics.oee)">
+                        <div class="metric-title">实时效率</div>
+                        <div class="metric-value-container">
+                            <span class="metric-value" x-text="metrics.oee">--</span>
+                            <span class="metric-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">当前执行工序</div>
+                        <div class="metric-value-container">
+                            <span class="metric-value" style="font-size:16px;" x-text="metrics.process">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row -->
+        <div class="bottom-grid">
+            <div class="main-card">
+                <div class="card-title">
+                    <div class="db-title-bar"
+                        style="width:3px; height:14px; background:var(--primary); margin-right:8px;"></div>
+                    实时趋势关联分析
+                    <span style="font-size:11px; color:var(--text-hint); font-weight:400; margin-left:10px;">电流 ↔
+                        AI风险值</span>
+                </div>
+                <div id="dualAxisChart" class="chart-container"></div>
+            </div>
+
+            <div class="main-card">
+                <div class="card-title">操作日志</div>
+                <div class="logs-table-wrapper">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 130px;">时间</th>
+                                <th style="width: 100px;">来源</th>
+                                <th>内容详情</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="log in logs" :key="log.id">
+                                <tr>
+                                    <td class="log-time" x-text="log.time"></td>
+                                    <td>
+                                        <span :class="log.source==='系统工单' ? 'tag-default' : 'tag-current'"
+                                            style="font-size:10px; padding:2px 6px;" x-text="log.source"></span>
+                                    </td>
+                                    <td class="log-detail" x-text="log.content"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Diagnostic Modal -->
+        <div class="ai-hub-modal" x-show="showAIModal" x-transition x-cloak>
+            <div class="ai-hub-container">
+                <div class="ai-hub-header">
+                    <div class="ai-hub-title">AI 智能专家诊断</div>
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <button class="btn-diagnose-trigger" style="position:static; padding:5px 12px;"
+                            @click="startDiagnosis()" x-show="!diagnosing && hasDiagnosis">
+                            重新诊断
+                        </button>
+                        <div class="ai-hub-close" @click="showAIModal = false">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="ai-content-body">
+                    <div class="ai-response-box">
+                        <div x-show="!hasDiagnosis && diagnosing" class="empty-prompt">
+                            正在读取设备实时快照，执行特征聚类分析...
+                        </div>
+                        <div x-show="hasDiagnosis || diagnosing" class="ai-response-block">
+                            <div id="ai-output"></div><span class="typewriter-cursor" x-show="diagnosing"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+    (function () {
+        const register = () => {
+            if (window.Alpine && !window.DeviceDetailAppDefined) {
+                window.DeviceDetailAppDefined = true;
+                Alpine.data('DeviceDetailApp', (id, name) => ({
+                    deviceId: id,
+                    deviceName: name,
+                    metrics: { current: '--', power: '--', velocity: '--', ai_confidence: '--', oee: '--', process: 'Loading...' },
+                    logs: [], showAIModal: false, diagnosing: false, hasDiagnosis: false, chart: null, pollTimer: null,
+
+                    init() {
+                        setTimeout(() => { this.initChart(); this.initThree(); this.pollData(); }, 100);
+                        this.pollTimer = setInterval(() => this.pollData(), 3000);
+                    },
+                    initThree() {
+                        if (typeof THREE === 'undefined') { setTimeout(() => this.initThree(), 300); return; }
+                        const container = document.getElementById('model-3d-container');
+                        if (!container) return;
+
+                        // Clear previous canvas to prevent "double machines" in HTMX swaps
+                        container.innerHTML = '<div id="three-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:var(--text-hint); font-size:12px;">正在载入三维数字孪生实体...</div>';
+
+                        const loader = new THREE.GLTFLoader();
+                        const scene = new THREE.Scene();
+                        const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 1000);
+                        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                        renderer.setSize(container.clientWidth, container.clientHeight);
+                        renderer.setPixelRatio(window.devicePixelRatio);
+                        container.appendChild(renderer.domElement);
+                        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+                        const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(5, 10, 7); scene.add(sun);
+
+                        let modelPath = '/static/monitor/models/CNC01.glb';
+                        if (this.deviceName.includes('LAT')) modelPath = '/static/monitor/models/CNC02.glb';
+                        if (this.deviceName.includes('TML')) modelPath = '/static/monitor/models/CNC03.glb';
+
+                        loader.load(modelPath, (gltf) => {
+                            const m = gltf.scene;
+
+                            // 1. Initial bounding box to find scale factor
+                            const b1 = new THREE.Box3().setFromObject(m);
+                            const s1 = b1.getSize(new THREE.Vector3());
+
+                            // 不同机型采用不同的比例系数
+                            // LAT 机型通常较“扁”，需要更大的系数来填充画面
+                            let targetFactor = this.deviceName.includes('LAT') ? 18 : 8;
+
+                            const initialScale = targetFactor / Math.max(s1.x, s1.y, s1.z);
+                            m.scale.set(initialScale, initialScale, initialScale);
+
+                            // 2. Re-calculate bounding box AFTER scaling to get accurate center
+                            // This prevents models (like LAT) from being offset due to pivot scaling
+                            const b2 = new THREE.Box3().setFromObject(m);
+                            const c2 = b2.getCenter(new THREE.Vector3());
+                            m.position.x -= c2.x;
+                            m.position.y -= c2.y;
+                            m.position.z -= c2.z;
+
+                            scene.add(m);
+                            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                            controls.enableDamping = true;
+
+                            const loadEl = document.getElementById('three-loading'); if (loadEl) loadEl.style.display = 'none';
+                            const anim = () => { if (!document.getElementById('model-3d-container')) return; requestAnimationFrame(anim); controls.update(); renderer.render(scene, camera); };
+                            anim();
+                        });
+                        camera.position.set(7, 5, 9); camera.lookAt(0, 0, 0);
+                        window.addEventListener('resize', () => {
+                            camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix();
+                            renderer.setSize(container.clientWidth, container.clientHeight);
+                        });
+                    },
+                    getRiskClass(val) {
+                        const score = parseFloat(val) / 100;
+                        if (isNaN(score)) return '';
+                        if (score > 0.75) return 'status-high';
+                        if (score > 0.45) return 'status-med';
+                        return 'status-low';
+                    },
+                    getOEEClass(val) {
+                        const oee = parseFloat(val) / 100;
+                        if (isNaN(oee)) return '';
+                        // OEE: Values < 0.45 are Danger (status-high)
+                        if (oee < 0.45) return 'status-high';
+                        if (oee < 0.75) return 'status-med';
+                        return 'status-low';
+                    },
+                    initChart() {
+                        const dom = document.getElementById('dualAxisChart');
+                        if (dom) this.chart = echarts.init(dom);
+                    },
+                    async pollData() {
+                        try {
+                            const r = await fetch(`/api/stream/${this.deviceId}/`);
+                            const d = await r.json();
+                            if (d.status === 'ok') {
+                                if (d.spindle_current && d.spindle_current.length > 0) {
+                                    const i = d.spindle_current.length - 1;
+                                    this.metrics.current = d.spindle_current[i].toFixed(2);
+                                    this.metrics.power = d.spindle_power[i].toFixed(2);
+                                    this.metrics.ai_confidence = d.anomaly_score[i].toFixed(1);
+                                    this.metrics.oee = d.oee[i].toFixed(1);
+                                    this.metrics.process = d.process ? d.process[i] : "Processing...";
+                                    this.metrics.velocity = d.feed_velocity ? d.feed_velocity[i].toFixed(2) : '--';
+                                }
+                                if (d.logs) this.logs = d.logs;
+                                if (this.chart) this.updateChart(d);
+                            }
+                        } catch (e) { }
+                    },
+                    updateChart(d) {
+                        const t = d.timestamps.map(x => new Date(x).toLocaleTimeString('en-GB', { hour12: false }));
+                        const opt = {
+                            tooltip: { trigger: 'axis' },
+                            legend: { data: ['电流', 'AI预警'], left: 20, bottom: 0, itemWidth: 24, itemHeight: 2, icon: 'roundRect', textStyle: { fontSize: 13 } },
+                            grid: { top: 40, bottom: 40, left: '4%', right: '4%', containLabel: true },
+                            xAxis: { type: 'category', data: t, boundaryGap: false, axisLabel: { color: '#94a3b8' } },
+                            yAxis: [
+                                { type: 'value', name: '电流(A)', splitLine: { lineStyle: { color: '#f1f5f9' } } },
+                                { type: 'value', name: 'AI风险(%)', max: 100, splitLine: { show: false } }
+                            ],
+                            series: [
+                                { name: '电流', type: 'line', data: d.spindle_current, itemStyle: { color: '#3b82f6' }, areaStyle: { color: 'rgba(59,130,246,0.1)' }, smooth: true, showSymbol: false },
+                                { name: 'AI预警', type: 'line', data: d.anomaly_score, yAxisIndex: 1, itemStyle: { color: '#ef4444' }, smooth: true, showSymbol: false }
+                            ]
+                        };
+                        this.chart.setOption(opt);
+                    },
+                    openAIModal() { this.showAIModal = true; if (!this.hasDiagnosis && !this.diagnosing) this.startDiagnosis(); },
+                    async startDiagnosis() {
+                        this.diagnosing = true; this.hasDiagnosis = true;
+                        const out = document.getElementById('ai-output'); if (out) out.innerHTML = '';
+                        const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/copilot/');
+                        ws.onopen = () => ws.send(JSON.stringify({ mode: 'ask', message: `针对设备 ${this.deviceName} 执行深度诊断。` }));
+                        ws.onmessage = (e) => {
+                            const m = JSON.parse(e.data);
+                            if (m.type === 'ask_response') this.typeWriterEffect(m.message, () => { this.diagnosing = false; ws.close(); });
+                        };
+                    },
+                    typeWriterEffect(text, done) {
+                        const out = document.getElementById('ai-output'); if (!out) return;
+                        let i = 0; let fmt = marked.parse(text); out.innerHTML = "";
+                        const tmr = setInterval(() => {
+                            if (i < text.length) { out.innerText = text.substring(0, i + 1); i += 4; }
+                            else { clearInterval(tmr); out.innerHTML = fmt; if (done) done(); }
+                        }, 20);
+                    }
+                }));
+            }
+        };
+        if (window.Alpine) register(); else document.addEventListener('alpine:init', register);
+    })();
+</script>
+{% endblock %}

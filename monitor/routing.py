@@ -3,5 +3,4 @@ from . import consumers
 
 websocket_urlpatterns = [
     re_path(r'ws/copilot/$',  consumers.CopilotConsumer.as_asgi()),
-    re_path(r'ws/factory/$',  consumers.FactoryConsumer.as_asgi()),
 ]

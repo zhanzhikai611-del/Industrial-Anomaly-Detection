@@ -40,7 +40,7 @@
                 <tbody id="dev-tbody">
                     <!-- Alpine x-for Implementation (1:1 Style Match) -->
                     <template x-for="dev in devices" :key="dev.device_id">
-                        <tr style="cursor:pointer;" @click="DeviceApp.modals.openAIModal(dev.device_id)">
+                        <tr style="cursor:pointer;" @click="window.location.href = '/device/' + dev.device_id + '/'">
                             <td style="font-weight:600; color:var(--text); padding-left:24px;" x-text="dev.device_name"></td>
                             <td style="color:var(--text-hint);" x-text="dev.device_type || '--'"></td>
                             <td style="color:var(--text-sec); font-size:12px;" x-text="dev.machining_process || '--'"></td>

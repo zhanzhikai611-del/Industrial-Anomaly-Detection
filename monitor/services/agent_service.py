@@ -58,6 +58,15 @@ class AgentService:
                 "recent_alerts": [
                     {"alert_type": a.alert_type, "alert_time": a.alert_time.isoformat(), "anomaly_score": a.anomaly_score}
                     for a in AnomalyAlertLog.objects.filter(record__device=device, is_handled=False).order_by('-alert_time')[:3]
+                ],
+                "recent_sensor_data": [
+                    {
+                        "time": s.timestamp.strftime('%H:%M:%S'),
+                        "current": s.spindle_current,
+                        "power": s.spindle_power,
+                        "feed_velocity": s.feed_velocity
+                    }
+                    for s in ProductionSensorData.objects.filter(device=device).order_by('-timestamp')[:20]
                 ]
             }
             results.append(dev_info)
@@ -71,7 +80,7 @@ class AgentService:
             "type": "function",
             "function": {
                 "name": "get_device_recent_data",
-                "description": "获取指定设备的当前运行状态、异常分数和最近的报警日志。",
+                "description": "获取指定设备的当前运行状态、异常分数、报警日志以及最新20条传感器时序数据以进行深度诊断。",
                 "parameters": {
                     "type": "object",
                     "properties": {

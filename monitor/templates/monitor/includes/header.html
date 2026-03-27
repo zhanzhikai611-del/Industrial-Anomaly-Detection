@@ -1,13 +1,6 @@
 <!-- ══════ Header ══════ -->
-<header class="header" style="justify-content: flex-start; gap: 0;">
-    <div style="display:flex; align-items:stretch; height:100%; margin-right:auto;">
-        <a href="/dashboard/"
-            class="nav-center-tab {% if request.resolver_match.url_name != 'factory' %}active{% endif %}">CNC
-            Vision</a>
-        <a href="/factory/"
-            class="nav-center-tab {% if request.resolver_match.url_name == 'factory' %}active{% endif %}">Digital
-            Twin</a>
-    </div>
+<header class="header" style="justify-content: flex-end; gap: 16px; padding: 0 24px;">
+
 
     <div id="ai-agent-mount">
         {% if request.resolver_match.url_name == 'dashboard' %}
