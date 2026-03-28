@@ -141,7 +141,7 @@ class AgentService:
         ).order_by('-anomaly_score').first()
         
         # 从系统配置中获取动态识别阈值 (V3.3.3: 同步设计文档)
-        cfg = await sync_to_async(SystemConfig.get)()
+        cfg = SystemConfig.get()
         thresh = cfg.ai_alert_threshold if cfg else 0.75
 
         if latest_alert and latest_alert.anomaly_score and latest_alert.anomaly_score >= thresh:

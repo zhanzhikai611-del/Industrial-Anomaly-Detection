@@ -146,18 +146,30 @@ venv/bin/daphne -p 8000 IndustrialWarningSystem.asgi:application
 venv/bin/python manage.py run_realtime_stream
 ```
 
-> **两个测试数据脚本的核心差异对比：**
->
-> | 对比项 | `core_scripts/simulate_real_cnc_data.py` | `manage.py run_realtime_stream` |
-> |---|---|---|
-> | 一次性初始化 7 天历史流 | ✅ 支持，适合冷启动 | ❌ 不支持 |
-> | V5 实时脉冲计算引擎与级联预警 | ✅ 支持 | ✅ 支持 |
-> | 支持维修回春与前端操作反向控制 | ✅ 支持 | ✅ 支持 |
 > | 数据量防爆与滚动清理 (15分钟频次) | ❌ 缺失 (持续运行会导致表过大) | ✅ 支持 (最近 1 天保留清理上限) |
 
 ---
 
-## 7. 版本更新日志
+## 7. 数据维护与重置指南
+
+当需要清除所有历史数据进行算法重新验证，或系统数据出现逻辑污染时，请按顺序执行：
+
+### Step 1 — 停止所有运行进程
+按下 `Ctrl+C` 停止 `daphne` 和 `run_realtime_stream`。
+
+### Step 2 — 执行重置脚本
+运行以下命令，该脚本将一键执行：**清空数据库记录**、**重置 Redis 计数器**、**重新初始化 25 台设备**及 **7 天历史流数据**。
+
+```bash
+venv/bin/python core_scripts/reset_system.py
+```
+
+### Step 3 — 重新验证
+重置完成后，重启 Web 服务与实时流进程，此时单机指标将完全基于最新且干净的物理环境进行展示。
+
+---
+
+## 8. 版本更新日志
 
   ### V3.3.1 — Performance & Physics Synchronization Edition (2026-03-28) [✨最新✨]
 - **[重构] 核心指标 P (Performance) 算法**：采用「流水潜力对齐逻辑」。直接对齐 600 条记录的实产与标准能力，彻底消除采样边界偏差带来的数值飘移（告别虚高 100%）。
@@ -198,5 +210,5 @@ venv/bin/python manage.py run_realtime_stream
 | 项目 | 说明 |
 |------|------|
 | 数据保留策略 | 实时流守护进程每 15 分钟自动清理超过 **1 天** 的旧传感记录与报警 |
-| 手动修复分组 | `venv/bin/python core_scripts/fix_db_groups.py`（恢复 Group 1-5 梯度分布）|
-| 清除并重建历史 | 重新运行 `core_scripts/simulate_real_cnc_data.py` 并在提示时选择清除 |
+| 系统一键重置 | `venv/bin/python core_scripts/reset_system.py`（清空 DB+Redis 并重建环境）|
+| 修复特定分组 | `venv/bin/python core_scripts/fix_db_groups.py`（仅恢复 1-5 梯度，不清除数据）|

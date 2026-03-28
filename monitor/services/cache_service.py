@@ -21,7 +21,7 @@ class CacheService:
     KEY_DASHBOARD_STATS = "stats:dashboard:overview"
     KEY_DAILY_OUTPUT = "stats:output:today"
     
-    TTL_DASHBOARD = 60  # 60s 缓存 (PRD 2.2)
+    TTL_DASHBOARD = 15  # 15s 高频缓存 (优化响应速度)
 
     # ═══════════════════════════════════════════════════════════════════
     #  1. 设备状态快照 (Live State Snapshot)
@@ -79,7 +79,6 @@ class CacheService:
     #  3. 实时产量计数器 (Real-time Calculation Decoupling)
     # ═══════════════════════════════════════════════════════════════════
 
-    @classmethod
     @classmethod
     def incr_daily_output(cls, amount=1):
         """增加今日总产量计数 (V3.3.1 优化)"""

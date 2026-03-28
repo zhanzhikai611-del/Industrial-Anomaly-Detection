@@ -153,6 +153,36 @@ window.EventApp = {
 
                 tr.style.display = matches ? '' : 'none';
             });
+        },
+
+        // [V3.3.5] 自定义下拉框选择逻辑
+        selectType: function(val, label) {
+            const input = document.getElementById('type-filter');
+            const pillLabel = document.getElementById('type-pill-label');
+            if (input) input.value = val;
+            if (pillLabel) pillLabel.textContent = label;
+
+            // 更新下拉项的高亮状态
+            const container = document.getElementById('type-filter-container');
+            if (container) {
+                container.querySelectorAll('.custom-select-item').forEach(item => {
+                    const itemText = item.textContent.trim();
+                    if (itemText === label) item.classList.add('active');
+                    else item.classList.remove('active');
+                });
+            }
+
+            // 触发过滤
+            this.applyFilter();
+            
+            // 通知 Alpine 关闭下拉 (通过事件)
+            // 注意：由于 showTypeFilter 在 template 的 x-data 中，直接修改需要通过 Alpine 变量，
+            // 但这里我们已经在 template 中使用了 @click.outside="showTypeFilter = false"，
+            // 所以这里只需要处理逻辑，点击项后 Alpine 会因为事件冒泡（或我们手动设置）关闭它。
+            // 实际上在 HTML 中我们用了 onclick，它会先执行逻辑。
+            // 为了保险，我们可以手动触发一个点击事件或让 Alpine 监听。
+            // 简单做法：在 HTML 的 onclick 中加入且在 @click 之外处理。
+            // 目前 HTML 是 onclick="EventApp.filters.selectType(...)"
         }
     },
 

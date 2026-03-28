@@ -9,7 +9,7 @@
 
 {% block content %}
 <div style="display: flex; align-items: stretch; gap: 24px; min-height: calc(100vh - 104px);"
-     x-data="{}"
+     x-data="{ showTypeFilter: false }"
      x-init="
         if (window.EventApp) {
             window.EventApp.state.data.stats = JSON.parse('{{ stats_data_json|escapejs }}');

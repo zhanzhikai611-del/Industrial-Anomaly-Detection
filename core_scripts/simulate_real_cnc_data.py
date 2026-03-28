@@ -187,22 +187,21 @@ def _gen_production_record(device, timestamp, group_idx, step_secs=3.0):
     else:
         dt = 0.0
 
-
-
-
-
     dt = round(dt, 4)
 
+    # ── P 绩效 (Performance) 核心仿真逻辑 ──────────────────────────────
+    # 设置各设备组别 (Group 1-5) 的理论产出速度倍率 (perf_ratio)
+    # 修复/保养操作会改变设备的 group_id，从而触发 P 指标的瞬间爬升
     if group_idx == 0:
-        perf_ratio = random.uniform(0.96, 1.00)           # 新设备接近满载
+        perf_ratio = random.uniform(0.97, 1.00)           # Group 1: 完美状态，几无磨损 (97%-100%)
     elif group_idx == 1:
-        perf_ratio = random.uniform(0.93, 0.98)           # 准新，轻微下降
+        perf_ratio = random.uniform(0.92, 0.97)           # Group 2: 轻微衰减，准新机 (92%-97%)
     elif group_idx == 2:
-        perf_ratio = random.uniform(0.88, 0.95)           # 正常磨损期
+        perf_ratio = random.uniform(0.75, 0.92)           # Group 3: 正常工作区间 (75%-92%)
     elif group_idx == 3:
-        perf_ratio = random.uniform(0.78, 0.90)           # 老旧，主轴倍率明显降低
+        perf_ratio = random.uniform(0.60, 0.75)           # Group 4: 显著亚健康状态 (60%-75%)
     else:
-        perf_ratio = random.uniform(0.65, 0.82)           # 故障边缘，严重降速
+        perf_ratio = random.uniform(0.35, 0.60)           # Group 5: 临界故障/极其老旧 (35%-60%)
 
     # ── V5 引擎：脉冲余数累加器 (Yield Buffer / Pulse Accumulator) ────────
     # [V3.3.1] 修复：微停 dt 已在上方完成缩放，此处扣除即可

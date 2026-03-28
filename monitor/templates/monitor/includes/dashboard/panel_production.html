@@ -26,7 +26,7 @@
 
     <!-- ② 各时段产量 ECharts (居中，通过 JS 联动刷新，不重复发起 HTMX 请求) -->
     <div style="font-size:11px;color:#909399;margin-bottom:4px;margin-top:12px;">各时段产量（件）</div>
-    <div id="chart-hourly" style="height:140px; margin-bottom:12px;"></div>
+    <div id="chart-hourly" hx-preserve style="height:140px; margin-bottom:12px;"></div>
 
     <!-- ③ 良品 / 次品 双卡 -->
     <div id="prod-stats-bottom">

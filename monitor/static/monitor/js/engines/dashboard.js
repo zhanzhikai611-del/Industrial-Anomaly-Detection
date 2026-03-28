@@ -113,7 +113,7 @@ function initDashboardCharts() {
 
 // ── 2. Data Polling Logic ──
 // [V3.2.4] ECharts Self-Repair Handler
-// Since HTMX swaps the outerHTML of the panel every 5s, we must re-init if the canvas is gone.
+let lastHourlyUpdate = 0;
 document.addEventListener('updateHourlyChart', (e) => {
     const d = e.detail;
     if (!d) return;
@@ -125,7 +125,7 @@ document.addEventListener('updateHourlyChart', (e) => {
     if (!window.cHourly || window.cHourly.getDom() !== el) {
         if (window.cHourly) window.cHourly.dispose();
         window.cHourly = echarts.init(el);
-        // Re-apply basic config (since initDashboardCharts only runs once)
+        // Re-apply basic config
         window.cHourly.setOption({
             grid: { left: 4, right: 4, top: 12, bottom: 20, containLabel: false },
             xAxis: {
@@ -141,6 +141,11 @@ document.addEventListener('updateHourlyChart', (e) => {
             }]
         });
     }
+
+    // [Throttle] Hourly chart only needs to refresh once per minute
+    const now = Date.now();
+    if (now - lastHourlyUpdate < 60000 && window.cHourly.getOption().series[0].data.length > 0) return;
+    lastHourlyUpdate = now;
 
     window.cHourly.setOption({ xAxis: { data: d.labels || [] }, series: [{ data: d.values || [] }] });
 });

@@ -157,9 +157,9 @@ def _gen_running_record(device, ts, group_idx):
         final_perf = 0.0
     else:
         if device.yield_buffer >= 1.0:
-            # 物理限制：3秒内产量无论如何堆积，单次输出强限制为不超过1件，
-            # 避免瞬间 OEE 性能 P 除法溢出超 100%
-            produced = min(1, int(device.yield_buffer))
+            # [V3.3.5 Fix] 解除产量封印：移除 min(1, ...) 限制，允许高容量设备真实产出。
+            # 扣除已产出的整数件数，保留小数部分脉冲继续累积。
+            produced = int(device.yield_buffer)
             device.yield_buffer -= produced
         else:
             produced = 0
@@ -320,10 +320,16 @@ class Command(BaseCommand):
                 alerts_created  = 0
 
                 total_step_output = 0
-                for idx, dev in enumerate(devices):
-                    # [V3.3.4 Fix] 关键修复：强制从数据库同步最新状态（分组信息），
-                    # 避免由于内存对象过期导致 Copilot 修复后性能分不回升的问题。
+                for dev in devices:
+                    # [V3.3.6 Fix] 关键修复：刷新数据库字段前保存内存属性（防止进度被清空）
+                    y_buf = getattr(dev, 'yield_buffer', 0.0)
+                    d_buf = getattr(dev, 'defect_buffer', 0.0)
+                    
                     dev.refresh_from_db(fields=['current_group_id', 'current_status', 'maintenance_advice'])
+                    
+                    # 属性回锚：恢复生产进度火种
+                    dev.yield_buffer  = y_buf
+                    dev.defect_buffer = d_buf
                     
                     status = dev.current_status
                     group_idx = min(max(dev.current_group_id - 1, 0), 4)

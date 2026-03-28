@@ -36,7 +36,7 @@
 当模式为 Copilot 时，Agent 的工作流是一个无限循环（直到 WebSocket 模式切换或断开），其核心状态机闭环如下：
 
 1.  **全局扫描 (Global Scan):**
-    -   *行为:* 每隔 3 秒读取一次 `AnomalyAlertLog` 表。寻找 `is_handled=False` 且 `anomaly_score > 0.70` 的最新记录。若无异常则继续沉睡。
+    -   *行为:* 每隔 3 秒读取一次 `AnomalyAlertLog` 表。寻找 `is_handled=False` 且 `anomaly_score > 0.75` 的最新记录。若无异常则继续沉睡。
 2.  **锁定目标 (Lock Target):**
     -   *行为:* 获取异常设备 (Device) 和对应的警报记录。将设备名称和风险值推送至前端终端。
 3.  **安全停机 (Safety Shutdown - Action):**

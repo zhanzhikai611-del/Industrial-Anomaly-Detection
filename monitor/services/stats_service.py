@@ -15,18 +15,21 @@ def calculate_rolling_oee(dev, local_now):
     window_start = local_now - timedelta(minutes=30)
     recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
     
-    # 采用聚合查询获取 1:1 对齐的分母 (Total Loading Time)
+    # 采用聚合查询获取 1:1 对齐的分母 (Total Runtime = Loading - Down)
     agg = recs.aggregate(
         s=Sum('actual_output'), 
         i=Sum('input_qty'),
-        t_load=Sum('loading_time') # 分母核心：该窗口内累计占据的物理时间份额
+        t_load=Sum('loading_time'),
+        t_down=Sum('downtime') # 引入停机时间
     )
     
     if agg['t_load'] and agg['t_load'] > 0:
         actual_out = agg['s'] or 0
         input_qty = agg['i'] or 0
-        # 潜力计算：标准产能 * (累计负载分钟 / 60)
-        theo_max = dev.standard_capacity * (agg['t_load'] / 60.0)
+        # 潜力计算基准：必须扣除停机时间，反映运行期间的真实速率 (Actual Run Time)
+        # 这样设备修复并恢复运转的第一秒，P 值就能瞬间“触底反弹”
+        actual_run_min = max(0, agg['t_load'] - (agg['t_down'] or 0))
+        theo_max = dev.standard_capacity * (actual_run_min / 60.0)
         
         if theo_max > 0:
             p_val = min(input_qty / theo_max, 1.0)
@@ -49,8 +52,9 @@ def get_device_matrix_data():
             s=Sum('actual_output'), 
             i=Sum('input_qty'),
             t_min=Min('timestamp'),
-            # 采用 1:1 对齐：汇总 loading_time 作为时间基准，解决边界跳变
-            load_min_sum=Sum('loading_time')
+            # V3.3.6 精准对齐：同时提取负载时间与停机时间，实现纯净性能 (P) 隔离
+            load_min_sum=Sum('loading_time'),
+            down_min_sum=Sum('downtime')
         )
     agg_map = {row['device_id']: row for row in agg_qs}
     
@@ -58,8 +62,10 @@ def get_device_matrix_data():
         """基于 1:1 对齐结果计算 P*Q，解决响应过慢与虚高问题"""
         if not agg or not agg['load_min_sum']: return 0.0
         
-        # 潜力计算：标准产能 * (累计负载分钟 / 60)
-        delta_hours = agg['load_min_sum'] / 60.0
+        # 关键修正：计算 P 时分母需排除停机时间 (Downtime)
+        # 这样当设备从 Down->Running 时，denominator 只包含 Running 的时间片段，数值瞬间恢复
+        runtime_mins = agg['load_min_sum'] - (agg['down_min_sum'] or 0)
+        delta_hours = max(0, runtime_mins) / 60.0
         theo_max = dev.standard_capacity * delta_hours
         
         actual_out = agg['s'] or 0

@@ -6,11 +6,20 @@
     </div>
     <div class="ev-tools">
         <input class="ev-search" id="ev-search" placeholder="搜索设备名…" oninput="EventApp.filters.applyFilter()">
-        <select class="ev-select" id="type-filter" onchange="EventApp.filters.applyFilter()">
-            <option value="">全部类型</option>
-            <option value="HIGH_CURRENT">主轴过电流</option>
-            <option value="HIGH_POWER">主轴过载</option>
-            <option value="LOW_VELOCITY">进给速度异常</option>
-        </select>
+        
+        <!-- 核心优化：改用系统统一风格的自定义下拉框 (V3.3.5) -->
+        <div class="custom-select-container" id="type-filter-container" style="min-width: 140px;">
+            <div class="custom-select-pill" @click="showTypeFilter = !showTypeFilter">
+                <span id="type-pill-label">全部类型</span>
+            </div>
+            <div class="custom-select-dropdown" x-show="showTypeFilter" @click.outside="showTypeFilter = false" x-cloak>
+                <div class="custom-select-item active" onclick="EventApp.filters.selectType('', '全部类型')">全部类型</div>
+                <div class="custom-select-item" onclick="EventApp.filters.selectType('HIGH_CURRENT', '主轴过电流')">主轴过电流</div>
+                <div class="custom-select-item" onclick="EventApp.filters.selectType('HIGH_POWER', '主轴过载')">主轴过载</div>
+                <div class="custom-select-item" onclick="EventApp.filters.selectType('LOW_VELOCITY', '进给速度异常')">进给速度异常</div>
+            </div>
+            <!-- 隐藏的原始 Select 用于逻辑保持兼容 -->
+            <input type="hidden" id="type-filter" value="">
+        </div>
     </div>
 </div>
