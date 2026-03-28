@@ -27,10 +27,19 @@ class DeviceService:
     def reset_all_device_groups():
         """
         全量重置所有设备的特征组梯度 (模拟换刀/新工艺开始)
+        [V3.4.3 修复补丁]：联动清除 AI 缓冲区
         """
         try:
-            # 调用模型层定义的中心化梯度重置逻辑 (V3.2.2)
+            # 1. 重置数据库物理组别
             DeviceInfo.initial_repair_all()
+            
+            # 2. 联动重置 AI 特征计算缓冲区 (解决重置后分数不降的问题)
+            from .ai_service import reset_device_buffer
+            devices = DeviceInfo.objects.all()
+            for dev in devices:
+                reset_device_buffer(dev.id)
+            
+            logger.info("Successfully reset all device groups and cleared AI buffers.")
             return True
         except Exception as e:
             logger.error(f"Reset groups error: {e}")

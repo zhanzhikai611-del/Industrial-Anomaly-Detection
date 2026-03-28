@@ -236,6 +236,12 @@ class ProductionSensorData(models.Model):
         verbose_name='实际产量',
         help_text='实际产出数量，用于大屏产量看板及 OEE 性能稼动率计算',
     )
+    anomaly_score = models.FloatField(
+        default=0.0,
+        verbose_name='异常风险分',
+        help_text='[V3.4.6] 持久化存放该时刻的模型推断值，确保详情页与 Dashboard 逻辑 1:1 同步',
+        db_index=True,
+    )
 
     class Meta:
         db_table = 'production_sensor_data'

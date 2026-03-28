@@ -336,6 +336,11 @@ class Command(BaseCommand):
 
                     if status == 'Running':
                         rec_obj, perf_ratio = _gen_running_record(dev, now, group_idx)
+                        
+                        # [V3.4.6] 关键补丁：在落库前注入 AI 风险分数，确保详情页逻辑同步
+                        prob = ai_service.predict_proba(rec_obj) or 0.0
+                        rec_obj.anomaly_score = prob
+                        
                         rec_obj.save()          # 逐条 save 获取 pk，便于立即关联 Alert
                         records_created += 1
                         total_step_output += (rec_obj.actual_output or 0)
@@ -361,7 +366,7 @@ class Command(BaseCommand):
                         'spindle_current': float(rec_obj.spindle_current),
                         'spindle_power': float(rec_obj.spindle_power),
                         'feed_velocity': float(rec_obj.feed_velocity),
-                        'anomaly_score': float(round(prob, 4)),
+                        'anomaly_score': float(round(rec_obj.anomaly_score, 4)),
                         'oee_val': float(perf_ratio) if dev.current_status == 'Running' else 0.0,
                         'last_update': now.isoformat(),
                         'machining_process': rec_obj.machining_process,

@@ -98,21 +98,32 @@ def clear_data():
 def _resolve_status(seq):
     return 'Running'
 
-GROUP_PARAMS = [
-    (15.0, 0.13), # Group 1: 1-5 (New) -> ~0-40% Probability
-    (24.0, 0.18), # Group 2: 6-10 (Semi-new) -> ~30-50%
-    (27.0, 0.25), # Group 3: 11-15 (Normal) -> ~41-75%
-    (31.0, 0.32), # Group 4: 16-20 (Old) -> ~60-85%
-    (40.0, 0.40), # Group 5: 21-25 (Faulty) -> ~76-100%
-]
+# ── 组别基础值 (Group Bases) ──────────────────────────────────────
+# 定义 5 个健康阶段的基础参数。维修/保养操作会修改设备的 current_group_id，
+# 系统根据该 ID 动态切换基准，从而实现“维修后异常分数下降”的联动效果。
+GROUP_BASES = {
+    1: (15.0, 0.15), # Excellent (新机/刚维修)
+    2: (24, 0.20), # Good
+    3: (28.3, 0.28), # Fair (磨损监控区 - 增加电流基准使之靠近黄区)
+    4: (28.7, 0.28), # Degraded (建议维护 - 适当压低使之靠近黄区)
+    5: (36.0, 0.40), # Critical (风险极高)
+}
+
+# ── 设备指纹 (Unique Fingerprints) ────────────────────────────────
+# 为 25 台设备分配固定的随机偏移量。
+# 这样即使两台设备处于同一组（如都是 G1），它们的 sc_mean 也会差 1-3A，
+# 从而在仪表板上形成从 0% 到 100% 的平滑、非聚簇的连续分数谱。
+_rng_fp = np.random.RandomState(2024)
+DEVICE_FINGERPRINTS = {
+    i: (float(_rng_fp.uniform(-3.0, 3.0)), float(_rng_fp.uniform(-0.02, 0.02)))
+    for i in range(1, TOTAL_DEVICES + 1)
+}
 
 def _get_group_id(seq: int) -> int:
     """
-    将设备创建序号 (1-25) 映射到特征组 ID (1-5)。
-    分布：Group1=5台(1-5)、Group2=6台(6-11)、Group3=7台(12-18)、
-          Group4=5台(19-23)、Group5=2台(24-25)
+    为了兼容 PRD 的分组概念，依然保留 1-5 分组，但仅作为 UI 分组使用。
     """
-    idx = seq - 1  # 转为 0-based
+    idx = seq - 1
     if idx < 5:    return 1
     elif idx < 11: return 2
     elif idx < 18: return 3
@@ -120,9 +131,7 @@ def _get_group_id(seq: int) -> int:
     else:          return 5
 
 def create_devices():
-    print(f'🏭  初始化 {TOTAL_DEVICES} 台设备 '
-          f'(Running={RUNNING_COUNT} / Idle={IDLE_COUNT} / Down={DOWN_COUNT})…',
-          end=' ', flush=True)
+    print(f'🏭  初始化 {TOTAL_DEVICES} 台设备 (状态/OEE 联动模型)…', end=' ', flush=True)
     objs, seq = [], 0
     for name_tpl, count, dtype, cap in DEVICE_CONFIGS:
         for i in range(1, count + 1):
@@ -137,7 +146,6 @@ def create_devices():
     DeviceInfo.objects.bulk_create(objs)
     devices = list(DeviceInfo.objects.order_by('id'))
     
-    # [V3.3.0] 初始化 Redis 快照
     for d in devices:
         CacheService.update_device_snapshot(d.id, {
             'device_id': d.id,
@@ -156,15 +164,30 @@ def create_devices():
 
 
 def _gen_production_record(device, timestamp, group_idx, step_secs=3.0):
-    """生成运行状态的详细传感器数据（用于仿真循环）"""
-    sc_mean, sp_mean = GROUP_PARAMS[group_idx]
-    sc = float(np.random.normal(sc_mean, 1.5))
-    sp = float(max(0, np.random.normal(sp_mean, 0.015)))
-    # V1.4.2 修复：防止正常进给速度随机值过小而持续触发 LOW_VELOCITY 报警
-    fv_mean = 20.0 if group_idx < 3 else 18.0
-    fv = float(np.random.normal(fv_mean, 2.0))
+    """生成运行状态的详细传感器数据（联动维修逻辑与连续指纹）"""
+    # 1. 获取组别基准（支持通过维修改变 group_id 实现联动）
+    # group_idx 对应 DB 中的 current_group_id - 1
+    g_id = group_idx + 1
+    base_sc, base_sp = GROUP_BASES.get(g_id, (25.0, 0.25))
 
-    is_worn = (group_idx >= 3)
+    # 2. 应用设备指纹（确保同组设备也有差异，形成连续分数谱）
+    dev_seq = device.id - (device.id // 100) * 100
+    if dev_seq < 1: dev_seq = 1
+    off_sc, off_sp = DEVICE_FINGERPRINTS.get(dev_seq, (0.0, 0.0))
+
+    sc_mean = base_sc + off_sc
+    sp_mean = base_sp + off_sp
+
+    # 3. 生成波动数据
+    sc = float(np.random.normal(sc_mean, 1.2))
+    sp = float(max(0, np.random.normal(sp_mean, 0.012)))
+    
+    # 进给速度联动：磨损增加，P 绩效下降，进给速度理论中心下移
+    fv_mean = 20.0 - (sc_mean - 15.0) / 10.0 
+    fv = float(np.random.normal(fv_mean, 1.5))
+
+    # 4. 判断逻辑状态 (用于 legacy 系统兼容)
+    is_worn = (sc_mean >= 27.5) 
     cap = device.standard_capacity
     loading_mins = round(step_secs / 60.0, 4)
 
@@ -244,6 +267,7 @@ def _gen_production_record(device, timestamp, group_idx, step_secs=3.0):
         machining_process=np.random.choice(STAGE_LABELS, p=STAGE_PROBS),
         tool_condition=is_worn, loading_time=float(loading_mins),
         downtime=float(dt), input_qty=int(input_qty_val), actual_output=good_output,
+        anomaly_score=0.1,  # 初始默认占位，稍后由 ai_service 覆盖
     ), perf_ratio
 
 
@@ -306,33 +330,42 @@ def simulate_sensor_data(devices):
 
             if status == 'Running':
                 rec, perf = _gen_production_record(dev, ts, group_idx, step_secs=INTERVAL_MINS * 60.0)
-                all_records.append(rec)
+            elif status == 'Idle':
+                rec, _ = _gen_idle_record(dev, ts)
+            else:  # Down
+                rec, _ = _gen_down_record(dev, ts)
 
+            # [V3.4.6] 统一计算分值并存入流水模型
+            prob = ai_service.predict_proba(rec)
+            score = round(prob, 4) if prob is not None else random.uniform(0.01, 0.05)
+            rec.anomaly_score = score
+            all_records.append(rec)
 
+            # 报警触发判定 (物理硬报警 + AI软报警并集)
+            if status == 'Running':
+                # 1. 物理检测
                 if (abs(rec.spindle_current) > sc_thresh or
                         rec.spindle_power    > sp_thresh or
                         abs(rec.feed_velocity) < fv_thresh):
                     atype = ('HIGH_CURRENT' if abs(rec.spindle_current) > sc_thresh
                              else 'HIGH_POWER' if rec.spindle_power > sp_thresh
                              else 'LOW_VELOCITY')
-                    prob = ai_service.predict_proba(rec)
-                    if prob is None:
-                        prob = random.uniform(0.60, 0.99)
                     alert_infos.append({
                         'list_idx':    len(all_records) - 1,
                         'alert_time':  ts,
                         'alert_type':  atype,
-                        'anomaly_score': round(prob, 4),
+                        'anomaly_score': score,
                         'is_handled':  random.choice([True, False]),
                     })
-
-            elif status == 'Idle':
-                rec, _ = _gen_idle_record(dev, ts)
-                all_records.append(rec)
-
-            else:  # Down
-                rec, _ = _gen_down_record(dev, ts)
-                all_records.append(rec)
+                # 2. 软报警预判 (捕捉漏网之鱼)
+                elif score > 0.75:
+                    alert_infos.append({
+                        'list_idx':    len(all_records) - 1,
+                        'alert_time':  ts,
+                        'alert_type':  'AI_SOFT_SIGNAL',
+                        'anomaly_score': score,
+                        'is_handled':  random.choice([True, False]),
+                    })
 
 
         # [V3.3.1] 已移除 DOWNTIME 全局停机报警逻辑
@@ -424,26 +457,41 @@ def _generate_single_device_realtime(dev, ts, group_idx):
         sc_thresh = cfg.spindle_current_high if cfg else ALERT_THRESHOLDS['spindle_current']
         sp_thresh = cfg.spindle_power_high if cfg else ALERT_THRESHOLDS['spindle_power']
         fv_thresh = cfg.feed_velocity_low if cfg else 0.5
+        # [V3.4.6] 统一计算分值并持久化
+        prob = ai_service.predict_proba(rec)
+        score = round(prob, 4) if prob is not None else random.uniform(0.01, 0.05)
+        rec.anomaly_score = score
 
+        # 1. 物理阈值检测 (硬报警)
         if (abs(rec.spindle_current) > sc_thresh or
                 rec.spindle_power    > sp_thresh or
                 abs(rec.feed_velocity) < fv_thresh):
             atype = ('HIGH_CURRENT' if abs(rec.spindle_current) > sc_thresh
                      else 'HIGH_POWER' if rec.spindle_power > sp_thresh
                      else 'LOW_VELOCITY')
-            prob = ai_service.predict_proba(rec)
-            if prob is None:
-                prob = random.uniform(0.60, 0.99)
             alert_info = {
                 'alert_time':  ts,
                 'alert_type':  atype,
-                'anomaly_score': round(prob, 4),
+                'anomaly_score': score,
+                'is_handled':  False,
+            }
+        
+        # 2. AI 软报警检测
+        elif score > 0.75:
+            alert_info = {
+                'alert_time':  ts,
+                'alert_type':  'AI_SOFT_SIGNAL',
+                'anomaly_score': score,
                 'is_handled':  False,
             }
     elif status == 'Idle':
         rec, perf = _gen_idle_record(dev, ts)
+        prob = ai_service.predict_proba(rec)
+        rec.anomaly_score = round(prob, 4) if prob is not None else 0.02
     else:  # Down
         rec, perf = _gen_down_record(dev, ts)
+        prob = ai_service.predict_proba(rec)
+        rec.anomaly_score = round(prob, 4) if prob is not None else 0.01
         # [V3.3.1] 已从此移除 DOWNTIME 实时异常检测逻辑
     return rec, alert_info, perf
 
@@ -469,6 +517,9 @@ def run_realtime_simulation():
         dev.maintenance_advice = '设备运行平稳，暂无维修建议。'
         dev.save(update_fields=['yield_buffer', 'defect_buffer', 'maintenance_advice'])
     
+    # 记录上一次的组别，用于检测“维修/状态变更”
+    prev_groups = {dev.id: dev.current_group_id for dev in devices}
+    
     with ThreadPoolExecutor(max_workers=25) as executor:
         while True:
             try:
@@ -482,16 +533,22 @@ def run_realtime_simulation():
                     continue
 
                 ts = timezone.now()
-                # 根据 device index 生成组别
                 futures = []
                 for idx, dev in enumerate(devices):
-                    # 重新从 DB 读取最新状态与分组，支持前台动态更改及回春逻辑
+                    # 重新从 DB 读取最新状态与分组
+                    curr_id = dev.id
+                    old_group_id = prev_groups.get(curr_id, 1)
                     dev.refresh_from_db(fields=['current_status', 'current_group_id'])
                     
-                    # V5: 3 秒步长，用 step_secs 统一表示
-                    dev.step_secs = 3.0
-                    dev.current_interval_mins = 3.0 / 60.0  # 保留兼容
+                    # ★ 核心逻辑：如果组别 ID 变小，说明发生了维修/重置
+                    if dev.current_group_id < old_group_id:
+                        print(f"🔧  检测到设备维修: #{curr_id} (G{old_group_id} -> G{dev.current_group_id})")
+                        ai_service.reset_device_buffer(curr_id)
+                    
+                    prev_groups[curr_id] = dev.current_group_id
 
+                    # V5: 3 秒步长
+                    dev.step_secs = 3.0
                     group_idx = min(max(dev.current_group_id - 1, 0), 4)
                     futures.append(executor.submit(_generate_single_device_realtime, dev, ts, group_idx))
                 
@@ -508,6 +565,11 @@ def run_realtime_simulation():
 
 
                 if records:
+                    # [DEBUG] 检查分数是否已注入
+                    test_dev = "CNC-TML-05"
+                    for r in records:
+                        if r.device.device_name == test_dev:
+                            print(f"  🔍 [DEBUG] {test_dev} score={r.anomaly_score}")
                     ProductionSensorData.objects.bulk_create(records)
                     
                     if alert_infos:
@@ -524,8 +586,8 @@ def run_realtime_simulation():
                             CacheService.incr_daily_output(total_step_output)
 
                         for i, rec in enumerate(records):
-                            # 计算 AI 分数供快照使用
-                            prob = ai_service.predict_proba(rec) or 0.0
+                            # [V3.4.6] 快照直接使用已计算并落库的分数
+                            score = getattr(rec, 'anomaly_score', 0.04)
                             
                             snapshot = {
                                 'device_id': rec.device_id,
@@ -535,7 +597,7 @@ def run_realtime_simulation():
                                 'spindle_current': float(rec.spindle_current),
                                 'spindle_power': float(rec.spindle_power),
                                 'feed_velocity': float(rec.feed_velocity),
-                                'anomaly_score': float(round(prob, 4)),
+                                'anomaly_score': float(score),
                                 'oee_val': float(perf_map.get(rec.device_id, 0.0)) if rec.device.current_status == 'Running' else 0.0,
                                 'last_update': ts.isoformat(),
                                 'machining_process': rec.machining_process,

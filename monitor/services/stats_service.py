@@ -120,7 +120,8 @@ def get_device_matrix_data():
             if latest is None:
                 score, process = 0.0, '--'
             else:
-                score = ai_service.predict_proba(latest) or 0.0
+                # [V3.4.6] 统一读取持久记录，确保与详情页、Simulation 1:1 对齐
+                score = latest.anomaly_score or 0.0
                 process = latest.machining_process
 
             is_running = dev.current_status == 'Running'
@@ -222,7 +223,7 @@ def get_dashboard_stats():
             avg_p = round(min(total_actual_pieces / total_theo_pieces, 1.0), 4)
 
     # 4. 计算 Q (Quality) 与 OEE 聚合值
-    daily_target = (DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))['total_cap'] or 0) * 8
+    daily_target = (DeviceInfo.objects.aggregate(total_cap=Sum('standard_capacity'))['total_cap'] or 0) * 12
     # [V3.3.1] 确保 Q 指标的分子分母口径一致
     # 如果处于数据重载期，统一使用数据库聚合值以防止 Redis 计数器与 DB 记录不同步
     totals = ProductionSensorData.objects.filter(timestamp__gte=today_start).aggregate(actual_total=Sum('actual_output'), input_total=Sum('input_qty'))

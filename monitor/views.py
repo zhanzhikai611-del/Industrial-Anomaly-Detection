@@ -611,9 +611,9 @@ def api_device_stream(request, device_id):
         feed_velocities.append(rec.feed_velocity)
         machining_processes.append(rec.get_machining_process_display())
         # 固定返回聚合后的稳定值，避免瞬时 0.0% 干扰
-        oee_list.append(round(stable_oee * 100, 1))
-        prob = ai_service.predict_proba(rec)
-        anomaly_scores.append(round((prob or 0) * 100, 2))  # 转换为百分比
+        oee_list.append(round(stable_oee * 100, 1))        # [V3.4.6] 统一读取持久化的异常分，禁止在此处重算（解决 Web 进程 Buffer 缺失导致的偏差）
+        score = rec.anomaly_score or 0.0
+        anomaly_scores.append(round(score * 100, 2))  # 转换为百分比
 
     device = DeviceInfo.objects.filter(pk=device_id).first()
 
@@ -753,6 +753,9 @@ def api_device_reset(request, device_id):
             device.current_status = 'Idle'  # 下发完成后切到待机，不自动恢复运行
             device.maintenance_advice = note # 保存到设备信息表中
             device.save(update_fields=['current_group_id', 'current_status', 'maintenance_advice'])
+            
+            # [V3.4.3 增强] 联动重置 AI 特征计算缓冲区，让风险分数瞬间回落
+            ai_service.reset_device_buffer(device_id)
 
         return JsonResponse({'status': 'ok', 'message': f'设备 {device.device_name} 已处理完毕，已切换至待机'})
     except Exception as e:

@@ -36,7 +36,10 @@
 当模式为 Copilot 时，Agent 的工作流是一个无限循环（直到 WebSocket 模式切换或断开），其核心状态机闭环如下：
 
 1.  **全局扫描 (Global Scan):**
-    -   *行为:* 每隔 3 秒读取一次 `AnomalyAlertLog` 表。寻找 `is_handled=False` 且 `anomaly_score > 0.75` 的最新记录。若无异常则继续沉睡。
+    -   *行为:* 每隔 3 秒读取一次 `AnomalyAlertLog` 表。**扫描策略**：寻找 `is_handled=False` 且符合以下任一条件的记录：
+        -   **物理硬报警**：类型为 `HIGH_CURRENT`, `HIGH_POWER` 等。
+        -   **AI 软报警 (Soft Signal)**：类型为 `AI_SOFT_SIGNAL`，且 `anomaly_score > 0.75`。
+    -   *意图:* 即使物理指标尚未爆表，只要 AI 持续判定的风险值超过 0.75，Agent 也会将其选定为干预标靶，实现真正的“预见性维护”。
 2.  **锁定目标 (Lock Target):**
     -   *行为:* 获取异常设备 (Device) 和对应的警报记录。将设备名称和风险值推送至前端终端。
 3.  **安全停机 (Safety Shutdown - Action):**
@@ -111,6 +114,12 @@ final_reply, data_context = await loop.run_in_executor(None, ask_copilot_with_to
 ### 3.4 前端 Glass Wall 与视觉反馈
 -   **Copilot 交互阻断:** `#copilot-overlay` 绝对定位全屏覆盖，设置 `pointer-events: auto`，拦截一切点击事件，保证系统“被接管”的视觉与物理真实感。增加 `body.copilot-active` 实现屏幕边缘浅蓝色“呼吸灯”效果（box-shadow inset）。
 -   **Ask 界面与表格嵌入:** Ask 消息分为 `user` 及 `ai` 两派样式。通过在 WS 返回中下发原生的二维数据表，配合 `font-family: 'Roboto Mono'` 生成具备科技感的行内解析表格，完美补齐了纯文本分析的短板。
+
+### 3.5 预见性干预：AI 软报警机制 (V3.4.5)
+为了解决 Agent 对“高风险但未越限”设备的感知迟钝问题，系统引入了 **AI 软报警 (AI Soft Alarm)** 机制：
+-   **生成逻辑**：仿真引擎每 3 秒预计算一次 AI 概率。若 $\text{prob} > 0.75$，即使物理电流正常，也会静默插入一条 `AI_SOFT_SIGNAL` 类型的报警。
+-   **标靶作用**：该记录不触发前端弹窗、不计入看板报警总数统计，仅作为 Agent 后台扫描的“电子红点”。
+-   **Agent 响应**：一旦扫描到软报警，Agent 会跳出单纯的“阈值触发逻辑”，转而进入“AI 驱动模式”，主动锁定该设备并执行停机/诊断流。
 
 ## 4. 扩展性探讨与未来建议 (V3.0 Outlook)
 

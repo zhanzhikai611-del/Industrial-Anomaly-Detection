@@ -133,15 +133,16 @@ class AgentService:
     @staticmethod
     @sync_to_async
     def get_highest_risk_device():
-        # V3.3.2 Fix: 只锁定最近5分钟内的未处理报警，避免由于历史随机分数据残留导致的误报捕获
+        """
+        [回滚 V3.3.2] 基于报警日志的被动锁定逻辑。
+        """
         time_limit = timezone.now() - timedelta(minutes=5)
         latest_alert = AnomalyAlertLog.objects.filter(
             is_handled=False, 
             alert_time__gte=time_limit
         ).order_by('-anomaly_score').first()
         
-        # 从系统配置中获取动态识别阈值 (V3.3.3: 同步设计文档)
-        cfg = SystemConfig.get()
+        cfg = SystemConfig.objects.first()
         thresh = cfg.ai_alert_threshold if cfg else 0.75
 
         if latest_alert and latest_alert.anomaly_score and latest_alert.anomaly_score >= thresh:
@@ -199,11 +200,10 @@ class AgentService:
     @classmethod
     async def run_autonomous_loop(cls, log_cb: Callable, should_continue: Callable):
         """
-        自主控制循环 (原 CopilotConsumer.run_agent_loop)
+        自主控制循环 (原方案：基于事件驱动)
         """
         await log_cb("[System] Copilot 智能体已接管系统，正在初始化扫描路径...")
         
-        # V3.1.2 Fix: should_continue 是同步 lambda，移除 await (解决 Copilot 模式失效)
         while should_continue():
             await asyncio.sleep(3)
             await log_cb("[System] 正在扫描全线设备风险状态...")
@@ -225,7 +225,7 @@ class AgentService:
             await cls.run_diagnosis_flow(device.id, device.device_name, h_data, log_cb)
             await asyncio.sleep(3)
             
-            # 自动化修复 (如果分数不是极高，尝试复位)
+            # 自动化修复
             await log_cb("[Recovery] 正在尝试自动化系统复位与报警清理...")
             await cls.perform_recovery(device.id)
             await log_cb("[Status] 设备已恢复运行至安全组，报警记录已归档。")

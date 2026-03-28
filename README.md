@@ -1,6 +1,6 @@
 # 基于机器学习的 CNC 工业生产数据异常预警系统
 
-> **当前版本**：V3.3.1 · Performance & Physics Synchronization Edition (2026-03-28)
+> **当前版本**：V3.4.0 · AI Score Persistence & Real-time Hardening Edition (2026-03-28)
 
 ## 1. 项目简介
 
@@ -171,7 +171,12 @@ venv/bin/python core_scripts/reset_system.py
 
 ## 8. 版本更新日志
 
-  ### V3.3.1 — Performance & Physics Synchronization Edition (2026-03-28) [✨最新✨]
+  ### V3.4.0 — AI Score Persistence & Real-time Hardening Edition (2026-03-28) [✨最新✨]
+- **[重构] AI 风险评分持久化 (Persistence)**：实现了从“实时重算”到“生成即存库”的闭环。彻底解决了详情页与 Dashboard 间由于内存隔离导致的数据不一致问题（1:1 逻辑对齐）。
+- **[修复] 实时流守护进程 (Guardian) 补丁**：修复了 `run_realtime_stream` 在落库前丢失 `anomaly_score` 字段的重大 Bug，确保流水表拥有完整 AI 预测痕迹。
+- **[优化] 仿真引擎鲁棒性 (Stability)**：清除了双进程冲突及静默崩溃隐患。引入了对象构造占位与 `.save()` 强制校验，保障 24/7 连续传感流生成的绝对可靠性。
+
+  ### V3.3.1 — Performance & Physics Synchronization Edition (2026-03-28)
 - **[重构] 核心指标 P (Performance) 算法**：采用「流水潜力对齐逻辑」。直接对齐 600 条记录的实产与标准能力，彻底消除采样边界偏差带来的数值飘移（告别虚高 100%）。
 - **[优化] 核心指标 A (Availability) 算法**：由瞬时快照升级为「时间加权移动平均」。通过对最近 1 分钟内的停机记录进行物理闭环求和，使看板具备真正的“故障记忆”能力。
 - **[系统] 接入 Redis 高性能内核**：
