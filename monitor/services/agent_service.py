@@ -5,8 +5,9 @@ import asyncio
 from openai import OpenAI
 from typing import List, Tuple, Dict, Any, Callable
 from asgiref.sync import sync_to_async
+from datetime import timedelta
 from django.utils import timezone
-from ..models import DeviceInfo, AnomalyAlertLog, ProductionSensorData
+from ..models import DeviceInfo, AnomalyAlertLog, ProductionSensorData, SystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +133,18 @@ class AgentService:
     @staticmethod
     @sync_to_async
     def get_highest_risk_device():
-        latest_alert = AnomalyAlertLog.objects.filter(is_handled=False).order_by('-anomaly_score').first()
-        if latest_alert and latest_alert.anomaly_score and latest_alert.anomaly_score > 0.70:
+        # V3.3.2 Fix: 只锁定最近5分钟内的未处理报警，避免由于历史随机分数据残留导致的误报捕获
+        time_limit = timezone.now() - timedelta(minutes=5)
+        latest_alert = AnomalyAlertLog.objects.filter(
+            is_handled=False, 
+            alert_time__gte=time_limit
+        ).order_by('-anomaly_score').first()
+        
+        # 从系统配置中获取动态识别阈值 (V3.3.3: 同步设计文档)
+        cfg = await sync_to_async(SystemConfig.get)()
+        thresh = cfg.ai_alert_threshold if cfg else 0.75
+
+        if latest_alert and latest_alert.anomaly_score and latest_alert.anomaly_score >= thresh:
             return latest_alert.record.device, latest_alert
         return None, None
 

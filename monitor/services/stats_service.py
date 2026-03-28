@@ -8,23 +8,27 @@ from . import ai_service
 from .cache_service import CacheService
 
 def calculate_rolling_oee(dev, local_now):
-
     """
-    统一 OEE 计算逻辑 (V3.0.9): 30分钟滑动窗口聚合
+    统一 OEE 计算逻辑 (V3.1.5): 30分钟滑动窗口聚合 (1:1 物理对齐法)
+    解决采样边界偏差，确保单机指标与全局指标逻辑闭环。
     """
     window_start = local_now - timedelta(minutes=30)
-    window_recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
-    first_rec = window_recs.order_by('timestamp').first()
+    recs = ProductionSensorData.objects.filter(device=dev, timestamp__gte=window_start)
     
-    if first_rec:
-        agg = window_recs.aggregate(s=Sum('actual_output'), i=Sum('input_qty'))
+    # 采用聚合查询获取 1:1 对齐的分母 (Total Loading Time)
+    agg = recs.aggregate(
+        s=Sum('actual_output'), 
+        i=Sum('input_qty'),
+        t_load=Sum('loading_time') # 分母核心：该窗口内累计占据的物理时间份额
+    )
+    
+    if agg['t_load'] and agg['t_load'] > 0:
         actual_out = agg['s'] or 0
         input_qty = agg['i'] or 0
-        delta_t_hours = max((local_now - first_rec.timestamp).total_seconds() / 3600.0, 5/60.0)
-        theo_max = dev.standard_capacity * delta_t_hours
+        # 潜力计算：标准产能 * (累计负载分钟 / 60)
+        theo_max = dev.standard_capacity * (agg['t_load'] / 60.0)
         
         if theo_max > 0:
-            # P 使用总投入（含次品）衡量速度，Q 使用良品/总投入衡量质量
             p_val = min(input_qty / theo_max, 1.0)
             q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
             return p_val * q_val
@@ -37,27 +41,33 @@ def get_device_matrix_data():
     window_start = local_now - timedelta(minutes=30)
     devices = list(DeviceInfo.objects.all())
     
-    # 2. 批量聚合 30 分钟滑动窗口数据 (V3.3.1 性能优化：单次查询代替 25 次)
-    from django.db.models import Sum, Min
+    # 2. 批量聚合 30 分钟滑动窗口数据 (V3.3.6 精准对齐版)
+    from django.db.models import Sum, Min, F
     agg_qs = ProductionSensorData.objects.filter(timestamp__gte=window_start) \
         .values('device_id') \
         .annotate(
             s=Sum('actual_output'), 
             i=Sum('input_qty'),
-            t_min=Min('timestamp')
+            t_min=Min('timestamp'),
+            # 采用 1:1 对齐：汇总 loading_time 作为时间基准，解决边界跳变
+            load_min_sum=Sum('loading_time')
         )
     agg_map = {row['device_id']: row for row in agg_qs}
     
     def calculate_oee_from_agg(dev, agg):
-        """基于聚合结果计算 OEE，保持与详情页逻辑对齐"""
-        if not agg or not agg['t_min']: return 0.0
-        # 实效理论跨度：从窗口第一条记录开始到当前，不少于 5 分钟
-        delta_hours = max((local_now - agg['t_min']).total_seconds() / 3600.0, 5/60.0)
+        """基于 1:1 对齐结果计算 P*Q，解决响应过慢与虚高问题"""
+        if not agg or not agg['load_min_sum']: return 0.0
+        
+        # 潜力计算：标准产能 * (累计负载分钟 / 60)
+        delta_hours = agg['load_min_sum'] / 60.0
         theo_max = dev.standard_capacity * delta_hours
+        
         actual_out = agg['s'] or 0
-        input_qty  = agg['i'] or actual_out # 投入兜底
-        input_qty  = agg['i'] or actual_out # 投入兜底
+        input_qty  = agg['i'] or actual_out 
+        
+        # P = 实际投入 / 理论最大产出潜力
         p_val = min(input_qty / theo_max, 1.0) if theo_max > 0 else 0.0
+        # Q = 合格良品 / 实际投入
         q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
         return p_val * q_val
 
@@ -184,20 +194,25 @@ def get_dashboard_stats():
         
         for r in recent_qs:
             # [A] 可用性：计算 600 条流水内的物理稼动率
+            # 采用实际步长（如 3s）进行累加，dt 为该步内的停机时间
             load = r.loading_time or 0.05
             dt = r.downtime or 0.0
-            total_run_time += (load - dt)
             total_load_time += load
+            total_run_time += (load - dt)
             
-            # [P] 表现度：计算运行期间的产出负荷
-            # 注意：仅统计记录发生时设备处于 Running 状态的情况
-            if r.device.current_status == 'Running':
+            # [P] 表现度：计算运行期间的产出负荷 (V3.3.1-B 专项修复)
+            # 摒弃 Live Status 过滤逻辑，改用「增量运行时间」判断
+            # 只有当该记录对应步长内存在实际运行时间（load > dt）时，才计入 P 的分子分母
+            run_step_min = load - dt
+            if run_step_min > 0:
                 total_actual_pieces += (r.input_qty or 0)
-                theo_seg = (r.device.standard_capacity or 0) * load / 60.0
+                # 分母：该设备在 run_step_min 时间内的理论产出潜力
+                theo_seg = (r.device.standard_capacity or 0) * (run_step_min / 60.0)
                 total_theo_pieces += theo_seg
         
         avg_a = round(total_run_time / total_load_time, 4) if total_load_time > 0 else 1.0
         if total_theo_pieces > 0:
+            # P = 实际产出 / (标准产能 * 实际运行时间)
             avg_p = round(min(total_actual_pieces / total_theo_pieces, 1.0), 4)
 
     # 4. 计算 Q (Quality) 与 OEE 聚合值

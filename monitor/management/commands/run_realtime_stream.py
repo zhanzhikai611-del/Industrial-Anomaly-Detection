@@ -26,6 +26,8 @@ from django.utils import timezone
 from monitor.models import (
     DeviceInfo, ProductionSensorData, AnomalyAlertLog, SystemConfig, SystemLog
 )
+from monitor.services.cache_service import CacheService
+from monitor.services import ai_service
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +78,7 @@ CLEANUP_EVERY  = 300    # 每 N 次心跳执行一次清理（300 × 3s ≈ 15 �
 #  核心生成函数（复用 simulate_real_cnc_data.py 同款逻辑）
 # ═══════════════════════════════════════════════════════════════════
 
-def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
+def _gen_running_record(device, ts, group_idx):
     """
     BUG FIX (V1.4.2): 原实现使用固定 LOADING_TIME=60分钟 计算每条 3秒 记录的产量，
     导致每条 3 秒记录产出约 1000 件（等于按整小时满负荷计算），造成日产量爆炸。
@@ -87,9 +89,8 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
       - loading_time 写入实际步长 STEP_MINS（0.05 分钟），而非固定 60 分钟
     """
     sc_mean, sp_mean = GROUP_PARAMS[group_idx]
-
     sc = float(np.random.normal(sc_mean, 1.5))
-    sp = float(max(0.0, np.random.normal(sp_mean, 0.015)))
+    sp = float(max(0, np.random.normal(sp_mean, 0.015)))
     
     # V1.4.2 修复：防止正常进给速度随机值过小而持续触发 LOW_VELOCITY 报警
     fv_mean = 20.0 if group_idx < 3 else 18.0
@@ -97,7 +98,7 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
 
     # 人工注入物理极限预警，以确保不同类型异常均匀分布
     cfg = SystemConfig.get()
-    if group_idx >= 2 and random.random() < (ANOMALY_PROB * 0.1): 
+    if group_idx >= 3 and random.random() < (ANOMALY_PROB * 0.1): 
         spike_type = random.choice(['HIGH_CURRENT', 'HIGH_POWER', 'LOW_VELOCITY'])
         if spike_type == 'HIGH_CURRENT':
             sc = cfg.spindle_current_high + random.uniform(2.0, 10.0)
@@ -111,18 +112,27 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
     is_worn = (group_idx >= 3)
     cap = device.standard_capacity
 
-    # ── 可用性 A：本步是否发生停机（概率性，以设备组别为权重）──────
-    # 由于步长极短 (3s)，将分钟级停机概率转换为每步概率
+    # [V3.3.1] 视觉效果优化：显著微抖动 (增加卡顿深度，使图表产生可见抖动)
     if group_idx == 0:
-        dt = 0.0
+        dt_prob = 0.0001
     elif group_idx == 1:
-        dt = round(random.uniform(0, 2), 1) if random.random() < 0.01 else 0.0
+        dt_prob = 0.001
     elif group_idx == 2:
-        dt = round(random.uniform(0, STEP_MINS), 2) if random.random() < 0.03 else 0.0
+        dt_prob = 0.005
     elif group_idx == 3:
-        dt = round(random.uniform(0, STEP_MINS), 2) if random.random() < 0.08 else 0.0
+        dt_prob = random.uniform(0.04, 0.08)
     else:
-        dt = round(random.uniform(0, STEP_MINS), 2) if random.random() < 0.15 else 0.0
+        dt_prob = random.uniform(0.08, 0.12)
+
+    if random.random() < dt_prob:
+        # 触发时停机占比调大 (40%-80%)，形成图表“毛刺”感
+        dt = round(random.uniform(STEP_MINS * 0.4, STEP_MINS * 0.8), 2)
+    else:
+        dt = 0.0
+
+    # 运行时间：扣除本步中的微型停机
+    run_step_min = STEP_MINS - dt
+    input_fraction = (cap / 60.0) * run_step_min
 
     # ── 性能 P：主轴倍率下降 ─────────────────────────────────────────
     if group_idx == 0:
@@ -130,22 +140,22 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
     elif group_idx == 1:
         perf_ratio = random.uniform(0.93, 0.98)
     elif group_idx == 2:
-        perf_ratio = random.uniform(0.88, 0.95)
+        perf_ratio = random.uniform(0.88, 0.94)
     elif group_idx == 3:
-        perf_ratio = random.uniform(0.78, 0.90)
+        perf_ratio = random.uniform(0.80, 0.88)
     else:
         perf_ratio = random.uniform(0.65, 0.82)
 
     # ── V5 脉冲累加器：每步精确时间份额，积累到整数才出一件 ─────────
-    input_fraction = cap / 3600.0 * STEP_SECS        # 本步理论产量份额（精确小数）
+    # 累加本步产出脉冲到 yield_buffer (增量驱动)
+    pulse = input_fraction * perf_ratio
+    device.yield_buffer = getattr(device, 'yield_buffer', 0.0) + pulse
 
     if dt > 0:   # 停机：本步产出=0
         good_output   = 0
         input_qty_val = 0
+        final_perf = 0.0
     else:
-        pulse = input_fraction * perf_ratio
-        device.yield_buffer += pulse
-
         if device.yield_buffer >= 1.0:
             # 物理限制：3秒内产量无论如何堆积，单次输出强限制为不超过1件，
             # 避免瞬间 OEE 性能 P 除法溢出超 100%
@@ -166,15 +176,16 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
 
         defects = 0
         if produced > 0:
-            device.defect_buffer += produced * defect_rate
+            device.defect_buffer = getattr(device, 'defect_buffer', 0.0) + (produced * defect_rate)
             if device.defect_buffer >= 1.0:
                 defects = min(1, int(device.defect_buffer))
                 device.defect_buffer -= defects
 
         good_output   = max(0, produced - defects)
         input_qty_val = produced
+        final_perf = perf_ratio
 
-    return ProductionSensorData(
+    rec = ProductionSensorData(
         device            = device,
         timestamp         = ts,
         spindle_current   = round(sc, 4),
@@ -187,27 +198,30 @@ def _gen_running_record(device, ts, group_idx) -> ProductionSensorData:
         input_qty         = input_qty_val,
         actual_output     = good_output,
     )
+    return rec, final_perf
 
-def _gen_idle_record(device, ts) -> ProductionSensorData:
+def _gen_idle_record(device, ts):
     sc = float(max(0, np.random.normal(0.3, 0.05)))
     sp = float(max(0, np.random.normal(0.002, 0.001)))
     fv = float(np.random.normal(0.0, 0.02))
-    return ProductionSensorData(
+    rec = ProductionSensorData(
         device=device, timestamp=ts,
         spindle_current=round(sc, 4), spindle_power=round(sp, 4), feed_velocity=round(fv, 4),
         machining_process='Idle', tool_condition=False,
         loading_time=0.0, downtime=0.0,
         input_qty=0, actual_output=0,   # 待机不投料
     )
+    return rec, 0.0
 
-def _gen_down_record(device, ts) -> ProductionSensorData:
-    return ProductionSensorData(
+def _gen_down_record(device, ts):
+    rec = ProductionSensorData(
         device=device, timestamp=ts,
         spindle_current=0.0, spindle_power=0.0, feed_velocity=0.0,
         machining_process='Down', tool_condition=False,
         loading_time=0.0, downtime=STEP_MINS,   # 停机时长=实际步长
         input_qty=0, actual_output=0,            # 停机不投料
     )
+    return rec, 0.0
 
 
 def _check_and_create_alert(record: ProductionSensorData) -> bool:
@@ -229,11 +243,14 @@ def _check_and_create_alert(record: ProductionSensorData) -> bool:
     else:
         return False
 
+    prob = ai_service.predict_proba(record)
+    if prob is None:
+        prob = random.uniform(0.60, 0.99)
     AnomalyAlertLog.objects.create(
         record        = record,
         alert_time    = record.timestamp,
         alert_type    = atype,
-        anomaly_score = round(random.uniform(0.60, 0.99), 4),
+        anomaly_score = round(prob, 4),
         is_handled    = False,
     )
     return True
@@ -249,14 +266,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS(
             '\n══════════════════════════════════════════\n'
-            '  🚀  实时数据流守护进程已启动 (DB 日志模式)\n'
+            '  🚀  实时数据流守护进程已启动 (Redis-Hybrid 模式)\n'
             f'  轮询间隔: {STREAM_INTERVAL}s | 异常概率: {ANOMALY_PROB:.0%}\n'
             '  按 Ctrl+C 安全退出\n'
             '══════════════════════════════════════════\n'
         ))
 
         tick = 0
-        # ★ 关键：在 while 循环外初始化设备列表和 yield_buffer
+        # ★ 关键：在 while 循环外初始化设备列表 and yield_buffer
         #   每次循环内只调用 refresh_from_db(fields=[...]) 更新状态，
         #   而不重建对象，从而让 yield_buffer/defect_buffer 持续积累。
         devices = list(DeviceInfo.objects.all())
@@ -302,27 +319,52 @@ class Command(BaseCommand):
                 records_created = 0
                 alerts_created  = 0
 
+                total_step_output = 0
                 for idx, dev in enumerate(devices):
-                    # 只更新会动态变化的字段，保留 yield_buffer/defect_buffer
-                    dev.refresh_from_db(fields=['current_status', 'current_group_id'])
+                    # [V3.3.4 Fix] 关键修复：强制从数据库同步最新状态（分组信息），
+                    # 避免由于内存对象过期导致 Copilot 修复后性能分不回升的问题。
+                    dev.refresh_from_db(fields=['current_group_id', 'current_status', 'maintenance_advice'])
+                    
                     status = dev.current_status
                     group_idx = min(max(dev.current_group_id - 1, 0), 4)
 
                     if status == 'Running':
-                        rec_obj = _gen_running_record(dev, now, group_idx)
+                        rec_obj, perf_ratio = _gen_running_record(dev, now, group_idx)
                         rec_obj.save()          # 逐条 save 获取 pk，便于立即关联 Alert
                         records_created += 1
+                        total_step_output += (rec_obj.actual_output or 0)
 
                         if _check_and_create_alert(rec_obj):
                             alerts_created += 1
                     elif status == 'Idle':
-                        rec_obj = _gen_idle_record(dev, now)
+                        rec_obj, perf_ratio = _gen_idle_record(dev, now)
                         rec_obj.save()
                         records_created += 1
                     else: # Down
-                        rec_obj = _gen_down_record(dev, now)
+                        rec_obj, perf_ratio = _gen_down_record(dev, now)
                         rec_obj.save()
                         records_created += 1
+                    
+                    # [V3.3.0] 关键修复：同步更新 Redis 快照，供 Dashboard 矩阵及监控列表使用
+                    prob = ai_service.predict_proba(rec_obj) or 0.0
+                    snapshot = {
+                        'device_id': rec_obj.device_id,
+                        'device_name': dev.device_name,
+                        'device_type': dev.device_type,
+                        'current_status': dev.current_status,
+                        'spindle_current': float(rec_obj.spindle_current),
+                        'spindle_power': float(rec_obj.spindle_power),
+                        'feed_velocity': float(rec_obj.feed_velocity),
+                        'anomaly_score': float(round(prob, 4)),
+                        'oee_val': float(perf_ratio) if dev.current_status == 'Running' else 0.0,
+                        'last_update': now.isoformat(),
+                        'machining_process': rec_obj.machining_process,
+                    }
+                    CacheService.update_device_snapshot(dev.id, snapshot)
+
+                # [V3.3.0] 同步 Redis 今日产量计数器
+                if total_step_output > 0:
+                    CacheService.incr_daily_output(total_step_output)
 
                 log_text = f'写入 {records_created} 条  报警 {alerts_created} 条'
                 self.stdout.write(f'[{tick:>6}] ▶  {now:%H:%M:%S}  ' + log_text)
