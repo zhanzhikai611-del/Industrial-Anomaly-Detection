@@ -105,7 +105,7 @@ GROUP_BASES = {
     1: (15.0, 0.15), # Excellent (新机/刚维修)
     2: (24, 0.20), # Good
     3: (28.3, 0.28), # Fair (磨损监控区 - 增加电流基准使之靠近黄区)
-    4: (28.7, 0.28), # Degraded (建议维护 - 适当压低使之靠近黄区)
+    4: (28.6, 0.28), # Degraded (建议维护 - 适当压低使之靠近黄区)
     5: (36.0, 0.40), # Critical (风险极高)
 }
 
@@ -516,6 +516,9 @@ def run_realtime_simulation():
         dev.defect_buffer = 0.0
         dev.maintenance_advice = '设备运行平稳，暂无维修建议。'
         dev.save(update_fields=['yield_buffer', 'defect_buffer', 'maintenance_advice'])
+    
+    # [V3.3.1] 关键修复：同步重置 Redis 产量计数器，保证 1:1 物理对齐
+    CacheService.get_daily_output(force_sync=True)
     
     # 记录上一次的组别，用于检测“维修/状态变更”
     prev_groups = {dev.id: dev.current_group_id for dev in devices}

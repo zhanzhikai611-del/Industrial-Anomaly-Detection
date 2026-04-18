@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Sum, Count, Q, Max
 from django.db.models.functions import TruncHour
+from django.core.cache import cache
 from ..models import DeviceInfo, ProductionSensorData, AnomalyAlertLog, SystemConfig
 from . import ai_service
 from .cache_service import CacheService
@@ -38,42 +39,39 @@ def calculate_rolling_oee(dev, local_now):
     return 0.0
 
 def get_device_matrix_data():
-    """提取自 api_device_matrix 的核心数据计算逻辑 (V3.3.1 优化版)"""
+    """提取自 api_device_matrix 的核心数据计算逻辑 (V3.5.0 性能加速版)"""
+    
+    # 0. 优先尝试从全量缓存获取结果 (高频看板场景)
+    KEY_MATRIX_CACHE = "cache:device_matrix"
+    cached_matrix = cache.get(KEY_MATRIX_CACHE)
+    if cached_matrix:
+        return cached_matrix
+
     # 1. 初始化基础环境
     local_now = timezone.localtime(timezone.now())
     window_start = local_now - timedelta(minutes=30)
     devices = list(DeviceInfo.objects.all())
     
-    # 2. 批量聚合 30 分钟滑动窗口数据 (V3.3.6 精准对齐版)
-    from django.db.models import Sum, Min, F
+    # 2. 批量聚合 30 分钟滑动窗口数据
+    from django.db.models import Sum, Min
     agg_qs = ProductionSensorData.objects.filter(timestamp__gte=window_start) \
         .values('device_id') \
         .annotate(
             s=Sum('actual_output'), 
             i=Sum('input_qty'),
-            t_min=Min('timestamp'),
-            # V3.3.6 精准对齐：同时提取负载时间与停机时间，实现纯净性能 (P) 隔离
             load_min_sum=Sum('loading_time'),
             down_min_sum=Sum('downtime')
         )
     agg_map = {row['device_id']: row for row in agg_qs}
     
     def calculate_oee_from_agg(dev, agg):
-        """基于 1:1 对齐结果计算 P*Q，解决响应过慢与虚高问题"""
         if not agg or not agg['load_min_sum']: return 0.0
-        
-        # 关键修正：计算 P 时分母需排除停机时间 (Downtime)
-        # 这样当设备从 Down->Running 时，denominator 只包含 Running 的时间片段，数值瞬间恢复
         runtime_mins = agg['load_min_sum'] - (agg['down_min_sum'] or 0)
         delta_hours = max(0, runtime_mins) / 60.0
         theo_max = dev.standard_capacity * delta_hours
-        
         actual_out = agg['s'] or 0
         input_qty  = agg['i'] or actual_out 
-        
-        # P = 实际投入 / 理论最大产出潜力
         p_val = min(input_qty / theo_max, 1.0) if theo_max > 0 else 0.0
-        # Q = 合格良品 / 实际投入
         q_val = min(actual_out / input_qty, 1.0) if input_qty > 0 else 1.0
         return p_val * q_val
 
@@ -106,8 +104,7 @@ def get_device_matrix_data():
                 'status_label': 'Stopped' if dev.current_status == 'Down' else (dev.current_status if dev.current_status != 'Idle' else 'Standby')
             })
     else:
-        # Fallback path: 从数据库直接获取最新一条记录用于过程名和 AI 分数
-        from . import ai_service
+        # Fallback path
         from django.db.models import Max
         latest_recs = ProductionSensorData.objects.filter(id__in=ProductionSensorData.objects.values('device_id').annotate(max_id=Max('id')).values('max_id'))
         latest_map = {r.device_id: r for r in latest_recs}
@@ -116,14 +113,8 @@ def get_device_matrix_data():
             latest = latest_map.get(dev.id)
             agg = agg_map.get(dev.id)
             oee_val = calculate_oee_from_agg(dev, agg)
-            
-            if latest is None:
-                score, process = 0.0, '--'
-            else:
-                # [V3.4.6] 统一读取持久记录，确保与详情页、Simulation 1:1 对齐
-                score = latest.anomaly_score or 0.0
-                process = latest.machining_process
-
+            score = latest.anomaly_score if latest else 0.0
+            process = latest.machining_process if latest else '--'
             is_running = dev.current_status == 'Running'
             rows.append({
                 'device_id': dev.id, 'device_name': dev.device_name, 'device_type': dev.device_type or '--',
@@ -136,8 +127,11 @@ def get_device_matrix_data():
                 'status_label': 'Stopped' if dev.current_status == 'Down' else (dev.current_status if dev.current_status != 'Idle' else 'Standby')
             })
 
-    # 4. 默认排序：Running 靠前，其次按风险降序
+    # 4. 默认排序
     rows.sort(key=lambda x: (x['current_status'] != 'Running', -x['anomaly_score']))
+    
+    # 5. 写入缓存 (有效期 2s，应对瞬时高频)
+    cache.set(KEY_MATRIX_CACHE, rows, timeout=2)
     return rows
 
 def get_dashboard_stats():
@@ -165,9 +159,10 @@ def get_dashboard_stats():
 
     # 如果有全量缓存，则返回带基准修正的缓存数据
     if cached_data:
+        # [V3.5.0 定制修正] Demo 环境下良品产出直接以数据库为准，解决 Redis 虚高导致的次品抹平问题
+        realtime_output = db_actual
+        
         cached_data['total_output'] = realtime_output
-        # 实时修正：次品数必须基于数据库最新的投入数和最新的良品数
-        # 这里的 db_input 是当前物理值，比 cached_data 里的快
         cached_data['total_input'] = db_input
         cached_data['total_defects'] = max(0, db_input - realtime_output)
         
@@ -229,13 +224,9 @@ def get_dashboard_stats():
     totals = ProductionSensorData.objects.filter(timestamp__gte=today_start).aggregate(actual_total=Sum('actual_output'), input_total=Sum('input_qty'))
     db_actual = totals['actual_total'] or 0
     db_input  = totals['input_total'] or 0
-    total_output = CacheService.get_daily_output() or db_actual
-    
-    # 强制同步：如果 Redis 值远小于 DB 值（可能刚重启），以 DB 为准
-    if total_output < db_actual:
-        total_output = db_actual
-        
+    total_output = db_actual # 良品产出直接以数据库为准，确保与投入数 (total_input) 形成真实差值
     total_input = db_input
+    
     avg_q = min(round(total_output / total_input, 4), 1.0) if total_input > 0 else 1.0
     avg_oee = round(avg_a * avg_p * avg_q, 4)
 
@@ -273,7 +264,7 @@ def get_dashboard_stats():
         'running_devices': running_count, 'idle_devices': idle_count, 'down_devices': down_count,
         'total_devices': total_devices, 'avg_a': avg_a, 'avg_p': avg_p, 'avg_q': avg_q, # 补全基础浮点值
         'unhandled_alerts': unhandled_count, 'alert_distribution': alert_dist,
-        'total_defects': total_input - total_output, 'alerts': alerts,
+        'total_defects': max(0, total_input - total_output), 'alerts': alerts,
     }
     CacheService.set_dashboard_cache(res)
     return res

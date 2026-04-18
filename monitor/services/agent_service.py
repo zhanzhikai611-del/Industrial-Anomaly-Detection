@@ -8,10 +8,11 @@ from asgiref.sync import sync_to_async
 from datetime import timedelta
 from django.utils import timezone
 from ..models import DeviceInfo, AnomalyAlertLog, ProductionSensorData, SystemConfig
+from .knowledge_service import knowledge_service
 
 logger = logging.getLogger(__name__)
 
-# 配置参数 (V3.1.0: 统一维护)
+# 配置参数 (V3.5.0)
 API_KEY = "sk-6244491a10cd439b9d9013b557450741"
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 MODEL_NAME = "qwen3.5-flash"
@@ -20,9 +21,8 @@ client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
 class AgentService:
     """
-    Agent 服务类 (V3.1.0): 
-    整合原 ai_engine.py 的 RAG 能力与 consumers.py 的自主决策循环。
-    实现“思考-决策-执行”的闭环逻辑。
+    Agent 服务类 (V3.5.0): 
+    整合非结构化知识 RAG 与 结构化数据 Tool-use。
     """
 
     @staticmethod
@@ -76,7 +76,11 @@ class AgentService:
 
     @classmethod
     async def ask_copilot(cls, user_input: str) -> Tuple[str, List[Dict[str, Any]]]:
-        """处理 Ask 模式：RAG 问答"""
+        """处理 Ask 模式：RAG + Tool-use 混合问答"""
+        
+        # 1. 语义检索 (非结构化)
+        knowledge_context = await sync_to_async(knowledge_service.search)(user_input)
+        
         tools = [{
             "type": "function",
             "function": {
@@ -92,8 +96,13 @@ class AgentService:
             }
         }]
 
+        # 2. 增强 Prompt
+        system_prompt = "你是工厂 CNC 智能助理。请优先结合【背景知识】和【实时工具数据】回答。"
+        if knowledge_context:
+            system_prompt += f"\n\n【背景知识检索自本地文档库】：\n{knowledge_context}"
+
         messages = [
-            {"role": "system", "content": "你是工厂的 CNC 智能助理。必须使用 get_device_recent_data 查询真实数据。"},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
         ]
 
@@ -111,7 +120,6 @@ class AgentService:
                 for tc in resp_msg.tool_calls:
                     if tc.function.name == "get_device_recent_data":
                         args = json.loads(tc.function.arguments)
-                        # V3.1.1 Fix: 在异步上下文中调用同步 DB 工具函数必须 wrap (解决 Ask 模式失效)
                         func_resp = await sync_to_async(cls.get_device_recent_data)(args.get("device_names", []))
                         try:
                             data_context.extend(json.loads(func_resp))
@@ -133,9 +141,6 @@ class AgentService:
     @staticmethod
     @sync_to_async
     def get_highest_risk_device():
-        """
-        [回滚 V3.3.2] 基于报警日志的被动锁定逻辑。
-        """
         time_limit = timezone.now() - timedelta(minutes=5)
         latest_alert = AnomalyAlertLog.objects.filter(
             is_handled=False, 
@@ -158,7 +163,7 @@ class AgentService:
     @sync_to_async
     def get_harvest_data(device_id):
         recs = ProductionSensorData.objects.filter(device_id=device_id).order_by('-timestamp')[:10]
-        return "\\n".join([f"Time: {r.timestamp.strftime('%H:%M:%S')} | Spindle:{r.spindle_current:.2f}A" for r in recs])
+        return "\n".join([f"Time: {r.timestamp.strftime('%H:%M:%S')} | Spindle:{r.spindle_current:.2f}A" for r in recs])
 
     @staticmethod
     @sync_to_async
@@ -175,17 +180,27 @@ class AgentService:
 
     @classmethod
     async def run_diagnosis_flow(cls, device_id, device_name, harvest_data, log_cb: Callable):
-        """AI 诊断工作流"""
-        await log_cb("[AI] 正在进行预警数据的交叉验证分析...")
-        await asyncio.sleep(2)
+        """AI 诊断工作流 (V3.5.0: 全面接入 RAG 知识检索)"""
+        await log_cb("[AI] 正在检索本地故障处理标准与 SOP 说明...")
         
-        prompt = f"设备 '{device_name}' 触发高危预警。历史数据：\\n{harvest_data}\\n请给出简短诊断建议（3句以内）。"
+        # 1. 语义检索：基于设备名和当前异常情况获取文档知识
+        knowledge_context = await sync_to_async(knowledge_service.search)(f"{device_name} 故障诊断与处理规范")
+        
+        await log_cb("[AI] 正在进行预警数据的交叉验证分析...")
+        await asyncio.sleep(1)
+        
+        # 2. 构造融合知识的诊断提示词
+        prompt = f"设备 '{device_name}' 触发高危预警。\n"
+        if knowledge_context:
+            prompt += f"参考知识库规范：\n{knowledge_context}\n\n"
+        prompt += f"待诊断实时数据：\n{harvest_data}\n\n请结合知识库规范和实时数据，给出简短诊断建议（3句以内）。"
+
         try:
             loop = asyncio.get_event_loop()
             resp = await loop.run_in_executor(None, lambda: client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
-                    {"role": "system", "content": "You are a CNC expert."},
+                    {"role": "system", "content": "You are a CNC industrial expert. Respond in Chinese."},
                     {"role": "user", "content": prompt}
                 ]
             ))
@@ -199,9 +214,6 @@ class AgentService:
 
     @classmethod
     async def run_autonomous_loop(cls, log_cb: Callable, should_continue: Callable):
-        """
-        自主控制循环 (原方案：基于事件驱动)
-        """
         await log_cb("[System] Copilot 智能体已接管系统，正在初始化扫描路径...")
         
         while should_continue():
@@ -214,18 +226,15 @@ class AgentService:
                 await asyncio.sleep(5)
                 continue
             
-            # 执行防御性操作
             await log_cb(f"[Target] 锁定风险源：{device.device_name} (分数: {int(alert.anomaly_score*100)}%)")
             await cls.set_device_status(device.id, 'Stopped')
             await log_cb("[Action] 触发紧急避险：设备已远程停机。")
             await asyncio.sleep(2)
             
-            # AI 诊断
             h_data = await cls.get_harvest_data(device.id)
             await cls.run_diagnosis_flow(device.id, device.device_name, h_data, log_cb)
             await asyncio.sleep(3)
             
-            # 自动化修复
             await log_cb("[Recovery] 正在尝试自动化系统复位与报警清理...")
             await cls.perform_recovery(device.id)
             await log_cb("[Status] 设备已恢复运行至安全组，报警记录已归档。")

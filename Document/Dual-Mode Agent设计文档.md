@@ -1,10 +1,10 @@
-# 双模态 AI 交互中心 (Dual-Mode Agent) 设计与实现文档 (V2.1.0)
+# 双模态 AI 交互中心 (Dual-Mode Agent) 设计与实现文档 (V3.5.0)
 
 ## 1. 核心概述
 
-在 V2.1.0 版本中，原有的单一自动化 "Copilot 模式" 升级为 **"双模态 AI 交互中心"**。系统不仅保留了原有的全自动运维接管能力，还引入了全新的 **Ask 模式 (智能对话辅助)**。通过双模态架构，不仅能实现“发现异常 -> 自动干预”的全自动闭环，还能提供“实时提问 -> 数据检索 -> 智能解答”的交互式 RAG (Retrieval-Augmented Generation) 能力。
+在 V3.5.0 版本中，原有的单一自动化 "Copilot 模式" 升级为 **"双模态 AI 交互中心"**。系统不仅保留了原有的全自动运维接管能力，还引入了全新的 **Ask 模式 (智能对话辅助)**。通过双模态架构，不仅能实现“发现异常 -> 自动干预”的全自动闭环，还实现了 **Copilot 与 Ask 双模式对知识库的全面覆盖**，提供基于实时数据与本地文档库的混合调度能力。
 
-在技术架构上，系统基于 **Django Channels** 实现了全双工的 WebSocket 通信，并在后端引入了 **严格的状态机与协程管控**，确保 "Copilot"（自动运行）与 "Ask"（手动问答）两种模式在同一时间互斥，防止数据流重叠和冲突。此外，Ask 模式接入了 **大模型 Function Calling** 能力，实现意图识别与业务系统真实状态数据库的精准互通。
+在技术架构上，系统基于 **Django Channels** 实现了全双工的 WebSocket 通信，并在后端引入了 **严格的状态机与协程管控**，确保 "Copilot"（自动运行）与 "Ask"（手动问答）两种模式在同一时间互斥，防止数据流重叠和冲突。此外，Ask 模式接入了 **大模型 Function Calling** 与 **FAISS 语义搜索** 双引擎，实现意图识别、业务系统数据库与非结构化知识库的精准互通。
 
 ## 2. 架构设计
 
@@ -18,9 +18,10 @@
     -   路由 `ws/copilot/` 绑定至 `CopilotConsumer` (位于 `monitor/consumers.py`)。
     -   在 Consumer 中增加了 `receive` 方法以扮演消息路由和状态机的角色，根据前端传入的 JSON 指令动态切换工作流。
 -   **智能体核心 (AI Engine):**
-    -   `monitor/ai_engine.py` 作为全新的大模型驱动层，集成了基于 OpenAI SDK 接口标准的通义千问 (Qwen-max) API。
-    -   Copilot 模式继续保留原有的定时轮询与紧急干预逻辑 (`run_agent_loop`)。
-    -   Ask 模式使用 Function Calling 调度本地 RAG 工具函数 (`get_device_recent_data`) 查询真实设备状态，交由大模型整理返回给用户。
+    -   `monitor/services/agent_service.py` 作为大模型驱动层，集成了基于 OpenAI SDK 接口标准的通义千问 (Qwen-max) API。
+    -   `monitor/services/knowledge_service.py` 专门负责非结构化知识的向量化处理与检索。
+    -   Copilot 模式继续保留原有的定时轮询与紧急干预逻辑 (`run_autonomous_loop`)。
+    -   Ask 模式首先触发语义检索，随后使用 Function Calling 调度本地工具函数 (`get_device_recent_data`) 查询真实设备状态。
 
 ### 2.2 双模态状态互斥与生命周期管理
 
@@ -45,84 +46,68 @@
 3.  **安全停机 (Safety Shutdown - Action):**
     -   *行为:* 调用 ORM 将目标设备的 `current_status` 强制修改为 `Stopped`。立即物理级介入，防止刀具损毁或生产事故。
 4.  **数据快照采集 (Data Harvesting):**
-    -   *行为:* 提取该设备在异常发生前后的最近 10 条真实传感器数据（涉及主轴电流、功率、进给速度等），为 LLM 提供精准数字孪生上下文。
+    -   *行为:* 提取该设备在异常发生前后的最近 10 条真实传感器数据，为 LLM 提供精准数字孪生上下文。
 5.  **AI 智能诊断 (AI Diagnosis):**
-    -   *行为:* 组装系统 Prompt 和采集到的上下文数据，通过 API 发送给千问大模型。模型扮演专家提炼简短诊断反馈推至终端。
-    -   **[V2.2.0 联动增强]**: 诊断结论将同步持久化至数据库 `DeviceInfo.maintenance_advice` 字段。这意味着 AI 生成的专业建议（如“刀具磨损，建议更换”）将直接同步至 3D 数字孪生及所有监控终端，实现“瞬时日志日志 -> 业务工单”的转化。
+    -   *行为:* 组装系统 Prompt 和采集到的上下文数据，通过 API 发送给模型。模型扮演专家提炼简短诊断反馈推至终端。
+    -   **联动增强**: 诊断结论将同步持久化至数据库 `DeviceInfo.maintenance_advice` 字段。
 6.  **安全恢复 (Recovery):**
     -   *行为:* 模拟维修干预（软复位），重置特征组 `current_group_id`，警报归档恢复 `Running` 状态。
 7.  **系统重置与重绘 (Reset & Refresh):**
     -   *行为:* 向前端下发 `refresh` 指令重新拉取 API，保证底层图表与状态机同步。
 
-### 2.4 Ask 模式的 RAG 与 Function Calling 技术
+### 2.4 Ask 模式的结构化 Data-Retrieval (Function Calling)
 
-Ask 模式的本质是一个结合了本地实时数据库检索能力的智能问答系统。为了实现“语义化问题 -> 结构化查询 -> 自然语言总结”的完整链路，系统采用了 **Function Calling (工具调用)** 机制。
+Ask 模式支持基于“三次握手”的多轮会话，以实现对实时数据库的安全穿透：
 
-#### 2.4.1 详细交互流程 (三次握手交互模型)
-
-不同于普通的单次闲聊，Ask 模式在后台经历了类似“三次握手”的多轮会话（但在 WebSocket 前端感知中仍为一次异步请求）：
-
-1.  **第一轮：意图识别 (Identify Intent)**
-    *   **发起方:** 本地服务器 (`monitor/ai_engine.py`) -> 大模型 (LLM)。
-    *   **动作:** 服务端将用户提问（如：“现在哪台设备风险最高？”）连同系统预设的工具集定义 (`TOOLS`) 发送给 LLM。
-    *   **产出:** LLM 检测到用户意图涉及实时数据，不直接回答，而是返回一个特殊的 **`tool_calls`** 结构，指明要调用的函数名（如 `get_device_recent_data`） and 参数（如 `device_names: ['all']`）。
-
-2.  **第二轮：数据穿透 (Data Penetration)**
-    *   **发起方:** 本地服务器 (`monitor/ai_engine.py`) -> 本地数据库 (MySQL)。
-    *   **动作:** 服务端解析 LLM 发回的 `tool_calls`。**这是最关键的解析步骤**，发生在 `ai_engine.py` 的异步执行线程中。它负责根据 LLM 指定的参数执行 Python 业务逻辑，通过 Django ORM 从 `DeviceInfo` 和 `AnomalyAlertLog` 中提取真实的传感器快照。
-    *   **产出:** 穿透数据库后，服务端组装一个包含设备状态、风险分数、报警原因的 JSON 数据包，并将其作为“工具角色 (tool role)”的消息回复给 LLM。
-
-3.  **第三轮：归纳总结 (Summarization)**
-    *   **发起方:** 本地服务器 (`monitor/ai_engine.py`) -> 大模型 (LLM)。
-    *   **动作:** 服务端将最初的问题、LLM 第一轮的 `tool_calls` 以及刚刚获得的本地真实数据 (`tool response`) 全部打包，再次发送给 LLM。
-    *   **产出:** LLM 吸收了注入的真实实时数据，生成最终的专业自然语言回复。服务端通过 WebSocket (`monitor/consumers.py`) 将回复推送给前端。
-
-#### 2.4.2 解析逻辑与执行模块
-
-*   **执行模块:** 系统在 **`monitor/ai_engine.py`** 中定义了 `ask_copilot_with_tools` 函数。该模块是整个 AI 调度的“中枢神经”。
-*   **解析逻辑:**
-    1.  服务端接收到用户消息后，通过 OpenAI 兼容接口向大模型声明可调用的本地 API 清单。
-    2.  利用 `json.loads(tool_call.function.arguments)` 解析大模型生成的参数字符串。
-    3.  通过映射字典，将大模型的意图映射到本地定义的 RAG 函数 `get_device_recent_data` 上，从而实现数据的安全读取。
-    4.  通过 `data_context` 变量保留一份原始 JSON 副本，随 AI 文本一并下发，供前端进行结构化渲染（卡片或表格）。
+1.  **第一轮：意图识别 (Identify Intent)**: LLM 检测到用户意图涉及实时数据，返回 `tool_calls`。
+2.  **第二轮：数据穿透 (Data Penetration)**: 服务端解析工具调用，通过 Django ORM 提取真实的传感器快照。
+3.  **第三轮：归纳总结 (Summarization)**: 将所有背景（含 RAG 文档片段）与工具返回的数据打包发送给 LLM，生成最终回复。
 
 ### 2.5 核心代码模块映射 (Implementation Modules)
 
 | 模块 / 文件 | 主要承担的职责 |
 |---|---|
-| `monitor/consumers.py` | **状态机核心与 WebSocket 总线**：统一接管 `ws/copilot/` 路由，处理 `receive` 请求，维护 `agent_task` 协程生命周期，执行 Copilot 单独监控流，并主导模式互斥。 |
-| `monitor/ai_engine.py` | **AI 大脑与 Function Calling 引擎**：负责衔接 Qwen-max，注册、解析、执行 `get_device_recent_data` 函数并处理大模型两段式 Ask 对话返回或 Copilot 单次诊断推断。 |
-| `monitor/templates/monitor/dashboard.html` | **双模态 UI 适配**：囊括了 Ask 模式的毛玻璃风格聊天窗 (`#ask-modal`) 及其交互 JS，并融合传统的全屏 Copilot Terminal UI。 |
-| `monitor/templates/monitor/base.html` | **Split Button 入口**：引入全新样式的原生 HTML+CSS “主按钮/下拉菜单”混合热区，提供清晰的模式入口。 |
+| `monitor/consumers.py` | **状态机核心与 WebSocket 总线**：维护 `agent_task` 协程生命周期，主导模式互斥。 |
+| `monitor/services/agent_service.py` | **Agent 大脑**：整合 RAG 与 Tool-use，负责多轮对话逻辑与提示词注入。 |
+| `monitor/services/knowledge_service.py` | **RAG 引擎**：负责本地 Markdown 文件的扫描、FAISS 向量检索及 Embedding 生成。 |
+| `monitor/management/commands/build_rag_index.py` | **索引工具**：手动触发离线索引构建任务的任务。 |
+| `monitor/templates/monitor/dashboard.html` | **UI 适配**：Ask 模式悬浮窗交互与 Copilot Terminal UI。 |
 
-## 3. 关键技术点回顾
+---
 
-### 3.1 线程池解决同步阻塞
-在 `ai_engine.py` 与 `consumers.py` 中处理请求时，底层使用的是同步的 OpenAI Client，为了防止因为大模型网络延迟或生成过长导致 ASGI Worker (Daphne) 出现事件循环阻塞引发客户端断连，我们在处理请求时利用 AsyncIO 提供的线程池特性进行包裹执行：
-```python
-loop = asyncio.get_event_loop()
-final_reply, data_context = await loop.run_in_executor(None, ask_copilot_with_tools, user_input)
-```
+## 3. 语义化 RAG 架构设计 (V3.5.0 新增)
 
-### 3.2 提示词工程 (Prompt Engineering) 与 `all` 策略
-- **Copilot 模式提示工程**: 采用强控 System Prompt，并在 User prompt 中硬性约定回复长度（“最多3句”），并提供业务常识暗示（“电流激增意味着刀具严重磨损”），彻底避免 LLM 终端日志的格式发散。
-- **Ask 模式 `all` 策略**: 为应对用户习惯使用的模糊或总结性提问（例如：“现在车间的设备情况咋样？”），我们对 `System Prompt` 进行了补充。明确告知大模型：可以传入 `['all']` 查询。在后台接收 `all` 信号后，ORM 函数会自动聚合高风险权重 (`anomaly_score > 0.4`) 的设备进行针对性回答，实现了智能的“抓大放小”。
+为了解决 Agent 无法回答非结构化知识（如：技术手册、排查规范）的问题，系统引入了基于向量检索的深度 RAG 架构。
 
-### 3.3 Django 异步 ORM 操作
-因后台轮询与工具执行环境位于 ASGI 事件循环中，而 Django ORM 默认是同步的，所以大量引入了 `asgiref.sync.sync_to_async` 包装器进行保护性读写（尤其在 Copilot 的无限循环与 `AnomalyAlertLog` 读取分析中）。
+### 3.1 核心技术栈
+- **向量数据库 (Vector Store):** 采用 **FAISS (IndexFlatL2)**，实现低延迟的向量匹配。
+- **嵌入模型 (Embedding):** 阿里云 **`text-embedding-v2`**，提供 1536 维度的工业语义空间。
+- **文档范围:** 递归扫描 `Document/` 目录下的所有 **.md** 文件。
 
-### 3.4 前端 Glass Wall 与视觉反馈
--   **Copilot 交互阻断:** `#copilot-overlay` 绝对定位全屏覆盖，设置 `pointer-events: auto`，拦截一切点击事件，保证系统“被接管”的视觉与物理真实感。增加 `body.copilot-active` 实现屏幕边缘浅蓝色“呼吸灯”效果（box-shadow inset）。
--   **Ask 界面与表格嵌入:** Ask 消息分为 `user` 及 `ai` 两派样式。通过在 WS 返回中下发原生的二维数据表，配合 `font-family: 'Roboto Mono'` 生成具备科技感的行内解析表格，完美补齐了纯文本分析的短板。
+### 3.2 离线处理流水线 (The Ingestion Flow)
+1. **清理与预处理**: 去除 Markdown 格式干扰，保留核心文本内容。
+2. **切片 (Chunking)**: 块大小 512，重叠 50 字符，确保切片边界语义不丢失。
+3. **向量化**: 调用 Embedding API 将切片转化为高维向量，并存储至 `index.faiss`。
 
-### 3.5 预见性干预：AI 软报警机制 (V3.4.5)
-为了解决 Agent 对“高风险但未越限”设备的感知迟钝问题，系统引入了 **AI 软报警 (AI Soft Alarm)** 机制：
--   **生成逻辑**：仿真引擎每 3 秒预计算一次 AI 概率。若 $\text{prob} > 0.75$，即使物理电流正常，也会静默插入一条 `AI_SOFT_SIGNAL` 类型的报警。
--   **标靶作用**：该记录不触发前端弹窗、不计入看板报警总数统计，仅作为 Agent 后台扫描的“电子红点”。
--   **Agent 响应**：一旦扫描到软报警，Agent 会跳出单纯的“阈值触发逻辑”，转而进入“AI 驱动模式”，主动锁定该设备并执行停机/诊断流。
+### 3.3 实时检索流程 (Dual-Mode Integration)
+系统在 `AgentService` 中为两种模式均集成了语义搜索逻辑：
+- **Ask 模式 (交互式)**：用户的每次提问均会并发触发一次语义搜索。
+- **Copilot 模式 (自动化)**：在 `run_diagnosis_flow` 中，系统自动检索本地故障处理规范与 SOP。
+- **处理方式**: 检索 Top-3 的相关片段。如果 Score 匹配度高，则将片段注入 System Prompt 的知识背景区。
+- **混合注入示例**: `system_prompt = "已知背景知识：{chunks}\n实时设备数据：{tool_resp}\n请根据以上信息回答..."`
 
-## 4. 扩展性探讨与未来建议 (V3.0 Outlook)
+---
 
-1.  **深入 ReAct (Reasoning and Acting) 模式:** V2.1.0 已经在 Ask 模式中验证了 Function Calling 读取能力。V3.0 可将 Copilot 的硬编码干预流（关停、复位）也声明成 Tools，赋予 LLM 更高权限的 Action，令模型结合最新反馈自主决定修复时机。
-2.  **长下文对话记忆 (Session Memory):** 目前的 Ask 模块以单向的“一问一答”实现。未来可通过持久化聊天 `messages` 数组（使用 Redis 或 PostgreSQL 保存），进而支持包含指代消解的持续追问（如：“刚才那台精雕设备，它的历史报警记录是什么？”）。
-3.  **多功能工具集纵向扩散:** 面向生产管理实际，只需进一步暴露数据库 API，开发更多诸如 `get_production_plan()`（产线进度核对）、`trigger_maintenance_ticket()`（生成工单安排任务） 等工具函数，让 AI 助手真正接管复杂繁冗的车间 ERP 管理节点。
+## 4. 关键技术点回顾
+
+### 4.1 线程池解决同步阻塞
+利用 `loop.run_in_executor(None, ...)` 包裹同步的 OpenAI 和 FAISS 操作，防止 ASGI Worker 阻塞。
+
+### 4.2 预见性干预：AI 软报警机制
+仿真引擎每 3 秒生成一次概率。若 $\text{prob} > 0.75$，静默插入 `AI_SOFT_SIGNAL` 报警，引导 Agent 提前锁定风险源。
+
+## 5. 扩展性探讨与未来建议 (V4.0 Outlook)
+
+1.  **深入 ReAct (Reasoning and Acting) 模式:** 将 Copilot 的硬编码干预流声明成 Tools，赋予 LLM 自主决策权。
+2.  **长下文对话记忆 (Session Memory):** 引入 Redis 存储会话历史。
+3.  **外部知识扩展**: 接入互联网 API 实时搜索行业最新切削标准。
