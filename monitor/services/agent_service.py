@@ -142,16 +142,23 @@ class AgentService:
     @sync_to_async
     def get_highest_risk_device():
         time_limit = timezone.now() - timedelta(minutes=5)
+        # [V3.5.3] 扫描逻辑升级：仅寻找状态为 Running 的高风险设备。
+        # 理由：如果设备已经是 Stopped/Idle，说明 Copilot 或人工已经在处理，无需重复锁定。
         latest_alert = AnomalyAlertLog.objects.filter(
             is_handled=False, 
-            alert_time__gte=time_limit
+            alert_time__gte=time_limit,
+            record__device__current_status='Running'
         ).order_by('-anomaly_score').first()
         
         cfg = SystemConfig.objects.first()
         thresh = cfg.ai_alert_threshold if cfg else 0.75
 
         if latest_alert and latest_alert.anomaly_score and latest_alert.anomaly_score >= thresh:
-            return latest_alert.record.device, latest_alert
+            dev = latest_alert.record.device
+            # [V3.5.3] 原子级清理：一旦锁定该设备，立即将该设备所有积压的未处理报警归档。
+            # 这能有效解决 AI 诊断期间产生“幽灵报警”导致的重复触发问题。
+            AnomalyAlertLog.objects.filter(record__device_id=dev.id, is_handled=False).update(is_handled=True)
+            return dev, latest_alert
         return None, None
 
     @staticmethod

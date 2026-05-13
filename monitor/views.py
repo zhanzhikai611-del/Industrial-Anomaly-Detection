@@ -169,7 +169,9 @@ def event_view(request):
     from datetime import timedelta
     import json
     
-    events_list = AnomalyAlertLog.objects.select_related('record', 'record__device').order_by('-alert_time')
+    events_list = AnomalyAlertLog.objects.select_related('record', 'record__device')\
+                                 .exclude(alert_type='AI_SOFT_SIGNAL')\
+                                 .order_by('-alert_time')
     paginator = Paginator(events_list, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -177,8 +179,10 @@ def event_view(request):
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # 按照类型统计 (已移除 DOWNTIME)
-    type_counts = AnomalyAlertLog.objects.filter(alert_time__gte=today_start).values('alert_type').annotate(count=Count('id'))
+    # 按照类型统计 (已移除 DOWNTIME, 同时隐藏 AI_SOFT_SIGNAL)
+    type_counts = AnomalyAlertLog.objects.filter(alert_time__gte=today_start)\
+                                 .exclude(alert_type='AI_SOFT_SIGNAL')\
+                                 .values('alert_type').annotate(count=Count('id'))
     stats_data = {'HIGH_CURRENT': 0, 'HIGH_POWER': 0, 'LOW_VELOCITY': 0}
     for tc in type_counts:
         if tc['alert_type'] in stats_data:
@@ -186,7 +190,9 @@ def event_view(request):
     
     # 补回被误删的趋势图计算逻辑 (V3.3.1)
     last_24h_start = now - timedelta(hours=24)
-    recent_alerts = AnomalyAlertLog.objects.filter(alert_time__gte=last_24h_start).values_list('alert_time', flat=True)
+    recent_alerts = AnomalyAlertLog.objects.filter(alert_time__gte=last_24h_start)\
+                                   .exclude(alert_type='AI_SOFT_SIGNAL')\
+                                   .values_list('alert_time', flat=True)
     from django.utils.timezone import localtime
     now_local = localtime(now)
     
@@ -492,6 +498,7 @@ def api_latest_alerts(request):
     alerts = (
         AnomalyAlertLog.objects
         .select_related('record', 'record__device')
+        .exclude(alert_type='AI_SOFT_SIGNAL')
         .order_by('-alert_time')[:limit]
     )
     data = []
@@ -509,26 +516,26 @@ def api_latest_alerts(request):
             'spindle_power':      a.record.spindle_power,
             'feed_velocity':      a.record.feed_velocity,
         })
-    total_unhandled = AnomalyAlertLog.objects.filter(is_handled=False).count()
+    total_unhandled = AnomalyAlertLog.objects.filter(is_handled=False).exclude(alert_type='AI_SOFT_SIGNAL').count()
     return JsonResponse({'status': 'ok', 'count': len(data), 'total': total_unhandled, 'data': data})
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  API 4（新增）：设备风险矩阵 /api/device-matrix/
+#  API 4（补全）：设备矩阵看板 /api/device-matrix/
 # ═══════════════════════════════════════════════════════════════════
 
 @require_http_methods(['GET'])
-@cache_control(no_cache=True, must_revalidate=True, no_store=True)
 def api_device_matrix(request):
     """
     GET /api/device-matrix/
-    已重构：内部调用 stats_service.get_device_matrix_data() (V5.2.3)
+    返回所有设备的实时状态矩阵数据（用于 Honeycomb / 设备列表）。
+    逻辑已下沉至 stats_service 以实现多处复用。
     """
-    rows = stats_service.get_device_matrix_data()
-    return JsonResponse({'status': 'ok', 'data': rows})
+    data = stats_service.get_device_matrix_data()
+    return JsonResponse({'status': 'ok', 'data': data})
 
 
-# ═══════════════════════════════════════════════════════════════════
+
 #  API 5（新增）：全局传感流水 /api/sensor-logs/
 # ═══════════════════════════════════════════════════════════════════
 
@@ -615,6 +622,10 @@ def api_device_stream(request, device_id):
         score = rec.anomaly_score or 0.0
         anomaly_scores.append(round(score * 100, 2))  # 转换为百分比
 
+    # [V3.5.2] 移除 EMA 二次平滑（DB 已由流进程平滑），解决响应滞后问题。
+
+
+
     device = DeviceInfo.objects.filter(pk=device_id).first()
 
     logs_data = []
@@ -626,7 +637,9 @@ def api_device_stream(request, device_id):
             'content': device.maintenance_advice
         })
         
-    recent_alerts = AnomalyAlertLog.objects.filter(record__device=device).order_by('-alert_time')[:5]
+    recent_alerts = AnomalyAlertLog.objects.filter(record__device=device)\
+                                  .exclude(alert_type='AI_SOFT_SIGNAL')\
+                                  .order_by('-alert_time')[:5]
     for a in recent_alerts:
         score_info = f" 置信度: {a.anomaly_score*100:.1f}%" if a.anomaly_score else ""
         logs_data.append({
@@ -635,6 +648,33 @@ def api_device_stream(request, device_id):
             'source': '预警拦截',
             'content': f"[{a.get_alert_type_display()}]{score_info}"
         })
+
+    # [V3.5.2] current_score: 与流进程同源的实时平滑分
+    # 优先读取 Redis 快照（流进程自身写入）——避免跟 Web 进程内存隔离导致的读取错误。
+    # 降级顺序: Redis 快照 → ai_service._SMOOTHED_PROBS → DB 最新层山分
+    _device_name = device.device_name if device else ''
+    _current_score_pct = None
+
+    # 1️⃣ 试读 Redis 快照（流进程写入，最可靠）
+    try:
+        from monitor.services.cache_service import CacheService
+        _snapshots = CacheService.get_all_device_snapshots()
+        if _snapshots:
+            _snap_map = {int(s['device_id']): s for s in _snapshots}
+            _snap = _snap_map.get(device_id)
+            if _snap and _snap.get('anomaly_score') is not None:
+                _current_score_pct = round(float(_snap['anomaly_score']) * 100, 1)
+    except Exception:
+        pass
+
+    # 2️⃣ 降级：直接取 DB 最新记录（已由流进程 EMA 平滑）
+    # [V3.5.3] 废弃 Web 进程内存缓存，解决多进程环境下缓冲区不一致导致的评分偏差问题。
+    # 3️⃣ 最后降级：取 DB 最新层山分（已是流进程 EMA 后的值）
+    if _current_score_pct is None:
+        _latest_rec = records[-1] if records else None
+        _current_score_pct = round((_latest_rec.anomaly_score or 0.0) * 100, 1) if _latest_rec else 0.0
+
+    current_score = _current_score_pct
 
     return JsonResponse({
         'status':          'ok',
@@ -646,7 +686,8 @@ def api_device_stream(request, device_id):
         'spindle_power':   spindle_powers,
         'feed_velocity':   feed_velocities,
         'process':         machining_processes,
-        'anomaly_score':   anomaly_scores,
+        'anomaly_score':   anomaly_scores,   # EMA 平滑历史序列（用于图表）
+        'current_score':   current_score,    # 当前实时平滑分（用于指标卡，与 Dashboard 同源）
         'oee':             oee_list,
         'logs':            logs_data,
     })
@@ -754,8 +795,9 @@ def api_device_reset(request, device_id):
             device.maintenance_advice = note # 保存到设备信息表中
             device.save(update_fields=['current_group_id', 'current_status', 'maintenance_advice'])
             
-            # [V3.4.3 增强] 联动重置 AI 特征计算缓冲区，让风险分数瞬间回落
-            ai_service.reset_device_buffer(device_id)
+            # [V3.5.2 增强] 联动重置 AI 特征计算缓冲区，让风险分数瞬间回落
+            # 注意：此处需传入 device_name (str) 以匹配内存字典 Key
+            ai_service.reset_device_buffer(device.device_name)
 
         return JsonResponse({'status': 'ok', 'message': f'设备 {device.device_name} 已处理完毕，已切换至待机'})
     except Exception as e:

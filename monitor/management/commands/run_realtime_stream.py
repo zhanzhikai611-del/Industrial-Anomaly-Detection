@@ -224,12 +224,16 @@ def _gen_down_record(device, ts):
     return rec, 0.0
 
 
-def _check_and_create_alert(record: ProductionSensorData) -> bool:
+def _check_and_create_alert(record: ProductionSensorData, precalc_prob: float = None) -> bool:
     """
     检查刚保存的 record 是否触发物理报警阈值。
-    若触发则写入 AnomalyAlertLog，返回 True。
+    使用预计算好的 AI 分数。
     """
     cfg = SystemConfig.get()
+    # 直接使用传入的平滑分数
+    prob = precalc_prob if precalc_prob is not None else 0.5
+    thresh = cfg.ai_alert_threshold
+    
     sc  = abs(record.spindle_current)
     sp  = record.spindle_power
     fv  = abs(record.feed_velocity)
@@ -240,12 +244,12 @@ def _check_and_create_alert(record: ProductionSensorData) -> bool:
         atype = 'HIGH_POWER'
     elif fv < cfg.feed_velocity_low:
         atype = 'LOW_VELOCITY'
+    elif prob >= thresh:
+        # [V3.5.1] 补全软报警逻辑：物理指标正常但 AI 风险过高
+        atype = 'AI_SOFT_SIGNAL'
     else:
         return False
-
-    prob = ai_service.predict_proba(record)
-    if prob is None:
-        prob = random.uniform(0.60, 0.99)
+    
     AnomalyAlertLog.objects.create(
         record        = record,
         alert_time    = record.timestamp,
@@ -281,6 +285,8 @@ class Command(BaseCommand):
             dev.yield_buffer  = 0.0
             dev.defect_buffer = 0.0
         known_device_ids = {d.id for d in devices}
+        # [V3.5.2] 初始化历史状态字典，用于检测跨轮次的分组变更（由 Copilot 触发的修复重置）
+        self._PREV_GROUPS = {d.id: d.current_group_id for d in devices}
 
         try:
             while True:
@@ -321,6 +327,15 @@ class Command(BaseCommand):
 
                 total_step_output = 0
                 for dev in devices:
+                    # [V3.5.2] 缓冲区清理检测：
+                    # 若当前组为 1 且上一次记录的组 > 1 -> 说明该设备刚被 Copilot 或人工“修复”并重置
+                    # 必须立即清理 AI 推断缓冲区，防止 EMA 和滑动窗口的“残留高分”导致 Copilot 重复干预。
+                    if dev.current_group_id == 1 and self._PREV_GROUPS.get(dev.id, 1) > 1:
+                        ai_service.reset_device_buffer(dev.device_name)
+                    
+                    # 更新当前组状态快照
+                    self._PREV_GROUPS[dev.id] = dev.current_group_id
+
                     # [V3.3.6 Fix] 关键修复：刷新数据库字段前保存内存属性（防止进度被清空）
                     y_buf = getattr(dev, 'yield_buffer', 0.0)
                     d_buf = getattr(dev, 'defect_buffer', 0.0)
@@ -336,28 +351,29 @@ class Command(BaseCommand):
 
                     if status == 'Running':
                         rec_obj, perf_ratio = _gen_running_record(dev, now, group_idx)
-                        
-                        # [V3.4.6] 关键补丁：在落库前注入 AI 风险分数，确保详情页逻辑同步
+                        # 计算一次 AI 风险 (包括推送滑动窗口)
                         prob = ai_service.predict_proba(rec_obj) or 0.0
                         rec_obj.anomaly_score = prob
-                        
-                        rec_obj.save()          # 逐条 save 获取 pk，便于立即关联 Alert
+                        rec_obj.save()
                         records_created += 1
                         total_step_output += (rec_obj.actual_output or 0)
 
-                        if _check_and_create_alert(rec_obj):
+                        if _check_and_create_alert(rec_obj, precalc_prob=prob):
                             alerts_created += 1
                     elif status == 'Idle':
                         rec_obj, perf_ratio = _gen_idle_record(dev, now)
+                        prob = ai_service.predict_proba(rec_obj) or 0.0
+                        rec_obj.anomaly_score = prob
                         rec_obj.save()
                         records_created += 1
                     else: # Down
                         rec_obj, perf_ratio = _gen_down_record(dev, now)
+                        prob = ai_service.predict_proba(rec_obj) or 0.0
+                        rec_obj.anomaly_score = prob
                         rec_obj.save()
                         records_created += 1
                     
-                    # [V3.3.0] 关键修复：同步更新 Redis 快照，供 Dashboard 矩阵及监控列表使用
-                    prob = ai_service.predict_proba(rec_obj) or 0.0
+                    # 同步 Redis 快照，复用已计算的 prob
                     snapshot = {
                         'device_id': rec_obj.device_id,
                         'device_name': dev.device_name,
@@ -366,7 +382,7 @@ class Command(BaseCommand):
                         'spindle_current': float(rec_obj.spindle_current),
                         'spindle_power': float(rec_obj.spindle_power),
                         'feed_velocity': float(rec_obj.feed_velocity),
-                        'anomaly_score': float(round(rec_obj.anomaly_score, 4)),
+                        'anomaly_score': float(round(prob, 4)),
                         'oee_val': float(perf_ratio) if dev.current_status == 'Running' else 0.0,
                         'last_update': now.isoformat(),
                         'machining_process': rec_obj.machining_process,

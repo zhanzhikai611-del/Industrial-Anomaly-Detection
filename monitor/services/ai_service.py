@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-ai_service.py — V2 在线推断服务
-从 Redis 滑动窗口中提取多尺度特征，对齐 train_model_v2.py 训练时的特征工程。
-
-V2 特征 (10 维):
-  5min 窗口: sc_mean, sp_mean, fv_mean, sc_max, fv_max
-  1min 窗口: sc_mean, sp_mean, fv_mean
-  交互特征: current_x_power, delta_velocity
+ai_service.py — V2 在线推断服务 (终极稳态版)
+采用“切削触发更新”策略，彻底锁定非切削期的波动。
 """
 import logging
 from pathlib import Path
@@ -19,199 +14,134 @@ from ..models import ProductionSensorData
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════
-#  模型全局单例加载
+#  模型加载
 # ═══════════════════════════════════════════════════════════════════
 
 _ML_DIR = Path(__file__).resolve().parent.parent.parent / 'ml_models'
 
-
 def _load_artifacts():
-    """加载 V2 模型、标准化器、特征名和阈值"""
     try:
         model      = joblib.load(_ML_DIR / 'logistic_model.pkl')
         scaler     = joblib.load(_ML_DIR / 'scaler.pkl')
-        feat_names = joblib.load(_ML_DIR / 'feature_names.pkl')
-        # 尝试加载最优阈值（V2 新增）
-        try:
-            threshold = joblib.load(_ML_DIR / 'optimal_threshold.pkl')
-        except FileNotFoundError:
-            threshold = 0.5
-        logger.info('[AI Service] V2 模型加载成功，特征维度=%d，阈值=%.4f',
-                     len(feat_names), threshold)
-        return model, scaler, feat_names, threshold
-    except FileNotFoundError:
-        logger.warning('[AI Service] ml_models/ 文件不存在，AI 推断功能已禁用')
-        return None, None, None, 0.5
-    except Exception as exc:
-        logger.error('[AI Service] 模型加载异常：%s', exc)
-        return None, None, None, 0.5
+        threshold  = joblib.load(_ML_DIR / 'optimal_threshold.pkl')
+        return model, scaler, threshold
+    except:
+        return None, None, 0.5
 
-
-_LR_MODEL, _SCALER, _FEAT_NAMES, _THRESHOLD = _load_artifacts()
-
+_LR_MODEL, _SCALER, _THRESHOLD = _load_artifacts()
 
 # ═══════════════════════════════════════════════════════════════════
-#  设备级滑动窗口缓冲区（内存中维护最近 5 分钟的传感器数据）
+#  状态存储
 # ═══════════════════════════════════════════════════════════════════
 
-# 结构: {device_id: deque([(timestamp, sc, sp, fv), ...])}
-_DEVICE_BUFFERS: dict[int, deque] = {}
-_BUFFER_MAX_SECONDS = 300  # 5 分钟
+_SMOOTHED_RAW: dict[str, np.ndarray] = {}  
+_SMOOTHED_PROBS: dict[str, float] = {}     
+_DEVICE_BUFFERS: dict[str, deque] = {}     
 
+_FEAT_EMA_ALPHA = 0.15 
+_PROB_EMA_ALPHA = 0.05  # 略微调高，让反馈更及时
+_BUFFER_MAX_SECONDS = 600
 
-def _get_buffer(device_id: int) -> deque:
-    if device_id not in _DEVICE_BUFFERS:
-        _DEVICE_BUFFERS[device_id] = deque()
-    return _DEVICE_BUFFERS[device_id]
-
-
-def _push_and_trim(device_id: int, ts: datetime, sc: float, sp: float, fv: float):
-    """将新数据点推入缓冲区，并清除超过 5 分钟的旧数据"""
-    buf = _get_buffer(device_id)
-    buf.append((ts, sc, sp, fv))
-    # 清除 > 5min 的旧数据
-    cutoff = ts - timedelta(seconds=_BUFFER_MAX_SECONDS)
-    while buf and buf[0][0] < cutoff:
-        buf.popleft()
-
+# ═══════════════════════════════════════════════════════════════════
+#  辅助函数
+# ═══════════════════════════════════════════════════════════════════
 
 def _compute_window_stats(buf: deque, ts: datetime, window_secs: int):
-    """
-    从缓冲区中提取指定时间窗口内的统计量。
-    返回: (sc_mean, sp_mean, fv_mean, sc_max, fv_max)
-    """
     cutoff = ts - timedelta(seconds=window_secs)
-    sc_vals, sp_vals, fv_vals = [], [], []
+    sc_v, sp_v, fv_v = [], [], []
     for t, sc, sp, fv in buf:
         if t >= cutoff:
-            sc_vals.append(sc)
-            sp_vals.append(sp)
-            fv_vals.append(fv)
+            sc_v.append(sc); sp_v.append(sp); fv_v.append(fv)
+    if not sc_v: return 0.0, 0.0, 0.0, 0.0, 0.0
+    return np.mean(sc_v), np.mean(sp_v), np.mean(fv_v), np.max(sc_v), np.max(fv_v)
 
-    if not sc_vals:
-        return 0.0, 0.0, 0.0, 0.0, 0.0
-
-    return (
-        np.mean(sc_vals),   # sc_mean
-        np.mean(sp_vals),   # sp_mean
-        np.mean(fv_vals),   # fv_mean
-        np.max(sc_vals),    # sc_max
-        np.max(fv_vals),    # fv_max
-    )
-
-
-def _build_v2_features(device_id: int, ts: datetime, sc: float, sp: float, fv: float) -> np.ndarray:
-    """
-    构造 V2 的 10 维特征向量，对齐 train_model_v2.py 中的 rolling_aggregate_v2()。
-
-    特征顺序:
-      0: spindle_current_mean_5min
-      1: spindle_power_mean_5min
-      2: feed_velocity_mean_5min
-      3: spindle_current_max_5min
-      4: feed_velocity_max_5min
-      5: spindle_current_mean_1min
-      6: spindle_power_mean_1min
-      7: feed_velocity_mean_1min
-      8: interaction_current_x_power   (sc_mean_5min × sp_mean_5min)
-      9: delta_velocity_5m_1m          (fv_mean_5min - fv_mean_1min)
-    """
-    # 推入新数据
-    _push_and_trim(device_id, ts, sc, sp, fv)
-    buf = _get_buffer(device_id)
-
-    # 5 分钟窗口统计
-    sc_mean_5, sp_mean_5, fv_mean_5, sc_max_5, fv_max_5 = \
-        _compute_window_stats(buf, ts, 300)
-
-    # 1 分钟窗口统计
-    sc_mean_1, sp_mean_1, fv_mean_1, _, _ = \
-        _compute_window_stats(buf, ts, 60)
-
-    # 交互特征
-    interaction = sc_mean_5 * sp_mean_5
-    delta_vel   = fv_mean_5 - fv_mean_1
-
-    return np.array([[
-        sc_mean_5, sp_mean_5, fv_mean_5,
-        sc_max_5, fv_max_5,
-        sc_mean_1, sp_mean_1, fv_mean_1,
-        interaction, delta_vel,
-    ]])
-
-
-_LOGIT_SCALE = 6.0   # 减小缩放因子，让 sigmoid 敏感区更宽
-_LOGIT_BIAS = 1.5    # 引入偏置，平移概率中心点
-
-
-def _calibrate_probability(raw_prob: float) -> float:
-    """
-    高级概率校准：实现 0% - 100% 全量程覆盖。
-    
-    逻辑：
-      1. 将饱和的 raw_prob 转回 logit 空间。
-      2. 对 logit 进行线性重缩放和偏置。
-      3. 重新映射到 sigmoid 空间，实现平滑且具区分度的连续谱。
-    """
-    p = np.clip(raw_prob, 1e-9, 1 - 1e-9)
+def _calibrate(raw_p: float) -> float:
+    p = np.clip(raw_p, 1e-9, 1 - 1e-9)
     logit = np.log(p / (1 - p))
-    # 动态映射：健康机器 logit 更负，加上偏置后依然在 0% 附近产生差异
-    # 故障机器 logit 正值极大，缩放后能稳步达到 95% 以上
-    calibrated = 1.0 / (1.0 + np.exp(-(logit + _LOGIT_BIAS) / _LOGIT_SCALE))
+    calibrated = 1.0 / (1.0 + np.exp(-(logit + 1.5) / 6.0))
     return float(np.round(calibrated, 4))
 
-
 # ═══════════════════════════════════════════════════════════════════
-#  公开 API
+#  公开接口 (核心策略：Value Hold)
 # ═══════════════════════════════════════════════════════════════════
-
-def reset_device_buffer(device_id: int):
-    """
-    重置指定设备的特征缓冲区。
-    通常在设备维修完成、更换刀具或系统冷启动时调用，
-    以消除旧数据的“物理指标惯性”，让 AI 分数立即恢复正常。
-    """
-    if device_id in _DEVICE_BUFFERS:
-        _DEVICE_BUFFERS[device_id].clear()
-        print(f"♻️  AI Buffer Reset: Device {device_id}")
-
 
 def predict_proba(record: ProductionSensorData) -> float | None:
-    """
-    V2 单条记录在线推断。
-    使用设备级滑动窗口构造 10 维多尺度特征，对齐训练时的特征工程。
-    输出经 Temperature Scaling 校准的平滑概率。
-    """
-    if _LR_MODEL is None:
-        return None
+    if _LR_MODEL is None: return None
     try:
-        sc = float(record.spindle_current)
-        sp = float(record.spindle_power)
-        fv = float(record.feed_velocity)
-        ts = record.timestamp or datetime.now()
-        device_id = record.device_id
+        name = record.device.device_name
+        process = record.machining_process or ""
+        
+        # 1. 判定是否为“有效切削阶段”
+        # 只有在 Layer 1/2/3 进行切削时，我们才认为模型输出具有参考价值
+        is_cutting = any(kw in process for kw in ['Layer', 'Cutting', 'Machining'])
+        
+        # 2. 如果是非切削阶段 (Prep, end, Repositioning, Idle)
+        # 我们采取“数值保持”策略，返回上一次的平滑分值，不让它掉回 0
+        if not is_cutting:
+            return round(_SMOOTHED_PROBS.get(name, 0.01), 4)
 
-        x = _build_v2_features(device_id, ts, sc, sp, fv)
-        x_scaled = _SCALER.transform(x)
-        raw_prob = float(_LR_MODEL.predict_proba(x_scaled)[0, 1])
-        prob = _calibrate_probability(raw_prob)
-        return round(prob, 4)
-    except Exception as exc:
-        logger.warning('[AI Service] V2 推断异常：%s', exc)
+        # 3. 正常切削时的推断逻辑
+        sc, sp, fv = float(record.spindle_current), float(record.spindle_power), float(record.feed_velocity)
+        ts = record.timestamp or datetime.now()
+
+        # 滑动窗口特征构建
+        if name not in _DEVICE_BUFFERS: _DEVICE_BUFFERS[name] = deque()
+        buf = _DEVICE_BUFFERS[name]
+        buf.append((ts, sc, sp, fv))
+        while buf and buf[0][0] < ts - timedelta(seconds=_BUFFER_MAX_SECONDS):
+            buf.popleft()
+
+        # 构造 13 维特征
+        sc_m5, sp_m5, fv_m5, sc_max5, fv_max5 = _compute_window_stats(buf, ts, 300)
+        sc_m1, sp_m1, fv_m1, _, _ = _compute_window_stats(buf, ts, 60)
+        sc_m10, sp_m10, _, _, _ = _compute_window_stats(buf, ts, 600)
+        
+        inter = sc_m5 * sp_m5
+        eff5 = sp_m5 / (abs(sc_m5) + 0.01)
+        eff10 = sp_m10 / (abs(sc_m10) + 0.01)
+
+        x = np.array([[
+            sc_m5, sp_m5, fv_m5, sc_max5, fv_max5,
+            sc_m1, sp_m1, fv_m1, sc_m10, sp_m10,
+            inter, eff5, eff10
+        ]])
+        
+        # 模型推断
+        x_s = _SCALER.transform(x)
+        raw_p = float(_LR_MODEL.predict_proba(x_s)[0, 1])
+        prob = _calibrate(raw_p)
+
+        # EMA 更新 (仅在切削时更新趋势)
+        last_p = _SMOOTHED_PROBS.get(name, prob)
+        final_p = _PROB_EMA_ALPHA * prob + (1 - _PROB_EMA_ALPHA) * last_p
+        _SMOOTHED_PROBS[name] = final_p
+
+        return round(final_p, 4)
+    except Exception as e:
+        logger.warning(f"Inference Error: {e}")
         return None
 
+def reset_device_buffer(device_name: str):
+    """
+    [V3.5.2] 强制清除设备的推断缓冲区与 EMA 状态。
+    通常在 Copilot 执行修复（Recovery）操作后调用，确保分数能够立即归零。
+    """
+    if device_name in _SMOOTHED_RAW: del _SMOOTHED_RAW[device_name]
+    if device_name in _SMOOTHED_PROBS: del _SMOOTHED_PROBS[device_name]
+    if device_name in _DEVICE_BUFFERS: _DEVICE_BUFFERS[device_name].clear()
+    logger.info(f"AI Buffer Reset for device: {device_name}")
 
 def predict_is_anomaly(record: ProductionSensorData) -> tuple[bool, float | None]:
-    """
-    V2 异常判定（使用动态阈值）。
-    返回: (is_anomaly, probability)
-    """
-    prob = predict_proba(record)
-    if prob is None:
-        return False, None
-    return prob >= _THRESHOLD, prob
+    p = predict_proba(record)
+    return (p >= _THRESHOLD, p) if p is not None else (False, None)
 
+def is_ai_ready() -> bool: return _LR_MODEL is not None
 
-def is_ai_ready() -> bool:
-    """检查模型是否加载就绪"""
-    return _LR_MODEL is not None
+def get_current_smoothed_score(device_name: str) -> float | None:
+    """
+    返回指定设备当前的 EMA 平滑风险概率（与在线推断 _SMOOTHED_PROBS 同源）。
+    用于设备详情页指标卡，确保与 Dashboard / 设备列表显示值一致。
+    返回值为 [0, 1] 的浮点数，若该设备尚无推断记录则返回 None。
+    """
+    val = _SMOOTHED_PROBS.get(device_name)
+    return round(float(val), 4) if val is not None else None

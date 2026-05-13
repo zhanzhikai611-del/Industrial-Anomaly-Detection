@@ -230,14 +230,18 @@ def get_dashboard_stats():
     avg_q = min(round(total_output / total_input, 4), 1.0) if total_input > 0 else 1.0
     avg_oee = round(avg_a * avg_p * avg_q, 4)
 
-    unhandled_count = AnomalyAlertLog.objects.filter(is_handled=False).count()
-    alerts = list(AnomalyAlertLog.objects.select_related('record', 'record__device').order_by('-alert_time')[:7])
+    unhandled_count = AnomalyAlertLog.objects.filter(is_handled=False).exclude(alert_type='AI_SOFT_SIGNAL').count()
+    alerts = list(AnomalyAlertLog.objects.select_related('record', 'record__device')\
+                                         .exclude(alert_type='AI_SOFT_SIGNAL')\
+                                         .order_by('-alert_time')[:7])
     for a in alerts:
         score = a.anomaly_score or 0.75
         a.risk_pct = int(score * 100)
         a.risk_color = "#F5222D" if score > 0.8 else "#FAAD14" if score > 0.6 else "#52C41A"
 
-    alert_dist = list(AnomalyAlertLog.objects.filter(alert_time__gte=today_start).values('alert_type').annotate(cnt=Count('id')).order_by('-cnt'))
+    alert_dist = list(AnomalyAlertLog.objects.filter(alert_time__gte=today_start)\
+                                             .exclude(alert_type='AI_SOFT_SIGNAL')\
+                                             .values('alert_type').annotate(cnt=Count('id')).order_by('-cnt'))
 
     eight_hours_ago = (local_now - timedelta(hours=7)).replace(minute=0, second=0, microsecond=0)
     hourly_recs = ProductionSensorData.objects.filter(timestamp__gte=eight_hours_ago).values_list('timestamp', 'actual_output')

@@ -322,6 +322,7 @@ class AnomalyAlertLog(models.Model):
 
     ALERT_TYPE_CHOICES = [
         ('LR_TOOL_WEAR',   'LR 模型刀具磨损预警'),
+        ('AI_SOFT_SIGNAL', 'AI 软报警 (预见性干预)'),
         ('HIGH_CURRENT',   '主轴过电流物理报警'),
         ('HIGH_POWER',     '主轴过载物理报警'),
         ('LOW_VELOCITY',   '进给速度骤降报警'),

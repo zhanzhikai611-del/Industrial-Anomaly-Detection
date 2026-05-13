@@ -818,7 +818,11 @@
                                     const i = d.spindle_current.length - 1;
                                     this.metrics.current = d.spindle_current[i].toFixed(2);
                                     this.metrics.power = d.spindle_power[i].toFixed(2);
-                                    this.metrics.ai_confidence = d.anomaly_score[i].toFixed(1);
+                                    // [V3.5.1] 指标卡使用 current_score（与 Dashboard 同源）
+                                    // 图表依然使用 anomaly_score[]（后端 EMA 平滑历史序列）
+                                    this.metrics.ai_confidence = (d.current_score !== undefined)
+                                        ? parseFloat(d.current_score).toFixed(1)
+                                        : d.anomaly_score[i].toFixed(1);
                                     this.metrics.oee = d.oee[i].toFixed(1);
                                     this.metrics.process = d.process ? d.process[i] : "Processing...";
                                     this.metrics.velocity = d.feed_velocity ? d.feed_velocity[i].toFixed(2) : '--';
