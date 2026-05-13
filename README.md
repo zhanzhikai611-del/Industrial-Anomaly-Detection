@@ -53,7 +53,7 @@ pip install -r requirements.txt
 # 数据库迁移
 python manage.py migrate
 
-# 创建管理员 (建议: admin / baby0611)
+# 创建管理员
 python manage.py createsuperuser
 ```
 
